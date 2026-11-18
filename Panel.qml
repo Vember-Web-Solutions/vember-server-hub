@@ -218,7 +218,7 @@ Item {
     serverRoleDraft = r;
     wizardOpen = false;
     configReady = true;
-    writeHubConfig(true);
+    writeHubConfig(false);
   }
 
   function setPreferredEditor(editorId) {
