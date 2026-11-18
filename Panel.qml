@@ -1461,6 +1461,7 @@ Item {
         root.codeServerStatusText = root.codeServerSetupDetail;
         root._appendCodeServerSetupLog("Image pull complete. Creating container…");
         var p = root.codeServerPort;
+        var workspaceDir = "/home/coder/home/Projects";
         codeServerSetupRunProc.command = ["docker", "run", "-d",
           "--name", "vember-code-server",
           "-p", String(p) + ":8080",
@@ -1468,7 +1469,8 @@ Item {
           "-v", root.homeDir + ":/home/coder/home",
           "--env-file", root.homeDir + "/.config/vember-code-server/code-server.env",
           "--restart", "unless-stopped",
-          "codercom/code-server:latest"];
+          "codercom/code-server:latest",
+          workspaceDir];
         codeServerSetupRunProc.running = true;
       } else {
         root.codeServerBusy = false;
