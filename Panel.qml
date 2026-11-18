@@ -277,21 +277,37 @@ Item {
     codeServerProc.running = true;
   }
 
-  function setupCodeServerTerminal() {
+  function setupCodeServerTerminal(password) {
+    var pass = HubModel.trimText(password);
+    if (pass.length === 0) {
+      codeServerStatusText = "Set a password for Code Server before setup.";
+      lastActionMessage = "Code Server setup needs a password.";
+      return;
+    }
     codeServerBusy = true;
     codeServerStatusText = "Opening terminal to set up VS Code Server…";
     codeServerActionProc.actionName = "setup";
-    var script = [
+    var inner = [
       "set -e",
+      "PASS=\"$1\"",
       "mkdir -p \"$HOME/.config/vember-code-server\" \"$HOME/Projects\"",
-      "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then echo 'Container vember-code-server already exists.'; else",
-      "PASS=$(openssl rand -base64 18 | tr -d '\\n' | tr '/+' '_-');",
-      "docker run -d --name vember-code-server -p " + codeServerPort + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" -e PASSWORD=\"$PASS\" --restart unless-stopped codercom/code-server:latest;",
-      "echo ''; echo 'VS Code Server started.'; echo 'URL: http://localhost:" + codeServerPort + "'; echo \"Password: $PASS\"; echo ''; echo 'Save this password now.';",
+      "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then",
+      "  echo 'Container vember-code-server already exists.'",
+      "  echo 'Use Start to run it, or Uninstall to remove it and set it up again.'",
+      "else",
+      "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
+      "  docker run -d --name vember-code-server -p " + codeServerPort + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" -e PASSWORD=\"$PASS\" --restart unless-stopped codercom/code-server:latest",
+      "  echo ''",
+      "  echo 'VS Code Server started.'",
+      "  echo 'URL: http://localhost:" + codeServerPort + "'",
+      "  echo 'Password: (the one you set in the hub)'",
+      "  echo ''",
+      "  echo 'Config kept in ~/.config/vember-code-server'",
       "fi"
-    ].join("; ");
+    ].join("\n");
+    var script = "bash -lc " + JSON.stringify(inner + "\necho\necho 'Press Enter to close...'\nread -r _") + " _ " + JSON.stringify(pass);
     codeServerActionProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(script + "; echo; echo 'Press Enter to close...'; read -r") + " </dev/null >/dev/null 2>&1 &"];
+      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation " + JSON.stringify(script) + " </dev/null >/dev/null 2>&1 &"];
     codeServerActionProc.running = true;
   }
 

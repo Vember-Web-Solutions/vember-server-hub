@@ -722,35 +722,6 @@ PanelWindow {
               }
             }
 
-            // Omarchy update (compact)
-            Rectangle {
-              width: parent.width
-              radius: Style.cornerRadius
-              color: softText(0.04)
-              border.color: softText(0.08)
-              border.width: 1
-              implicitHeight: updCol.implicitHeight + 24
-              Column {
-                id: updCol
-                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                anchors.margins: 14; spacing: 10
-                RowLayout {
-                  width: parent.width; spacing: 12
-                  Text { textFormat: Text.PlainText; text: "󰚰"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
-                  ColumnLayout {
-                    Layout.fillWidth: true; spacing: 2
-                    Text { textFormat: Text.PlainText; text: "Omarchy update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body; font.bold: true }
-                    Text { textFormat: Text.PlainText; text: "Launch system update in a terminal. The hub closes to hand off focus."; color: softText(0.76); wrapMode: Text.Wrap; Layout.fillWidth: true; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                  }
-                  Button {
-                    iconText: "󰑓"
-                    text: "Open in terminal"
-                    tooltipText: "Launch omarchy-update in a terminal (closes hub)"
-                    onClicked: hub.openOmarchyUpdateTerminal()
-                  }
-                }
-              }
-            }
           }
 
           // ACCESS TAB
@@ -2522,6 +2493,112 @@ PanelWindow {
             color: softText(0.55)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
+          }
+        }
+      }
+    }
+
+    // Code Server setup dialog
+    Rectangle {
+      visible: panel.codeServerSetupOpen
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 110
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.codeServerSetupOpen = false
+      }
+
+      Rectangle {
+        id: codeServerSetupDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 500)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: codeServerSetupCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: codeServerSetupCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰨞"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            ColumnLayout {
+              Layout.fillWidth: true
+              spacing: 2
+              Text { textFormat: Text.PlainText; text: "Set up VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Create the code-server Docker container and choose the password you’ll use to sign in."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Password"
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.bold: true
+          }
+          Rectangle {
+            width: parent.width
+            radius: 8
+            color: softText(0.03)
+            border.color: accentSoft(0.2)
+            border.width: 1
+            implicitHeight: 40
+            TextInput {
+              id: codeServerPasswordInput
+              anchors.fill: parent
+              anchors.margins: 10
+              verticalAlignment: TextInput.AlignVCenter
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              selectByMouse: true
+              clip: true
+              echoMode: TextInput.Password
+              text: panel.codeServerSetupPassword
+              onTextChanged: panel.codeServerSetupPassword = text
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Setup runs in a terminal (so you can see Docker pull/start output). If a container named vember-code-server already exists, setup will not recreate it."
+            color: softText(0.75)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: panel.codeServerSetupOpen = false
+            }
+            Button {
+              iconText: "󰏔"
+              text: "Set up"
+              active: true
+              enabled: HubModel.trimText(panel.codeServerSetupPassword).length > 0 && !hub.codeServerBusy
+              onClicked: {
+                panel.codeServerSetupOpen = false;
+                hub.setupCodeServerTerminal(panel.codeServerSetupPassword);
+                panel.codeServerSetupPassword = "";
+              }
+            }
           }
         }
       }
