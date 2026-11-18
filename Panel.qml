@@ -853,7 +853,7 @@ Item {
     omarchyUpdateTerminalProc.running = false;
     omarchyUpdateTerminalProc.command = ["sh", "-c",
       "mkdir -p \"$HOME/.cache/vember-server-hub\" && : > \"$1\" && " +
-      "xdg-terminal-exec -T \"Vember Omarchy Update\" -e bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 & " +
+      "xdg-terminal-exec --title=\"Vember Omarchy Update\" bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 & " +
       "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true",
       "sh", logPath];
     omarchyUpdateTerminalProc.running = true;
