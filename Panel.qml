@@ -307,7 +307,7 @@ Item {
       "  echo ''",
       "  echo 'Config kept in ~/.config/vember-code-server'",
       "fi"
-    ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _";
+    ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _close || true";
     codeServerActionProc.command = ["sh", "-c",
       "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc \"$1\" _ \"$2\" </dev/null >/dev/null 2>&1 &",
       "sh", inner, pass];
