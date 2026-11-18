@@ -14,17 +14,10 @@ PanelWindow {
   property bool confirmPrune: false
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
-  property bool settingsMenuOpen: false
-  property bool arrangeTabsOpen: false
-  property var arrangeTabOrderDraft: []
-  property bool updateDialogOpen: false
-  property bool updateInProgress: false
-  property real updateProgress: 0
-  property string updateStatusText: ""
-  property var toastItems: []
-  property int toastSeq: 0
-  property bool isFullscreen: false
-  property string devSubTab: "workspace"
+  property bool codeServerSetupOpen: false
+  property string codeServerSetupPassword: ""
+  property string settingsMenuOpen: false // placeholder? no wait - keep types right
+
 
   function toggleFullscreen() {
     panel.isFullscreen = !panel.isFullscreen;
@@ -359,14 +352,12 @@ PanelWindow {
                       font.bold: true
                     }
                     Text {
-                      visible: HubModel.trimText(hub.serverRole).length > 0
+                      visible: false
                       textFormat: Text.PlainText
-                      text: hub.serverRole
+                      text: ""
                       color: softText(0.78)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
-                      elide: Text.ElideRight
-                      Layout.fillWidth: true
                     }
                   }
                 }
@@ -2314,10 +2305,13 @@ PanelWindow {
                           visible: !hub.codeServerPresent
                           iconText: "󰏔"
                           text: hub.codeServerBusy ? "Working…" : "Set up"
-                          tooltipText: "Open terminal to create and start VS Code Server container"
+                          tooltipText: "Configure and create the VS Code Server container"
                           enabled: !hub.codeServerBusy
                           active: true
-                          onClicked: hub.setupCodeServerTerminal()
+                          onClicked: {
+                            panel.codeServerSetupPassword = "";
+                            panel.codeServerSetupOpen = true;
+                          }
                         }
                         Button {
                           visible: hub.codeServerPresent && !hub.codeServerRunning
