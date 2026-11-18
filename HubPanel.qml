@@ -2614,7 +2614,7 @@ PanelWindow {
 
           Text {
             textFormat: Text.PlainText
-            text: "If 8443 is in use, try another port (e.g. 8444, 13337, 3000). Changing port for an existing container requires Uninstall then Set up again."
+            text: "Choose a free host port (e.g. 14444, 8444, 13337). Changing the port for an existing container requires Uninstall, then Set up again."
             color: softText(0.75)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
