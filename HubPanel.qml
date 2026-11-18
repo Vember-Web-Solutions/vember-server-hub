@@ -260,7 +260,7 @@ PanelWindow {
 
           Item { Layout.fillWidth: true }
 
-          // Right: update-ready + reload + settings + exit
+          // Right: update-ready + fullscreen + reload + settings + exit
           RowLayout {
             Layout.alignment: Qt.AlignVCenter
             spacing: 6
@@ -277,6 +277,12 @@ PanelWindow {
                 panel.updateInProgress = false;
                 panel.updateDialogOpen = true;
               }
+            }
+            Button {
+              iconText: panel.isFullscreen ? "󰊓" : "󰊔"
+              tooltipText: panel.isFullscreen ? "Exit fullscreen" : "Fullscreen"
+              active: panel.isFullscreen
+              onClicked: panel.toggleFullscreen()
             }
             Button {
               iconText: "󰑓"
@@ -2453,17 +2459,6 @@ PanelWindow {
             text: "Arrange tabs"
             tooltipText: "Reorder navigation tabs"
             onClicked: panel.openArrangeTabsDialog()
-          }
-          Button {
-            width: parent.width
-            iconText: panel.isFullscreen ? "󰊓" : "󰊔"
-            text: panel.isFullscreen ? "Exit fullscreen" : "Fullscreen"
-            tooltipText: "Toggle fullscreen (F)"
-            active: panel.isFullscreen
-            onClicked: {
-              panel.settingsMenuOpen = false;
-              panel.toggleFullscreen();
-            }
           }
           Button {
             width: parent.width
