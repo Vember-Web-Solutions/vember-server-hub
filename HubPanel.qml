@@ -28,6 +28,7 @@ PanelWindow {
   property int toastSeq: 0
   property bool isFullscreen: false
   property string devSubTab: "workspace"
+  property string accessSubTab: "tailnet"
 
 
   function toggleFullscreen() {
@@ -741,7 +742,25 @@ PanelWindow {
             width: parent.width
             spacing: Style.spacing.md
 
+            // Access sub-nav
+            Row {
+              spacing: 8
+              Button {
+                iconText: "󰖂"
+                text: "Tailnet"
+                active: panel.accessSubTab === "tailnet"
+                onClicked: panel.accessSubTab = "tailnet"
+              }
+              Button {
+                iconText: "󰣀"
+                text: "SSH"
+                active: panel.accessSubTab === "ssh"
+                onClicked: panel.accessSubTab = "ssh"
+              }
+            }
+
             Rectangle {
+              visible: panel.accessSubTab === "tailnet"
               width: parent.width
               radius: Style.cornerRadius
               color: softText(0.04)
@@ -944,6 +963,7 @@ PanelWindow {
 
             // SSH
             Rectangle {
+              visible: panel.accessSubTab === "ssh"
               width: parent.width
               radius: Style.cornerRadius
               color: softText(0.04)
@@ -1891,6 +1911,186 @@ PanelWindow {
                     }
                   }
                 }
+
+                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                Column {
+                  width: parent.width
+                  spacing: 8
+                  Text { textFormat: Text.PlainText; text: "Launchers & mod tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                  Text { textFormat: Text.PlainText; text: "Detect installed launchers (Epic via Heroic, Lutris, Minecraft, CurseForge) and offer installs. Detection is best-effort."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
+                  Flow {
+                    width: parent.width
+                    spacing: 14
+                    Repeater {
+                      model: {
+                        var out = [];
+                        var apps = hub.extraApps || [];
+                        for (var i = 0; i < apps.length; i++) {
+                          var a = apps[i];
+                          if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
+                        }
+                        return out;
+                      }
+                      delegate: Rectangle {
+                        required property var modelData
+                        width: 320
+                        radius: 14
+                        color: softText(0.045)
+                        border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
+                        border.width: 1
+                        implicitHeight: extraCardCol.implicitHeight + 20
+                        Column {
+                          id: extraCardCol
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 12
+                          spacing: 8
+                          RowLayout {
+                            width: parent.width
+                            spacing: 10
+                            Text {
+                              textFormat: Text.PlainText
+                              text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰀻"))))
+                              color: Color.accent
+                              font.family: Style.font.family
+                              font.pixelSize: 28
+                            }
+                            ColumnLayout {
+                              Layout.fillWidth: true
+                              spacing: 2
+                              Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                              Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                            }
+                            Rectangle {
+                              radius: 10
+                              color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                              border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                              border.width: modelData.running ? 1 : 0
+                              implicitWidth: extraStatus.implicitWidth + 14
+                              implicitHeight: extraStatus.implicitHeight + 8
+                              Row {
+                                id: extraStatus
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
+                                Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                              }
+                            }
+                          }
+                          Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                          Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                          Text { visible: HubModel.trimText(modelData.note || "").length > 0; textFormat: Text.PlainText; text: modelData.note; color: softText(0.65); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; width: parent.width }
+                          Flow {
+                            width: parent.width
+                            spacing: 8
+                            Button {
+                              iconText: "󰐊"
+                              text: "Launch"
+                              enabled: modelData.installed
+                              tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
+                              onClicked: hub.launchExtraApp(modelData.id)
+                            }
+                            Button {
+                              visible: !modelData.installed
+                              iconText: "󰏔"
+                              text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
+                              tooltipText: "Open terminal to install " + modelData.name
+                              enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                              onClicked: hub.installExtraApp(modelData.id)
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                Column {
+                  width: parent.width
+                  spacing: 8
+                  Text { textFormat: Text.PlainText; text: "Apps"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                  Text { textFormat: Text.PlainText; text: "Offer installs and quick launch for common apps like Discord."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Flow {
+                    width: parent.width
+                    spacing: 14
+                    Repeater {
+                      model: {
+                        var out = [];
+                        var apps = hub.extraApps || [];
+                        for (var i = 0; i < apps.length; i++) {
+                          var a = apps[i];
+                          if (a && a.category === "apps") out.push(a);
+                        }
+                        return out;
+                      }
+                      delegate: Rectangle {
+                        required property var modelData
+                        width: 320
+                        radius: 14
+                        color: softText(0.045)
+                        border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
+                        border.width: 1
+                        implicitHeight: appCardCol.implicitHeight + 20
+                        Column {
+                          id: appCardCol
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 12
+                          spacing: 8
+                          RowLayout {
+                            width: parent.width
+                            spacing: 10
+                            Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                            ColumnLayout {
+                              Layout.fillWidth: true
+                              spacing: 2
+                              Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                              Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                            }
+                            Rectangle {
+                              radius: 10
+                              color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                              border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                              border.width: modelData.running ? 1 : 0
+                              implicitWidth: appStatus.implicitWidth + 14
+                              implicitHeight: appStatus.implicitHeight + 8
+                              Row {
+                                id: appStatus
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
+                                Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                              }
+                            }
+                          }
+                          Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                          Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                          Flow {
+                            width: parent.width
+                            spacing: 8
+                            Button {
+                              iconText: "󰐊"
+                              text: "Launch"
+                              enabled: modelData.installed
+                              onClicked: hub.launchExtraApp(modelData.id)
+                            }
+                            Button {
+                              visible: !modelData.installed
+                              iconText: "󰏔"
+                              text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
+                              enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                              onClicked: hub.installExtraApp(modelData.id)
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -1911,26 +2111,16 @@ PanelWindow {
                 onClicked: panel.devSubTab = "workspace"
               }
               Button {
-                iconText: "󰨞"
+                iconText: hub.preferredEditor === "vscode" ? "󰨞" : "󰅱"
+                text: HubModel.trimText(hub.preferredEditor).length > 0 ? HubModel.devToolLabel(hub.preferredEditor) : "Zed"
+                tooltipText: "Local editor for opening repos (click to toggle Zed / VS Code)"
+                onClicked: hub.setPreferredEditor(hub.preferredEditor === "zed" ? "vscode" : "zed")
+              }
+              Button {
+                iconText: "󰖟"
                 text: "Code Server (Docker)"
                 active: panel.devSubTab === "codeserver"
                 onClicked: panel.devSubTab = "codeserver"
-              }
-              Rectangle {
-                visible: HubModel.trimText(hub.preferredEditor).length > 0
-                radius: 10
-                color: softText(0.08)
-                implicitWidth: editorNavBadge.implicitWidth + 14
-                implicitHeight: editorNavBadge.implicitHeight + 8
-                Text {
-                  id: editorNavBadge
-                  anchors.centerIn: parent
-                  textFormat: Text.PlainText
-                  text: "Editor: " + HubModel.devToolLabel(hub.preferredEditor)
-                  color: softText(0.85)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
               }
             }
 
@@ -2094,90 +2284,6 @@ PanelWindow {
                   Layout.alignment: Qt.AlignTop
                   spacing: 12
 
-                  // Editor picker nav
-                  Rectangle {
-                    width: parent.width
-                    radius: Style.cornerRadius
-                    color: accentSoft(0.08)
-                    border.color: accentSoft(0.18)
-                    border.width: 1
-                    implicitHeight: editorPickerCol.implicitHeight + 24
-                    Column {
-                      id: editorPickerCol
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12
-                      spacing: 10
-
-                      RowLayout {
-                        width: parent.width
-                        spacing: 10
-                        Text { textFormat: Text.PlainText; text: "󰅱"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
-                        ColumnLayout {
-                          Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Editor"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text {
-                            textFormat: Text.PlainText
-                            text: HubModel.trimText(hub.preferredEditor).length > 0 ? ("Current: " + HubModel.devToolLabel(hub.preferredEditor)) : "Choose the editor used to open repositories."
-                            color: softText(0.78)
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            wrapMode: Text.Wrap
-                            Layout.fillWidth: true
-                          }
-                        }
-                      }
-
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                      Row {
-                        spacing: 8
-                        Button {
-                          iconText: "󰅨"
-                          text: "Zed"
-                          active: hub.preferredEditor === "zed"
-                          enabled: {
-                            var ok = false;
-                            var tools = hub.devTools || [];
-                            for (var i = 0; i < tools.length; i++) { if (tools[i].id === "zed" && tools[i].installed) { ok = true; break; } }
-                            return ok;
-                          }
-                          tooltipText: "Set Zed as the editor for opening repos"
-                          onClicked: hub.setPreferredEditor("zed")
-                        }
-                        Button {
-                          iconText: "󰨞"
-                          text: "VS Code"
-                          active: hub.preferredEditor === "vscode"
-                          enabled: {
-                            var ok = false;
-                            var tools = hub.devTools || [];
-                            for (var i = 0; i < tools.length; i++) { if (tools[i].id === "vscode" && tools[i].installed) { ok = true; break; } }
-                            return ok;
-                          }
-                          tooltipText: "Set VS Code as the editor for opening repos"
-                          onClicked: hub.setPreferredEditor("vscode")
-                        }
-                        Button {
-                          iconText: "󰖟"
-                          text: "Code Server"
-                          tooltipText: "Open Code Server (Docker) setup and access"
-                          active: panel.devSubTab === "codeserver"
-                          onClicked: panel.devSubTab = "codeserver"
-                        }
-                      }
-
-                      Text {
-                        textFormat: Text.PlainText
-                        text: HubModel.trimText(hub.preferredEditor).length > 0 ? "Click a repository below to open it in " + HubModel.devToolLabel(hub.preferredEditor) + "." : "Install and select Zed or VS Code, or use Code Server in Docker for browser-based editing."
-                        color: softText(0.72)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.Wrap
-                        width: parent.width
-                      }
-                    }
-                  }
-
                   Rectangle {
                     width: parent.width
                     radius: Style.cornerRadius
@@ -2212,6 +2318,17 @@ PanelWindow {
                         color: softText(0.7)
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
+                      }
+
+                      Text {
+                        visible: HubModel.trimText(hub.preferredEditor).length > 0 && hub.devRepos && hub.devRepos.length > 0
+                        textFormat: Text.PlainText
+                        text: "Click a repository to open it in " + HubModel.devToolLabel(hub.preferredEditor) + ". Toggle the editor in the bar above."
+                        color: softText(0.72)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        width: parent.width
                       }
 
                       Repeater {

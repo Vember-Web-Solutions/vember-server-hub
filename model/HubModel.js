@@ -513,3 +513,126 @@ function parseCodeServerStatus(text) {
     image: trimText(parts[3] || "")
   };
 }
+
+function extraAppsCatalog() {
+  return [
+    {
+      id: "heroic",
+      name: "Heroic Games Launcher",
+      description: "Play Epic Games, GOG, and Amazon titles on Linux.",
+      category: "launchers",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/com.heroicgameslauncher.hgl.png",
+      launchCmd: ["sh", "-c", "command -v heroic >/dev/null 2>&1 && exec heroic || command -v heroic-games-launcher >/dev/null 2>&1 && exec heroic-games-launcher || exec flatpak run com.heroicgameslauncher.hgl"],
+      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed heroic-games-launcher-bin; elif command -v paru >/dev/null 2>&1; then paru -S --needed heroic-games-launcher-bin; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.heroicgameslauncher.hgl; else echo 'Install yay/paru or flatpak to install Heroic.'; exit 1; fi"
+    },
+    {
+      id: "lutris",
+      name: "Lutris",
+      description: "Game manager for Linux with runners and installers.",
+      category: "launchers",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/lutris.png",
+      launchCmd: ["sh", "-c", "command -v lutris >/dev/null 2>&1 && exec lutris || exec flatpak run net.lutris.Lutris"],
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed lutris; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub net.lutris.Lutris; else echo 'No supported installer found for Lutris.'; exit 1; fi"
+    },
+    {
+      id: "prismlauncher",
+      name: "Prism Launcher",
+      description: "Minecraft launcher with modpack and instance management.",
+      category: "minecraft",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/org.prismlauncher.PrismLauncher.png",
+      launchCmd: ["sh", "-c", "command -v prismlauncher >/dev/null 2>&1 && exec prismlauncher || exec flatpak run org.prismlauncher.PrismLauncher"],
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed prismlauncher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub org.prismlauncher.PrismLauncher; else echo 'No supported installer found for Prism Launcher.'; exit 1; fi"
+    },
+    {
+      id: "minecraft-launcher",
+      name: "Minecraft Launcher",
+      description: "Official Minecraft launcher (AUR/flatpak depending on setup).",
+      category: "minecraft",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/minecraft-launcher.png",
+      launchCmd: ["sh", "-c", "command -v minecraft-launcher >/dev/null 2>&1 && exec minecraft-launcher || exec flatpak run com.mojang.Minecraft"],
+      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed minecraft-launcher; elif command -v paru >/dev/null 2>&1; then paru -S --needed minecraft-launcher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.mojang.Minecraft; else echo 'Install yay/paru or flatpak to install Minecraft Launcher.'; exit 1; fi"
+    },
+    {
+      id: "curseforge",
+      name: "CurseForge",
+      description: "Mod manager for Minecraft and other supported games (best-effort detection).",
+      category: "mods",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/curseforge.png",
+      launchCmd: ["sh", "-c", "command -v curseforge >/dev/null 2>&1 && exec curseforge || (app=$(ls \"$HOME\"/Applications/CurseForge*.AppImage \"$HOME\"/Applications/curseforge*.AppImage 2>/dev/null | head -n1); if [ -n \"$app\" ]; then exec \"$app\"; fi) || exec flatpak run com.curseforge.curseforge"],
+      installCmd: "if command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.curseforge.curseforge; else echo 'CurseForge on Linux is often installed via AppImage or Flatpak. Install Flatpak or download the AppImage to ~/Applications.'; exit 1; fi"
+    },
+    {
+      id: "discord",
+      name: "Discord",
+      description: "Voice, video, and text chat.",
+      category: "apps",
+      icon: "file:///usr/share/icons/hicolor/256x256/apps/discord.png",
+      launchCmd: ["sh", "-c", "command -v discord >/dev/null 2>&1 && exec discord || command -v Discord >/dev/null 2>&1 && exec Discord || exec flatpak run com.discordapp.Discord"],
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed discord; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.discordapp.Discord; else echo 'No supported installer found for Discord.'; exit 1; fi"
+    }
+  ];
+}
+
+function extraAppsScanCommand() {
+  // Output: id\tinstalled(0/1)\trunning(0/1)\tnote
+  var script = [
+    "set -eu",
+    "has_cmd(){ command -v \"$1\" >/dev/null 2>&1; }",
+    "has_flatpak(){ command -v flatpak >/dev/null 2>&1 && flatpak info \"$1\" >/dev/null 2>&1; }",
+    "running_any(){ for p in \"$@\"; do pgrep -x \"$p\" >/dev/null 2>&1 && return 0; done; return 1; }",
+    "emit(){ printf '%s\\t%s\\t%s\\t%s\\n' \"$1\" \"$2\" \"$3\" \"$4\"; }",
+    // heroic
+    "if has_cmd heroic || has_cmd heroic-games-launcher || has_flatpak com.heroicgameslauncher.hgl; then ih=1; else ih=0; fi; if running_any heroic heroic-games-launcher; then rh=1; else rh=0; fi; emit heroic \"$ih\" \"$rh\" ''",
+    // lutris
+    "if has_cmd lutris || has_flatpak net.lutris.Lutris; then il=1; else il=0; fi; if running_any lutris; then rl=1; else rl=0; fi; emit lutris \"$il\" \"$rl\" ''",
+    // prismlauncher
+    "if has_cmd prismlauncher || has_flatpak org.prismlauncher.PrismLauncher; then ip=1; else ip=0; fi; if running_any prismlauncher; then rp=1; else rp=0; fi; emit prismlauncher \"$ip\" \"$rp\" ''",
+    // minecraft-launcher
+    "if has_cmd minecraft-launcher || has_flatpak com.mojang.Minecraft; then im=1; else im=0; fi; if running_any minecraft-launcher; then rm=1; else rm=0; fi; emit minecraft-launcher \"$im\" \"$rm\" ''",
+    // curseforge
+    "cf_app=$(ls \"$HOME\"/Applications/CurseForge*.AppImage \"$HOME\"/Applications/curseforge*.AppImage 2>/dev/null | head -n1 || true); if has_cmd curseforge || [ -n \"$cf_app\" ] || has_flatpak com.curseforge.curseforge; then ic=1; else ic=0; fi; if running_any curseforge CurseForge; then rc=1; else rc=0; fi; emit curseforge \"$ic\" \"$rc\" \"$cf_app\"",
+    // discord
+    "if has_cmd discord || has_cmd Discord || has_flatpak com.discordapp.Discord; then idc=1; else idc=0; fi; if running_any discord Discord; then rdc=1; else rdc=0; fi; emit discord \"$idc\" \"$rdc\" ''"
+  ].join("\n");
+  return ["sh", "-c", script];
+}
+
+function parseExtraAppsScan(text, catalog) {
+  var byId = {};
+  var rows = nonEmptyLines(text);
+  for (var i = 0; i < rows.length; i++) {
+    var parts = rows[i].split("\t");
+    var id = trimText(parts[0] || "");
+    if (!id) continue;
+    byId[id] = {
+      installed: trimText(parts[1] || "0") === "1",
+      running: trimText(parts[2] || "0") === "1",
+      note: trimText(parts.slice(3).join("\t") || "")
+    };
+  }
+  var out = [];
+  var cat = Array.isArray(catalog) ? catalog : [];
+  for (var j = 0; j < cat.length; j++) {
+    var def = cat[j] || {};
+    var st = byId[def.id] || { installed: false, running: false, note: "" };
+    out.push({
+      id: def.id || "",
+      name: def.name || def.id || "App",
+      description: def.description || "",
+      category: def.category || "apps",
+      icon: def.icon || "",
+      installed: !!st.installed,
+      running: !!st.running,
+      note: st.note || ""
+    });
+  }
+  return out;
+}
+
+function extraAppDefById(id) {
+  var cat = extraAppsCatalog();
+  for (var i = 0; i < cat.length; i++) {
+    if (cat[i] && cat[i].id === id) return cat[i];
+  }
+  return null;
+}

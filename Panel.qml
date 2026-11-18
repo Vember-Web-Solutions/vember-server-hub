@@ -68,6 +68,11 @@ Item {
   property int bnetGameCount: -1
   property string bnetNote: ""
 
+  property var extraApps: []
+  property bool extraAppsScanBusy: false
+  property string extraAppInstallBusyId: ""
+  property string extraAppInstallStatus: ""
+
   property bool gameMountPresent: false
   property string gameMountSummary: ""
   property string gameMountError: ""
@@ -685,6 +690,44 @@ Item {
     steamVdfView.path = HubModel.steamLibraryVdfPath(homeDir);
     bnetGameCountProc.command = HubModel.battlenetGameCountCommand(homeDir);
     if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
+
+    extraAppsScanBusy = true;
+    extraAppsScanProc.running = false;
+    extraAppsScanProc.command = HubModel.extraAppsScanCommand();
+    extraAppsScanProc.running = true;
+  }
+
+  function launchExtraApp(appId) {
+    var def = HubModel.extraAppDefById(appId);
+    if (!def) {
+      lastActionMessage = "Unknown app: " + appId;
+      return;
+    }
+    extraAppLaunchProc.appId = appId;
+    extraAppLaunchProc.appName = def.name || appId;
+    extraAppLaunchProc.running = false;
+    extraAppLaunchProc.command = def.launchCmd;
+    extraAppLaunchProc.running = true;
+    lastActionMessage = "Launching " + (def.name || appId) + "…";
+  }
+
+  function installExtraApp(appId) {
+    var def = HubModel.extraAppDefById(appId);
+    if (!def) {
+      lastActionMessage = "Unknown app: " + appId;
+      return;
+    }
+    extraAppInstallBusyId = appId;
+    extraAppInstallStatus = "Opening terminal to install " + (def.name || appId) + "…";
+    lastActionMessage = extraAppInstallStatus;
+    var cmd = String(def.installCmd || "");
+    if (cmd.length === 0) cmd = "echo 'No install command configured.'";
+    extraAppInstallProc.appId = appId;
+    extraAppInstallProc.appName = def.name || appId;
+    extraAppInstallProc.running = false;
+    extraAppInstallProc.command = ["sh", "-c",
+      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(cmd + "; echo; echo '---'; echo 'Press Enter to close...'; read -r") + " </dev/null >/dev/null 2>&1 &"];
+    extraAppInstallProc.running = true;
   }
 
   function runTailscaleAction(action) {
@@ -1170,6 +1213,65 @@ Item {
     onLoadFailed: {
       root.steamNote = "Counting installed games from default/common libraries.";
     }
+  }
+
+  Process {
+    id: extraAppsScanProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.extraApps = HubModel.parseExtraAppsScan(text, HubModel.extraAppsCatalog());
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.extraAppsScanBusy = false;
+      if (code !== 0 && (!root.extraApps || root.extraApps.length === 0)) {
+        root.extraApps = HubModel.parseExtraAppsScan("", HubModel.extraAppsCatalog());
+      }
+    }
+  }
+
+  Process {
+    id: extraAppLaunchProc
+    property string appId: ""
+    property string appName: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code === 0) {
+        root.lastActionMessage = "Launched " + (appName || appId) + ".";
+      } else {
+        var err = HubModel.trimText(stderr.text || "");
+        root.lastActionMessage = "Failed to launch " + (appName || appId) + (err.length > 0 ? (": " + err) : (" (code " + code + ")."));
+      }
+      root.refreshGames();
+    }
+  }
+
+  Process {
+    id: extraAppInstallProc
+    property string appId: ""
+    property string appName: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.extraAppInstallBusyId = "";
+      if (code === 0) {
+        root.extraAppInstallStatus = "Install terminal opened for " + (appName || appId) + ". Refreshing after install…";
+      } else {
+        root.extraAppInstallStatus = "Could not open install terminal for " + (appName || appId) + " (code " + code + ").";
+      }
+      root.lastActionMessage = root.extraAppInstallStatus;
+      // refresh later to pick up installs done in terminal
+      extraAppInstallRefreshTimer.restart();
+    }
+  }
+
+  Timer {
+    id: extraAppInstallRefreshTimer
+    interval: 6000
+    repeat: false
+    onTriggered: root.refreshGames()
   }
 
   // --- Processes: Game mount ---
