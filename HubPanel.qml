@@ -2186,7 +2186,7 @@ PanelWindow {
                     ColumnLayout {
                       Layout.fillWidth: true; spacing: 2
                       Text { textFormat: Text.PlainText; text: "Game servers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text { textFormat: Text.PlainText; text: "Detected game server containers (best-effort, by name/image). Manage full container details in the Containers tab."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                      Text { textFormat: Text.PlainText; text: "Detected game server containers (Docker) and Steam dedicated servers installed on this host (best-effort). Container controls are available for Docker servers."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
 
@@ -2201,7 +2201,12 @@ PanelWindow {
                       var hay = ((c.name || "") + " " + (c.image || "")).toLowerCase();
                       var match = false;
                       for (var k = 0; k < keys.length; k++) { if (hay.indexOf(keys[k]) !== -1) { match = true; break; } }
-                      if (match) out.push(c);
+                      if (match) out.push({ serverType: "container", name: c.name || "unknown", image: c.image || "", state: c.state || "", status: c.status || "" });
+                    }
+                    var steamServers = hub.steamDedicatedServers || [];
+                    for (var s = 0; s < steamServers.length; s++) {
+                      var ss = steamServers[s] || {};
+                      out.push({ serverType: "steam", name: ss.name || "Steam Dedicated Server", image: ss.appid ? ("AppID " + ss.appid) : "Steam dedicated server", state: "installed", status: ss.installdir ? ("Install dir: " + ss.installdir) : "Host install (Steam)", installdir: ss.installdir || "", appid: ss.appid || "" });
                     }
                     return out;
                   }
@@ -2209,7 +2214,7 @@ PanelWindow {
                   Text {
                     visible: (gameServersCol.detectedGameServers || []).length === 0
                     textFormat: Text.PlainText
-                    text: HubModel.trimText(hub.dockerError).length > 0 ? hub.dockerError : "No game server containers detected. Install or run a game server container and it may appear here."
+                    text: HubModel.trimText(hub.dockerError).length > 0 ? hub.dockerError : "No game servers detected. Docker game server containers and installed Steam dedicated servers will appear here."
                     color: HubModel.trimText(hub.dockerError).length > 0 ? "#ef4444" : softText(0.75)
                     font.family: Style.font.family
                     wrapMode: Text.Wrap
@@ -2234,16 +2239,17 @@ PanelWindow {
                         RowLayout {
                           width: parent.width
                           spacing: 8
-                          Rectangle { width: 10; height: 10; radius: 5; color: panel.dockerStateTone(modelData.state); Layout.alignment: Qt.AlignVCenter }
+                          Rectangle { width: 10; height: 10; radius: 5; color: modelData.serverType === "steam" ? "#66c0f4" : panel.dockerStateTone(modelData.state); Layout.alignment: Qt.AlignVCenter }
                           ColumnLayout {
                             Layout.fillWidth: true; spacing: 2
                             Text { textFormat: Text.PlainText; text: modelData.name || "unknown"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
                             Text { visible: HubModel.trimText(modelData.image || "").length > 0; textFormat: Text.PlainText; text: modelData.image; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; Layout.fillWidth: true }
                           }
-                          Text { textFormat: Text.PlainText; text: modelData.state || ""; color: panel.dockerStateTone(modelData.state); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                          Text { textFormat: Text.PlainText; text: modelData.serverType === "steam" ? "Steam" : (modelData.state || ""); color: modelData.serverType === "steam" ? "#66c0f4" : panel.dockerStateTone(modelData.state); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         }
                         Text { visible: HubModel.trimText(modelData.status || "").length > 0; textFormat: Text.PlainText; text: modelData.status; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
                         Flow {
+                          visible: modelData.serverType !== "steam"
                           width: parent.width
                           spacing: 8
                           Button {
@@ -2264,6 +2270,16 @@ PanelWindow {
                             enabled: !hub.dockerBusy
                             onClicked: hub.runDockerAction("restart", modelData.name)
                           }
+                        }
+                        Text {
+                          visible: modelData.serverType === "steam"
+                          textFormat: Text.PlainText
+                          text: "Host-installed Steam dedicated server (not a Docker container)."
+                          color: softText(0.65)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          wrapMode: Text.Wrap
+                          width: parent.width
                         }
                       }
                     }

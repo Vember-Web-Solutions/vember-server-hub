@@ -100,13 +100,45 @@ function parsePgrepCount(text) {
 }
 
 function parseManifestCount(text) {
-  var linesArr = nonEmptyLines(text);
-  if (linesArr.length === 1) {
-    var trimmed = trimText(linesArr[0]);
-    if (/^\d+$/.test(trimmed))
-      return Number(trimmed);
+  var scan = parseSteamManifestScan(text);
+  return scan.count;
+}
+
+function parseSteamManifestScan(text) {
+  var t = trimText(text);
+  var out = { count: 0, servers: [] };
+  if (t.length === 0)
+    return out;
+  try {
+    var obj = JSON.parse(t);
+    if (obj && typeof obj === "object") {
+      var n = Number(obj.count);
+      out.count = isNaN(n) ? 0 : n;
+      if (Array.isArray(obj.servers)) {
+        for (var i = 0; i < obj.servers.length; i++) {
+          var srv = obj.servers[i] || {};
+          out.servers.push({
+            appid: trimText(srv.appid || ""),
+            name: trimText(srv.name || ""),
+            installdir: trimText(srv.installdir || "")
+          });
+        }
+      }
+      return out;
+    }
+  } catch (e) {}
+  // fallback: plain number or line count
+  if (/^\d+$/.test(t)) {
+    out.count = Number(t);
+    return out;
   }
-  return linesArr.length;
+  var rows = nonEmptyLines(t);
+  if (rows.length === 1 && /^\d+$/.test(trimText(rows[0]))) {
+    out.count = Number(trimText(rows[0]));
+    return out;
+  }
+  out.count = rows.length;
+  return out;
 }
 
 function parseLibraryPathsFromVdf(text) {
@@ -249,9 +281,10 @@ function steamManifestCountCommandForDirs(steamappsDirs) {
       filtered.push(String(dirs[i]));
   }
   if (filtered.length === 0)
-    return ["python3", "-c", "print(0)"];
-  var script = "import sys,glob,os,re\n" +
+    return ["python3", "-c", "import json; print(json.dumps({'count': 0, 'servers': []}))"];
+  var script = "import sys,glob,os,re,json\n" +
     "keep=0\n" +
+    "servers=[]\n" +
     "seen=set()\n" +
     "for d in sys.argv[1:]:\n" +
     "  for m in glob.glob(os.path.join(d,'appmanifest_*.acf')):\n" +
@@ -262,12 +295,20 @@ function steamManifestCountCommandForDirs(steamappsDirs) {
     "      t=open(m,'r',errors='ignore').read()\n" +
     "    except Exception:\n" +
     "      continue\n" +
-    "    name=re.search(r'\"name\"\\s+\"([^\"]*)\"', t, re.I)\n" +
-    "    n=(name.group(1) if name else '').lower()\n" +
+    "    name_m=re.search(r'\\\"name\\\"\\s+\\\"([^\\\"]*)\\\"', t, re.I)\n" +
+    "    name=(name_m.group(1) if name_m else '')\n" +
+    "    n=name.lower()\n" +
     "    if ('proton' in n or 'steam linux runtime' in n or 'steamworks common redistributables' in n):\n" +
     "      continue\n" +
+    "    appid_m=re.search(r'\\\"appid\\\"\\s+\\\"([^\\\"]*)\\\"', t, re.I)\n" +
+    "    inst_m=re.search(r'\\\"installdir\\\"\\s+\\\"([^\\\"]*)\\\"', t, re.I)\n" +
+    "    appid=(appid_m.group(1) if appid_m else '')\n" +
+    "    installdir=(inst_m.group(1) if inst_m else '')\n" +
+    "    if ('dedicated server' in n):\n" +
+    "      servers.append({'appid': appid, 'name': name, 'installdir': installdir})\n" +
+    "      continue\n" +
     "    keep+=1\n" +
-    "print(keep)\n";
+    "print(json.dumps({'count': keep, 'servers': servers}))\n";
   var cmd = ["python3", "-c", script];
   for (var j = 0; j < filtered.length; j++) cmd.push(filtered[j]);
   return cmd;

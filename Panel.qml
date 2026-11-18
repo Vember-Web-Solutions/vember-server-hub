@@ -61,6 +61,7 @@ Item {
   property bool steamInstalled: false
   property bool steamRunning: false
   property int steamGameCount: -1
+  property var steamDedicatedServers: []
   property string steamNote: ""
 
   property bool bnetInstalled: false
@@ -747,6 +748,7 @@ Item {
     steamRunning = false;
     bnetRunning = false;
     steamGameCount = -1;
+    steamDedicatedServers = [];
     bnetGameCount = -1;
     if (!steamPgrepProc.running) steamPgrepProc.running = true;
     if (!bnetPgrepProc.running) bnetPgrepProc.running = true;
@@ -1247,7 +1249,13 @@ Item {
   }
   Process {
     id: steamManifestProc
-    stdout: StdioCollector { onStreamFinished: root.steamGameCount = HubModel.parseManifestCount(text) }
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var scan = HubModel.parseSteamManifestScan(text);
+        root.steamGameCount = scan.count;
+        root.steamDedicatedServers = scan.servers || [];
+      }
+    }
     stderr: StdioCollector {}
   }
   Process {
