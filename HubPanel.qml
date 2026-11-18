@@ -1888,7 +1888,6 @@ PanelWindow {
                           Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
                           Text { textFormat: Text.PlainText; text: (hub.steamGameCount >= 0 ? (hub.steamGameCount + " games detected") : "Game count unknown") + (hub.steamRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         }
-                        Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchSteam() }
                       }
                     }
 
@@ -1913,7 +1912,6 @@ PanelWindow {
                           Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
                           Text { textFormat: Text.PlainText; text: (hub.bnetGameCount >= 0 ? (hub.bnetGameCount + " games detected") : "Game count unknown") + (hub.bnetRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         }
-                        Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchBattleNet() }
                       }
                     }
 
@@ -1946,7 +1944,6 @@ PanelWindow {
                             Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
                             Text { textFormat: Text.PlainText; text: "Installed" + (modelData.running ? " • running" : "") + " • game count not tracked"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                           }
-                          Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchExtraApp(modelData.id) }
                         }
                       }
                     }

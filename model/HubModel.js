@@ -568,7 +568,7 @@ function extraAppsCatalog() {
       category: "launchers",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/com.heroicgameslauncher.hgl.png",
       launchCmd: ["sh", "-c", "command -v heroic >/dev/null 2>&1 && exec heroic || command -v heroic-games-launcher >/dev/null 2>&1 && exec heroic-games-launcher || exec flatpak run com.heroicgameslauncher.hgl"],
-      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed heroic-games-launcher-bin; elif command -v paru >/dev/null 2>&1; then paru -S --needed heroic-games-launcher-bin; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.heroicgameslauncher.hgl; else echo 'Install yay/paru or flatpak to install Heroic.'; exit 1; fi"
+      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed --noconfirm heroic-games-launcher-bin; elif command -v paru >/dev/null 2>&1; then paru -S --needed --noconfirm heroic-games-launcher-bin; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.heroicgameslauncher.hgl; else echo 'Install yay/paru or flatpak to install Heroic.'; exit 1; fi"
     },
     {
       id: "lutris",
@@ -577,7 +577,7 @@ function extraAppsCatalog() {
       category: "launchers",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/lutris.png",
       launchCmd: ["sh", "-c", "command -v lutris >/dev/null 2>&1 && exec lutris || exec flatpak run net.lutris.Lutris"],
-      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed lutris; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub net.lutris.Lutris; else echo 'No supported installer found for Lutris.'; exit 1; fi"
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm lutris; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub net.lutris.Lutris; else echo 'No supported installer found for Lutris.'; exit 1; fi"
     },
     {
       id: "prismlauncher",
@@ -586,7 +586,7 @@ function extraAppsCatalog() {
       category: "minecraft",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/org.prismlauncher.PrismLauncher.png",
       launchCmd: ["sh", "-c", "command -v prismlauncher >/dev/null 2>&1 && exec prismlauncher || exec flatpak run org.prismlauncher.PrismLauncher"],
-      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed prismlauncher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub org.prismlauncher.PrismLauncher; else echo 'No supported installer found for Prism Launcher.'; exit 1; fi"
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm prismlauncher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub org.prismlauncher.PrismLauncher; else echo 'No supported installer found for Prism Launcher.'; exit 1; fi"
     },
     {
       id: "minecraft-launcher",
@@ -595,7 +595,7 @@ function extraAppsCatalog() {
       category: "minecraft",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/minecraft-launcher.png",
       launchCmd: ["sh", "-c", "command -v minecraft-launcher >/dev/null 2>&1 && exec minecraft-launcher || exec flatpak run com.mojang.Minecraft"],
-      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed minecraft-launcher; elif command -v paru >/dev/null 2>&1; then paru -S --needed minecraft-launcher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.mojang.Minecraft; else echo 'Install yay/paru or flatpak to install Minecraft Launcher.'; exit 1; fi"
+      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed --noconfirm minecraft-launcher; elif command -v paru >/dev/null 2>&1; then paru -S --needed --noconfirm minecraft-launcher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.mojang.Minecraft; else echo 'Install yay/paru or flatpak to install Minecraft Launcher.'; exit 1; fi"
     },
     {
       id: "curseforge",
@@ -613,7 +613,7 @@ function extraAppsCatalog() {
       category: "apps",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/discord.png",
       launchCmd: ["sh", "-c", "command -v discord >/dev/null 2>&1 && exec discord || command -v Discord >/dev/null 2>&1 && exec Discord || exec flatpak run com.discordapp.Discord"],
-      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed discord; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.discordapp.Discord; else echo 'No supported installer found for Discord.'; exit 1; fi"
+      installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm discord; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.discordapp.Discord; else echo 'No supported installer found for Discord.'; exit 1; fi"
     }
   ];
 }
