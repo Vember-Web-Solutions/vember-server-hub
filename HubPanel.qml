@@ -411,6 +411,12 @@ PanelWindow {
                       font.bold: hub.sshActive === "active"
                     }
                   }
+                  Button {
+                    iconText: "󰚰"
+                    text: "Update Omarchy"
+                    tooltipText: "Launch omarchy-update in a terminal (closes hub)"
+                    onClicked: hub.openOmarchyUpdateTerminal()
+                  }
                 }
               }
             }
