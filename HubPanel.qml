@@ -2345,7 +2345,7 @@ PanelWindow {
                     Text {
                       visible: !hub.codeServerPresent
                       textFormat: Text.PlainText
-                      text: "Setup runs in a terminal, creates the container, and prints a generated password. Save the password — it is shown once."
+                      text: "Set a password and port in the hub. Setup runs in a terminal to create/start the container. The password is saved to a restricted env file (not in config.yaml)."
                       color: softText(0.72)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -2445,7 +2445,7 @@ PanelWindow {
                         spacing: 6
                         Text { textFormat: Text.PlainText; text: "Local URL: http://localhost:" + hub.codeServerPort; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
                         Text { textFormat: Text.PlainText; text: "Tailnet: reachable via this device’s Tailnet IP/hostname on port " + hub.codeServerPort + " if the port is accessible on your network."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                        Text { textFormat: Text.PlainText; text: "Password: generated during setup and printed in the terminal. Config/state is kept in ~/.config/vember-code-server (preserved on uninstall)."; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Text { textFormat: Text.PlainText; text: "Password: set in the hub during setup and stored in ~/.config/vember-code-server/code-server.env (mode 600). Config/state is kept in ~/.config/vember-code-server (preserved on uninstall)."; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
                       }
                     }
                   }
