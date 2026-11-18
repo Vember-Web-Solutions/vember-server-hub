@@ -108,6 +108,10 @@ Item {
   property string codeServerImage: ""
   property bool codeServerBusy: false
   property int codeServerPort: 8443
+  property string codeServerSetupStage: ""
+  property string codeServerSetupDetail: ""
+  property real codeServerSetupProgress: -1
+  property int codeServerSetupPollsLeft: 0
 
   function open(payloadJson) {
     if (Quickshell.screens && Quickshell.screens.length > 0)
@@ -283,6 +287,9 @@ Item {
     if (pass.length === 0) {
       codeServerStatusText = "Set a password for Code Server before setup.";
       lastActionMessage = "Code Server setup needs a password.";
+      codeServerSetupStage = "error";
+      codeServerSetupDetail = "Password required.";
+      codeServerSetupProgress = 0;
       return;
     }
     var p = Number(port);
@@ -293,6 +300,9 @@ Item {
     if (configReady || HubModel.trimText(serverName).length > 0) writeHubConfig(false);
 
     codeServerBusy = true;
+    codeServerSetupStage = "launching";
+    codeServerSetupProgress = -1;
+    codeServerSetupDetail = "Opening terminal to run Docker setup (image pull may take a while)…";
     codeServerStatusText = "Opening terminal to set up VS Code Server on port " + p + "…";
     codeServerActionProc.actionName = "setup";
     var inner = [
@@ -316,6 +326,7 @@ Item {
       "else",
       "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
       "  if ! docker info >/dev/null 2>&1; then echo 'Docker is installed but not running or not accessible (try: sudo systemctl start docker, and ensure your user can access docker).'; exit 1; fi",
+      "  echo 'Pulling/starting code-server container on port " + p + "…'",
       "  docker run -d --name vember-code-server -p " + p + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" --env-file \"$HOME/.config/vember-code-server/code-server.env\" --restart unless-stopped codercom/code-server:latest",
       "  echo ''",
       "  echo 'VS Code Server started.'",
@@ -351,6 +362,11 @@ Item {
   function uninstallCodeServer() {
     if (codeServerBusy) return;
     codeServerBusy = true;
+    codeServerSetupStage = "";
+    codeServerSetupDetail = "";
+    codeServerSetupProgress = -1;
+    codeServerSetupPollsLeft = 0;
+    codeServerSetupPollTimer.stop();
     codeServerActionProc.actionName = "uninstall";
     codeServerActionProc.command = ["docker", "rm", "-f", "vember-code-server"];
     codeServerActionProc.running = true;
@@ -1270,19 +1286,70 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {}
   }
+  Timer {
+    id: codeServerSetupPollTimer
+    interval: 3000
+    repeat: true
+    running: false
+    onTriggered: {
+      if (root.codeServerSetupPollsLeft <= 0) {
+        running = false;
+        if (root.codeServerBusy && root.codeServerSetupStage === "running") {
+          root.codeServerBusy = false;
+          root.codeServerSetupStage = "checking";
+          root.codeServerSetupDetail = "Setup terminal may still be running. Refresh status or check the terminal for progress/errors.";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+        }
+        return;
+      }
+      root.codeServerSetupPollsLeft -= 1;
+      root.refreshCodeServer();
+      root.refreshDocker();
+      if (root.codeServerRunning) {
+        running = false;
+        root.codeServerBusy = false;
+        root.codeServerSetupStage = "done";
+        root.codeServerSetupProgress = 1;
+        root.codeServerSetupDetail = "VS Code Server is running on port " + root.codeServerPort + ".";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.devStatus = "VS Code Server ready at http://localhost:" + root.codeServerPort;
+      } else if (root.codeServerPresent && !root.codeServerRunning) {
+        // container exists but not running yet; keep waiting unless last poll
+        root.codeServerSetupDetail = "Container created, waiting for it to start…";
+      }
+    }
+  }
+
   Process {
     id: codeServerActionProc
     property string actionName: ""
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
-      root.codeServerBusy = false;
       if (actionName === "setup") {
-        root.devStatus = "VS Code Server setup terminal opened (review password/URL there). Refreshing status…";
-      } else if (code === 0) {
-        root.devStatus = "VS Code Server " + actionName + " succeeded.";
+        if (code === 0) {
+          root.codeServerSetupStage = "running";
+          root.codeServerSetupProgress = -1;
+          root.codeServerSetupDetail = "Setup terminal opened. Docker may be pulling the image and starting the container…";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+          root.devStatus = "VS Code Server setup running in terminal. Watching for container status…";
+          root.codeServerSetupPollsLeft = 40; // ~2 minutes
+          codeServerSetupPollTimer.restart();
+        } else {
+          root.codeServerBusy = false;
+          root.codeServerSetupStage = "error";
+          root.codeServerSetupProgress = 0;
+          root.codeServerSetupDetail = "Failed to open setup terminal (code " + code + ").";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+          root.devStatus = root.codeServerSetupDetail;
+        }
       } else {
-        root.devStatus = "VS Code Server " + actionName + " failed (code " + code + ").";
+        root.codeServerBusy = false;
+        if (code === 0) {
+          root.devStatus = "VS Code Server " + actionName + " succeeded.";
+        } else {
+          root.devStatus = "VS Code Server " + actionName + " failed (code " + code + ").";
+        }
       }
       root.refreshCodeServer();
       root.refreshDocker();

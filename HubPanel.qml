@@ -2282,6 +2282,52 @@ PanelWindow {
                     }
 
                     Column {
+                      visible: hub.codeServerBusy || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking"
+                      width: parent.width
+                      spacing: 6
+                      Text {
+                        textFormat: Text.PlainText
+                        text: HubModel.trimText(hub.codeServerSetupDetail).length > 0 ? hub.codeServerSetupDetail : "Setting up VS Code Server…"
+                        color: softText(0.78)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        width: parent.width
+                      }
+                      Rectangle {
+                        width: parent.width
+                        height: 8
+                        radius: 4
+                        color: softText(0.12)
+                        clip: true
+                        Rectangle {
+                          id: codeServerSetupProgressFill
+                          height: parent.height
+                          radius: 4
+                          color: Color.accent
+                          width: hub.codeServerSetupProgress > 0 ? (parent.width * Math.max(0, Math.min(1, hub.codeServerSetupProgress))) : parent.width * 0.35
+                          x: hub.codeServerSetupProgress > 0 ? 0 : -width
+                          Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
+                          SequentialAnimation on x {
+                            running: (hub.codeServerSetupProgress <= 0) && (hub.codeServerBusy || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking")
+                            loops: Animation.Infinite
+                            NumberAnimation { from: -codeServerSetupProgressFill.width; to: codeServerSetupProgressFill.parent ? codeServerSetupProgressFill.parent.width : 300; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
+                          }
+                        }
+                      }
+                      Text {
+                        visible: hub.codeServerSetupStage === "running"
+                        textFormat: Text.PlainText
+                        text: "Docker image download/start progress is shown in the setup terminal. Full in-panel pull progress comes later."
+                        color: softText(0.65)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        width: parent.width
+                      }
+                    }
+
+                    Column {
                       width: parent.width
                       spacing: 4
                       Text { textFormat: Text.PlainText; text: "Actions"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
