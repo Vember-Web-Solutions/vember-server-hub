@@ -16,7 +16,17 @@ PanelWindow {
   property bool confirmRemoveCodeServer: false
   property bool codeServerSetupOpen: false
   property string codeServerSetupPassword: ""
-  property string settingsMenuOpen: false // placeholder? no wait - keep types right
+  property bool settingsMenuOpen: false
+  property bool arrangeTabsOpen: false
+  property var arrangeTabOrderDraft: []
+  property bool updateDialogOpen: false
+  property bool updateInProgress: false
+  property real updateProgress: 0
+  property string updateStatusText: ""
+  property var toastItems: []
+  property int toastSeq: 0
+  property bool isFullscreen: false
+  property string devSubTab: "workspace"
 
 
   function toggleFullscreen() {
@@ -1863,7 +1873,6 @@ PanelWindow {
                 color: softText(0.08)
                 implicitWidth: editorNavBadge.implicitWidth + 14
                 implicitHeight: editorNavBadge.implicitHeight + 8
-                anchors.verticalCenter: parent ? parent.verticalCenter : undefined
                 Text {
                   id: editorNavBadge
                   anchors.centerIn: parent
