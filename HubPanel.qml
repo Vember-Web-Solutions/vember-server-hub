@@ -351,27 +351,26 @@ PanelWindow {
 
                 RowLayout {
                   width: parent.width
-                  spacing: 12
-                  Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-                  ColumnLayout {
+                  spacing: 14
+                  Text {
+                    Layout.alignment: Qt.AlignVCenter
+                    textFormat: Text.PlainText
+                    text: "󰒋"
+                    color: Color.accent
+                    font.family: Style.font.family
+                    font.pixelSize: Math.round(Style.font.iconLarge * 1.5)
+                  }
+                  Text {
                     Layout.fillWidth: true
-                    spacing: 2
-                    Text {
-                      textFormat: Text.PlainText
-                      text: hub.defaultServerName()
-                      color: Color.menu.text
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.large
-                      font.bold: true
-                    }
-                    Text {
-                      visible: false
-                      textFormat: Text.PlainText
-                      text: ""
-                      color: softText(0.78)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                    }
+                    Layout.alignment: Qt.AlignVCenter
+                    textFormat: Text.PlainText
+                    text: hub.defaultServerName()
+                    color: Color.menu.text
+                    font.family: Style.font.family
+                    font.pixelSize: Math.round(Style.font.large * 1.4)
+                    font.bold: true
+                    elide: Text.ElideRight
+                    verticalAlignment: Text.AlignVCenter
                   }
                 }
 
