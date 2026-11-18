@@ -843,20 +843,27 @@ Item {
   function runOmarchyUpdateInPanel() {
     if (omarchyUpdateRunning)
       return;
+    var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
+    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]}; echo \"[vember-update-exit:$code]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
-    omarchyUpdateStatus = "Running Omarchy update…";
-    lastActionMessage = "Running Omarchy update.";
+    omarchyUpdateStatus = "Running Omarchy update in terminal (interactive)… streaming live log below.";
+    lastActionMessage = "Running Omarchy update in terminal.";
     omarchyUpdateRunning = true;
     omarchyUpdateLogProc.running = false;
-    omarchyUpdateLogProc.command = ["/usr/share/omarchy/bin/omarchy-update"];
+    omarchyUpdateTerminalProc.running = false;
+    omarchyUpdateTerminalProc.command = ["sh", "-c",
+      "mkdir -p \"$HOME/.cache/vember-server-hub\" && : > \"$1\" && " +
+      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 &",
+      "sh", logPath];
+    omarchyUpdateTerminalProc.running = true;
+    omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-f", logPath];
     omarchyUpdateLogProc.running = true;
   }
 
   function stopOmarchyUpdateLog() {
     omarchyUpdateLogProc.running = false;
     omarchyUpdateRunning = false;
-    if (HubModel.trimText(omarchyUpdateStatus).indexOf("Starting") === 0 || HubModel.trimText(omarchyUpdateStatus).indexOf("Live log") === 0)
-      omarchyUpdateStatus = "Live log stopped.";
+    omarchyUpdateStatus = "Live log stopped.";
   }
 
   function clearOmarchyUpdateLog() {
@@ -1111,12 +1118,31 @@ Item {
     stderr: StdioCollector {}
   }
   Process {
+    id: omarchyUpdateTerminalProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+  }
+
+  Process {
     id: omarchyUpdateLogProc
     function appendLog(line) {
-      var t = String(line || "").replace(/\r/g, "");
+      var raw = String(line || "").replace(/\r/g, "");
+      var t = raw;
       t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
       t = t.replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, "");
       t = t.replace(/\x1B\[\?[0-9;]*[a-zA-Z]/g, "");
+      var marker = t.match(/\[vember-update-exit:(-?\d+)\]/);
+      if (marker) {
+        var code = Number(marker[1]);
+        root.omarchyUpdateRunning = false;
+        if (code === 0)
+          root.omarchyUpdateStatus = "Omarchy update finished.";
+        else
+          root.omarchyUpdateStatus = "Omarchy update exited (code " + code + ").";
+        omarchyUpdateLogProc.running = false;
+        // don't append the internal marker line to visible log
+        return;
+      }
       if (HubModel.trimText(t).length === 0)
         return;
       var next = (root.omarchyUpdateLog.length > 0 ? (root.omarchyUpdateLog + "\n") : "") + t;
@@ -1127,11 +1153,12 @@ Item {
     stdout: SplitParser { onRead: function(line) { omarchyUpdateLogProc.appendLog(line) } }
     stderr: SplitParser { onRead: function(line) { omarchyUpdateLogProc.appendLog(line) } }
     onExited: function(code) {
-      root.omarchyUpdateRunning = false;
-      if (code === 0)
-        root.omarchyUpdateStatus = "Omarchy update finished.";
-      else
-        root.omarchyUpdateStatus = "Omarchy update exited (code " + code + ").";
+      // tail process exited (stopped by user or after marker handling)
+      if (root.omarchyUpdateRunning) {
+        root.omarchyUpdateRunning = false;
+        if (HubModel.trimText(root.omarchyUpdateStatus).indexOf("Running") === 0)
+          root.omarchyUpdateStatus = "Live log stopped.";
+      }
     }
   }
 
