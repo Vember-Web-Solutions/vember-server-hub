@@ -24,6 +24,7 @@ PanelWindow {
   property var toastItems: []
   property int toastSeq: 0
   property bool isFullscreen: false
+  property string devSubTab: "workspace"
 
   function toggleFullscreen() {
     panel.isFullscreen = !panel.isFullscreen;
@@ -335,12 +336,12 @@ PanelWindow {
               color: accentSoft(0.08)
               border.color: accentSoft(0.20)
               border.width: 1
-              implicitHeight: heroCol.implicitHeight + 24
+              implicitHeight: heroCol.implicitHeight + 28
               Column {
                 id: heroCol
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                 anchors.margins: 14
-                spacing: 0
+                spacing: 10
 
                 RowLayout {
                   width: parent.width
@@ -351,15 +352,16 @@ PanelWindow {
                     spacing: 2
                     Text {
                       textFormat: Text.PlainText
-                      text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName()
+                      text: hub.defaultServerName()
                       color: Color.menu.text
                       font.family: Style.font.family
                       font.pixelSize: Style.font.large
                       font.bold: true
                     }
                     Text {
+                      visible: HubModel.trimText(hub.serverRole).length > 0
                       textFormat: Text.PlainText
-                      text: (HubModel.trimText(hub.serverRole).length > 0 ? (hub.serverRole + " • ") : "") + "Host: " + hub.defaultServerName()
+                      text: hub.serverRole
                       color: softText(0.78)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -367,22 +369,55 @@ PanelWindow {
                       Layout.fillWidth: true
                     }
                   }
+                }
+
+                Text {
+                  textFormat: Text.PlainText
+                  text: "Use the tabs to check access, manage containers, open repositories, and monitor games and storage on this server."
+                  color: softText(0.78)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.Wrap
+                  width: parent.width
+                }
+
+                Flow {
+                  width: parent.width
+                  spacing: 8
                   Rectangle {
                     radius: 10
                     color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
                     border.color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
                     border.width: hub.tailscaleActive === "active" ? 1 : 0
-                    implicitWidth: heroNetBadge.implicitWidth + 14
-                    implicitHeight: heroNetBadge.implicitHeight + 8
+                    implicitWidth: heroTsChip.implicitWidth + 14
+                    implicitHeight: heroTsChip.implicitHeight + 8
                     Text {
-                      id: heroNetBadge
+                      id: heroTsChip
                       anchors.centerIn: parent
                       textFormat: Text.PlainText
-                      text: hub.tailscaleActive === "active" ? "Tailnet online" : "Tailnet " + hub.tailscaleActive
+                      text: "Tailnet: " + hub.tailscaleActive
                       color: hub.tailscaleActive === "active" ? "#22c55e" : Color.menu.text
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                       font.bold: hub.tailscaleActive === "active"
+                    }
+                  }
+                  Rectangle {
+                    radius: 10
+                    color: hub.sshActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
+                    border.color: hub.sshActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
+                    border.width: hub.sshActive === "active" ? 1 : 0
+                    implicitWidth: heroSshChip.implicitWidth + 14
+                    implicitHeight: heroSshChip.implicitHeight + 8
+                    Text {
+                      id: heroSshChip
+                      anchors.centerIn: parent
+                      textFormat: Text.PlainText
+                      text: "SSH: " + hub.sshActive
+                      color: hub.sshActive === "active" ? "#22c55e" : Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.bold: hub.sshActive === "active"
                     }
                   }
                 }
@@ -1839,13 +1874,38 @@ PanelWindow {
             width: parent.width
             spacing: Style.spacing.md
 
-            Text {
-              textFormat: Text.PlainText
-              text: "Development environment: cloned repos, toolchain status, and quick install helpers for this server."
-              color: softText(0.8)
-              font.family: Style.font.family
-              wrapMode: Text.Wrap
-              width: parent.width
+            // Dev sub-nav
+            Row {
+              spacing: 8
+              Button {
+                iconText: "󰅨"
+                text: "Workspace"
+                active: panel.devSubTab === "workspace"
+                onClicked: panel.devSubTab = "workspace"
+              }
+              Button {
+                iconText: "󰨞"
+                text: "Code Server (Docker)"
+                active: panel.devSubTab === "codeserver"
+                onClicked: panel.devSubTab = "codeserver"
+              }
+              Rectangle {
+                visible: HubModel.trimText(hub.preferredEditor).length > 0
+                radius: 10
+                color: softText(0.08)
+                implicitWidth: editorNavBadge.implicitWidth + 14
+                implicitHeight: editorNavBadge.implicitHeight + 8
+                anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+                Text {
+                  id: editorNavBadge
+                  anchors.centerIn: parent
+                  textFormat: Text.PlainText
+                  text: "Editor: " + HubModel.devToolLabel(hub.preferredEditor)
+                  color: softText(0.85)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+              }
             }
 
             Text {
@@ -1869,148 +1929,27 @@ PanelWindow {
               width: parent.width
             }
 
-            RowLayout {
+            // Workspace
+            Column {
+              visible: panel.devSubTab === "workspace"
               width: parent.width
-              spacing: 12
+              spacing: Style.spacing.md
 
-              // Left: tools
-              Rectangle {
-                Layout.preferredWidth: Math.max(320, parent.width * 0.48)
-                Layout.alignment: Qt.AlignTop
-                radius: Style.cornerRadius
-                color: softText(0.04)
-                border.color: softText(0.08)
-                border.width: 1
-                implicitHeight: devToolsCol.implicitHeight + 24
-                Column {
-                  id: devToolsCol
-                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                  anchors.margins: 12
-                  spacing: 10
-
-                  RowLayout {
-                    width: parent.width
-                    spacing: 10
-                    Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
-                    ColumnLayout {
-                      Layout.fillWidth: true; spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text { textFormat: Text.PlainText; text: "uv • Python • GitHub CLI • Zed • VS Code"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    }
-                  }
-
-                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                  Repeater {
-                    model: hub.devTools || []
-                    delegate: Rectangle {
-                      required property var modelData
-                      width: devToolsCol.width - 0
-                      radius: 8
-                      color: softText(0.03)
-                      border.color: softText(0.08)
-                      border.width: 1
-                      implicitHeight: toolRow.implicitHeight + 12
-                      RowLayout {
-                        id: toolRow
-                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                        anchors.margins: 8
-                        spacing: 8
-                        Rectangle {
-                          width: 10; height: 10; radius: 5
-                          color: modelData.installed ? "#22c55e" : softText(0.35)
-                          Layout.alignment: Qt.AlignVCenter
-                        }
-                        Column {
-                          Layout.fillWidth: true
-                          spacing: 2
-                          Text {
-                            textFormat: Text.PlainText
-                            text: HubModel.devToolLabel(modelData.id)
-                            color: Color.menu.text
-                            font.family: Style.font.family
-                            font.bold: true
-                          }
-                          Text {
-                            textFormat: Text.PlainText
-                            text: modelData.installed ? (HubModel.trimText(modelData.version).length > 0 ? modelData.version : (modelData.path || "Installed")) : "Not installed"
-                            color: modelData.installed ? softText(0.78) : softText(0.65)
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            elide: Text.ElideRight
-                            wrapMode: Text.NoWrap
-                            width: parent.width
-                          }
-                          Text {
-                            visible: modelData.installed && HubModel.trimText(modelData.path).length > 0
-                            textFormat: Text.PlainText
-                            text: modelData.path
-                            color: softText(0.6)
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            elide: Text.ElideMiddle
-                            width: parent.width
-                          }
-                        }
-                        Column {
-                          visible: !modelData.installed
-                          spacing: 4
-                          Layout.alignment: Qt.AlignVCenter
-                          Row {
-                            spacing: 6
-                            Button {
-                              iconText: "󰏔"
-                              text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
-                              tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
-                              enabled: !hub.devInstallBusy
-                              onClicked: hub.runDevInstallSilent(modelData.id)
-                            }
-                            Button {
-                              iconText: "󰆍"
-                              text: "Terminal"
-                              tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
-                              enabled: !hub.devInstallBusy
-                              onClicked: hub.openDevInstallTerminal(modelData.id)
-                            }
-                          }
-                          Text {
-                            visible: hub.devInstallBusy && hub.devInstallToolId === modelData.id
-                            textFormat: Text.PlainText
-                            text: "Running…"
-                            color: softText(0.7)
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                          }
-                        }
-                        Text {
-                          visible: modelData.installed
-                          textFormat: Text.PlainText
-                          text: "Installed"
-                          color: "#22c55e"
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Right: repos + notes
-              Column {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignTop
+              RowLayout {
+                width: parent.width
                 spacing: 12
 
+                // Left: tools
                 Rectangle {
-                  width: parent.width
+                  Layout.preferredWidth: Math.max(320, parent.width * 0.46)
+                  Layout.alignment: Qt.AlignTop
                   radius: Style.cornerRadius
                   color: softText(0.04)
                   border.color: softText(0.08)
                   border.width: 1
-                  implicitHeight: devReposCol.implicitHeight + 24
+                  implicitHeight: devToolsCol.implicitHeight + 24
                   Column {
-                    id: devReposCol
+                    id: devToolsCol
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: 12
                     spacing: 10
@@ -2018,26 +1957,157 @@ PanelWindow {
                     RowLayout {
                       width: parent.width
                       spacing: 10
-                      Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Cloned repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                        Text { textFormat: Text.PlainText; text: "Scanned from common dev folders under your home directory."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Toolchain and editor installs for this server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                       }
-                      Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
 
                     Rectangle { width: parent.width; height: 1; color: softText(0.08) }
 
+                    Repeater {
+                      model: hub.devTools || []
+                      delegate: Rectangle {
+                        required property var modelData
+                        width: devToolsCol.width - 0
+                        radius: 8
+                        color: softText(0.03)
+                        border.color: softText(0.08)
+                        border.width: 1
+                        implicitHeight: toolRow.implicitHeight + 12
+                        RowLayout {
+                          id: toolRow
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 8
+                          spacing: 8
+                          Rectangle {
+                            width: 10; height: 10; radius: 5
+                            color: modelData.installed ? "#22c55e" : softText(0.35)
+                            Layout.alignment: Qt.AlignVCenter
+                          }
+                          Column {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                              textFormat: Text.PlainText
+                              text: HubModel.devToolLabel(modelData.id)
+                              color: Color.menu.text
+                              font.family: Style.font.family
+                              font.bold: true
+                            }
+                            Text {
+                              textFormat: Text.PlainText
+                              text: modelData.installed ? (HubModel.trimText(modelData.version).length > 0 ? modelData.version : (modelData.path || "Installed")) : "Not installed"
+                              color: modelData.installed ? softText(0.78) : softText(0.65)
+                              font.family: Style.font.family
+                              font.pixelSize: Style.font.caption
+                              elide: Text.ElideRight
+                              wrapMode: Text.NoWrap
+                              width: parent.width
+                            }
+                            Text {
+                              visible: modelData.installed && HubModel.trimText(modelData.path).length > 0
+                              textFormat: Text.PlainText
+                              text: modelData.path
+                              color: softText(0.6)
+                              font.family: Style.font.family
+                              font.pixelSize: Style.font.caption
+                              elide: Text.ElideMiddle
+                              width: parent.width
+                            }
+                          }
+                          Column {
+                            visible: !modelData.installed
+                            spacing: 4
+                            Layout.alignment: Qt.AlignVCenter
+                            Row {
+                              spacing: 6
+                              Button {
+                                iconText: "󰏔"
+                                text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
+                                tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
+                                enabled: !hub.devInstallBusy
+                                onClicked: hub.runDevInstallSilent(modelData.id)
+                              }
+                              Button {
+                                iconText: "󰆍"
+                                text: "Terminal"
+                                tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
+                                enabled: !hub.devInstallBusy
+                                onClicked: hub.openDevInstallTerminal(modelData.id)
+                              }
+                            }
+                            Text {
+                              visible: hub.devInstallBusy && hub.devInstallToolId === modelData.id
+                              textFormat: Text.PlainText
+                              text: "Running…"
+                              color: softText(0.7)
+                              font.family: Style.font.family
+                              font.pixelSize: Style.font.caption
+                            }
+                          }
+                          Text {
+                            visible: modelData.installed
+                            textFormat: Text.PlainText
+                            text: "Installed"
+                            color: "#22c55e"
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Right: editor + repos
+                Column {
+                  Layout.fillWidth: true
+                  Layout.alignment: Qt.AlignTop
+                  spacing: 12
+
+                  // Editor picker nav
+                  Rectangle {
+                    width: parent.width
+                    radius: Style.cornerRadius
+                    color: accentSoft(0.08)
+                    border.color: accentSoft(0.18)
+                    border.width: 1
+                    implicitHeight: editorPickerCol.implicitHeight + 24
                     Column {
-                      width: parent.width
-                      spacing: 6
-                      Text { textFormat: Text.PlainText; text: "Open repos in"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                      id: editorPickerCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 10
+
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: "󰅱"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Editor"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: HubModel.trimText(hub.preferredEditor).length > 0 ? ("Current: " + HubModel.devToolLabel(hub.preferredEditor)) : "Choose the editor used to open repositories."
+                            color: softText(0.78)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.Wrap
+                            Layout.fillWidth: true
+                          }
+                        }
+                      }
+
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
                       Row {
                         spacing: 8
                         Button {
-                          text: "Zed"
                           iconText: "󰅨"
+                          text: "Zed"
                           active: hub.preferredEditor === "zed"
                           enabled: {
                             var ok = false;
@@ -2045,12 +2115,12 @@ PanelWindow {
                             for (var i = 0; i < tools.length; i++) { if (tools[i].id === "zed" && tools[i].installed) { ok = true; break; } }
                             return ok;
                           }
-                          tooltipText: "Use Zed to open repositories"
+                          tooltipText: "Set Zed as the editor for opening repos"
                           onClicked: hub.setPreferredEditor("zed")
                         }
                         Button {
-                          text: "VS Code"
                           iconText: "󰨞"
+                          text: "VS Code"
                           active: hub.preferredEditor === "vscode"
                           enabled: {
                             var ok = false;
@@ -2058,85 +2128,135 @@ PanelWindow {
                             for (var i = 0; i < tools.length; i++) { if (tools[i].id === "vscode" && tools[i].installed) { ok = true; break; } }
                             return ok;
                           }
-                          tooltipText: "Use VS Code to open repositories"
+                          tooltipText: "Set VS Code as the editor for opening repos"
                           onClicked: hub.setPreferredEditor("vscode")
                         }
+                        Button {
+                          iconText: "󰖟"
+                          text: "Code Server"
+                          tooltipText: "Open Code Server (Docker) setup and access"
+                          active: panel.devSubTab === "codeserver"
+                          onClicked: panel.devSubTab = "codeserver"
+                        }
                       }
+
                       Text {
-                        visible: HubModel.trimText(hub.preferredEditor).length === 0
                         textFormat: Text.PlainText
-                        text: "Select an installed editor, then click a repository to open it."
-                        color: softText(0.7)
+                        text: HubModel.trimText(hub.preferredEditor).length > 0 ? "Click a repository below to open it in " + HubModel.devToolLabel(hub.preferredEditor) + "." : "Install and select Zed or VS Code, or use Code Server in Docker for browser-based editing."
+                        color: softText(0.72)
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
                         wrapMode: Text.Wrap
                         width: parent.width
                       }
                     }
+                  }
 
-                    Text {
-                      visible: !hub.devRepos || hub.devRepos.length === 0
-                      textFormat: Text.PlainText
-                      text: hub.devBusy ? "Scanning…" : "No repositories found in scanned locations."
-                      color: softText(0.7)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                    }
+                  Rectangle {
+                    width: parent.width
+                    radius: Style.cornerRadius
+                    color: softText(0.04)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    implicitHeight: devReposCol.implicitHeight + 24
+                    Column {
+                      id: devReposCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 10
 
-                    Repeater {
-                      model: hub.devRepos || []
-                      delegate: Rectangle {
-                        required property var modelData
-                        width: devReposCol.width - 0
-                        radius: 8
-                        color: softText(0.03)
-                        border.color: softText(0.08)
-                        border.width: 1
-                        implicitHeight: repoRow.implicitHeight + 10
-                        MouseArea {
-                          anchors.fill: parent
-                          cursorShape: Qt.PointingHandCursor
-                          enabled: HubModel.trimText(hub.preferredEditor).length > 0
-                          onClicked: hub.openRepoInEditor(modelData.path)
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: "Cloned repos scanned from common dev folders under your home directory."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                         }
-                        Column {
-                          id: repoRow
-                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                          anchors.margins: 8
-                          spacing: 2
-                          Text {
-                            textFormat: Text.PlainText
-                            text: modelData.name || modelData.path || "repo"
-                            color: Color.menu.text
-                            font.family: Style.font.family
-                            font.bold: true
-                            elide: Text.ElideRight
-                            width: parent.width
+                        Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                      Text {
+                        visible: !hub.devRepos || hub.devRepos.length === 0
+                        textFormat: Text.PlainText
+                        text: hub.devBusy ? "Scanning…" : "No repositories found in scanned locations."
+                        color: softText(0.7)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
+
+                      Repeater {
+                        model: hub.devRepos || []
+                        delegate: Rectangle {
+                          required property var modelData
+                          width: devReposCol.width - 0
+                          radius: 8
+                          color: softText(0.03)
+                          border.color: softText(0.08)
+                          border.width: 1
+                          implicitHeight: repoRow.implicitHeight + 10
+                          MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            enabled: HubModel.trimText(hub.preferredEditor).length > 0
+                            onClicked: hub.openRepoInEditor(modelData.path)
                           }
-                          Text {
-                            textFormat: Text.PlainText
-                            text: modelData.path || ""
-                            color: softText(0.68)
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            elide: Text.ElideMiddle
-                            width: parent.width
+                          Column {
+                            id: repoRow
+                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                            anchors.margins: 8
+                            spacing: 2
+                            Text {
+                              textFormat: Text.PlainText
+                              text: modelData.name || modelData.path || "repo"
+                              color: Color.menu.text
+                              font.family: Style.font.family
+                              font.bold: true
+                              elide: Text.ElideRight
+                              width: parent.width
+                            }
+                            Text {
+                              textFormat: Text.PlainText
+                              text: modelData.path || ""
+                              color: softText(0.68)
+                              font.family: Style.font.family
+                              font.pixelSize: Style.font.caption
+                              elide: Text.ElideMiddle
+                              width: parent.width
+                            }
                           }
                         }
                       }
                     }
                   }
                 }
+              }
+            }
 
+            // Code Server (Docker) mapped view
+            Column {
+              visible: panel.devSubTab === "codeserver"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              RowLayout {
+                width: parent.width
+                spacing: 12
+
+                // Status & actions
                 Rectangle {
-                  width: parent.width
+                  Layout.preferredWidth: Math.max(320, parent.width * 0.46)
+                  Layout.alignment: Qt.AlignTop
                   radius: Style.cornerRadius
                   color: softText(0.04)
                   border.color: accentSoft(hub.codeServerRunning ? 0.28 : 0.14)
                   border.width: 1
-                  implicitHeight: codeServerCol.implicitHeight + 24
+                  implicitHeight: codeServerStatusCol.implicitHeight + 24
                   Column {
-                    id: codeServerCol
+                    id: codeServerStatusCol
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: 12
                     spacing: 10
@@ -2144,21 +2264,21 @@ PanelWindow {
                     RowLayout {
                       width: parent.width
                       spacing: 10
-                      Text { textFormat: Text.PlainText; text: "󰨞"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      Text { textFormat: Text.PlainText; text: "󰨞"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "VS Code Server (Docker)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                        Text { textFormat: Text.PlainText; text: "Browser-based VS Code via code-server container (" + hub.codeServerPort + ")"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        Text { textFormat: Text.PlainText; text: "VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Browser-based editor in Docker (code-server)"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                       }
                       Rectangle {
                         radius: 10
                         color: hub.codeServerRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
                         border.color: hub.codeServerRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
                         border.width: hub.codeServerRunning ? 1 : 0
-                        implicitWidth: codeServerBadge.implicitWidth + 14
-                        implicitHeight: codeServerBadge.implicitHeight + 8
+                        implicitWidth: codeServerBadge2.implicitWidth + 14
+                        implicitHeight: codeServerBadge2.implicitHeight + 8
                         Text {
-                          id: codeServerBadge
+                          id: codeServerBadge2
                           anchors.centerIn: parent
                           textFormat: Text.PlainText
                           text: hub.codeServerPresent ? hub.codeServerState : "not set up"
@@ -2173,109 +2293,178 @@ PanelWindow {
                     Rectangle { width: parent.width; height: 1; color: softText(0.08) }
 
                     Text {
-                      visible: hub.codeServerPresent && HubModel.trimText(hub.codeServerStatusText).length > 0
+                      visible: HubModel.trimText(hub.codeServerStatusText).length > 0
                       textFormat: Text.PlainText
                       text: hub.codeServerStatusText
-                      color: softText(0.8)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.Wrap
-                      width: parent.width
-                    }
-                    Text {
-                      visible: !hub.codeServerPresent
-                      textFormat: Text.PlainText
-                      text: "Not set up yet. Setup creates container `vember-code-server` (codercom/code-server), mounts your home into the container, and generates a password shown in the terminal."
-                      color: softText(0.78)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.Wrap
-                      width: parent.width
-                    }
-                    Text {
-                      visible: hub.codeServerPresent
-                      textFormat: Text.PlainText
-                      text: "URL: http://localhost:" + hub.codeServerPort + " (accessible over Tailnet via this device IP/hostname if port is reachable)"
-                      color: softText(0.78)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.Wrap
-                      width: parent.width
-                    }
-
-                    Flow {
-                      width: parent.width
-                      spacing: 8
-                      Button {
-                        visible: !hub.codeServerPresent
-                        iconText: "󰏔"
-                        text: hub.codeServerBusy ? "Working…" : "Set up"
-                        tooltipText: "Open terminal to create and start VS Code Server container"
-                        enabled: !hub.codeServerBusy
-                        onClicked: hub.setupCodeServerTerminal()
-                      }
-                      Button {
-                        visible: hub.codeServerPresent && !hub.codeServerRunning
-                        iconText: "󰐊"
-                        text: "Start"
-                        enabled: !hub.codeServerBusy
-                        onClicked: hub.startCodeServer()
-                      }
-                      Button {
-                        visible: hub.codeServerPresent && hub.codeServerRunning
-                        iconText: "󰓛"
-                        text: "Stop"
-                        enabled: !hub.codeServerBusy
-                        onClicked: hub.stopCodeServer()
-                      }
-                      Button {
-                        visible: hub.codeServerPresent
-                        iconText: "󰖟"
-                        text: "Open"
-                        tooltipText: "Open VS Code Server in browser"
-                        enabled: hub.codeServerRunning
-                        onClicked: hub.openCodeServer()
-                      }
-                      Button {
-                        iconText: "󰑐"
-                        text: "Refresh status"
-                        tooltipText: "Refresh VS Code Server container status"
-                        enabled: !hub.codeServerBusy
-                        onClicked: hub.refreshCodeServer()
-                      }
-                      Button {
-                        visible: hub.codeServerPresent
-                        iconText: "󰆴"
-                        text: "Uninstall"
-                        tooltipText: "Remove the VS Code Server container"
-                        enabled: !hub.codeServerBusy
-                        onClicked: panel.confirmRemoveCodeServer = true
-                      }
-                    }
-                  }
-                }
-
-                Rectangle {
-                  width: parent.width
-                  radius: Style.cornerRadius
-                  color: accentSoft(0.08)
-                  border.color: accentSoft(0.18)
-                  border.width: 1
-                  implicitHeight: devNoteCol.implicitHeight + 20
-                  Column {
-                    id: devNoteCol
-                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                    anchors.margins: 10
-                    spacing: 6
-                    Text { textFormat: Text.PlainText; text: "Dev environment notes"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-                    Text {
-                      textFormat: Text.PlainText
-                      text: "Tool installs try a silent/background command first (where safe) and refresh this section; use Terminal if sudo/password or AUR interaction is needed. Repo and tool status also refresh automatically with the hub."
                       color: softText(0.82)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
                       wrapMode: Text.Wrap
                       width: parent.width
+                    }
+
+                    Column {
+                      width: parent.width
+                      spacing: 4
+                      Text { textFormat: Text.PlainText; text: "Actions"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                      Flow {
+                        width: parent.width
+                        spacing: 8
+                        Button {
+                          visible: !hub.codeServerPresent
+                          iconText: "󰏔"
+                          text: hub.codeServerBusy ? "Working…" : "Set up"
+                          tooltipText: "Open terminal to create and start VS Code Server container"
+                          enabled: !hub.codeServerBusy
+                          active: true
+                          onClicked: hub.setupCodeServerTerminal()
+                        }
+                        Button {
+                          visible: hub.codeServerPresent && !hub.codeServerRunning
+                          iconText: "󰐊"
+                          text: "Start"
+                          enabled: !hub.codeServerBusy
+                          onClicked: hub.startCodeServer()
+                        }
+                        Button {
+                          visible: hub.codeServerPresent && hub.codeServerRunning
+                          iconText: "󰓛"
+                          text: "Stop"
+                          enabled: !hub.codeServerBusy
+                          onClicked: hub.stopCodeServer()
+                        }
+                        Button {
+                          visible: hub.codeServerPresent
+                          iconText: "󰖟"
+                          text: "Open in browser"
+                          tooltipText: "Open VS Code Server in browser"
+                          enabled: hub.codeServerRunning
+                          active: hub.codeServerRunning
+                          onClicked: hub.openCodeServer()
+                        }
+                        Button {
+                          iconText: "󰑐"
+                          text: "Refresh"
+                          tooltipText: "Refresh VS Code Server container status"
+                          enabled: !hub.codeServerBusy
+                          onClicked: hub.refreshCodeServer()
+                        }
+                        Button {
+                          visible: hub.codeServerPresent
+                          iconText: "󰆴"
+                          text: "Uninstall"
+                          tooltipText: "Remove the VS Code Server container"
+                          enabled: !hub.codeServerBusy
+                          onClicked: panel.confirmRemoveCodeServer = true
+                        }
+                      }
+                    }
+
+                    Text {
+                      visible: !hub.codeServerPresent
+                      textFormat: Text.PlainText
+                      text: "Setup runs in a terminal, creates the container, and prints a generated password. Save the password — it is shown once."
+                      color: softText(0.72)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                  }
+                }
+
+                // Map/details
+                Column {
+                  Layout.fillWidth: true
+                  Layout.alignment: Qt.AlignTop
+                  spacing: 12
+
+                  Rectangle {
+                    width: parent.width
+                    radius: Style.cornerRadius
+                    color: softText(0.04)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    implicitHeight: codeServerMapCol.implicitHeight + 24
+                    Column {
+                      id: codeServerMapCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 10
+
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: "󰘦"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Docker map"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: "How the VS Code Server container is set up on this machine."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        }
+                      }
+
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                      GridLayout {
+                        width: parent.width
+                        columns: 2
+                        columnSpacing: 12
+                        rowSpacing: 8
+
+                        Text { textFormat: Text.PlainText; text: "Container"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "vember-code-server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Image"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText(hub.codeServerImage).length > 0 ? hub.codeServerImage : "codercom/code-server:latest"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Port"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "localhost:" + hub.codeServerPort + " → container:8080"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Home mount"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "$HOME → /home/coder/home"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Config"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "~/.config/vember-code-server → /home/coder/.config"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Restart"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "unless-stopped"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
+                      }
+                    }
+                  }
+
+                  Rectangle {
+                    width: parent.width
+                    radius: Style.cornerRadius
+                    color: softText(0.04)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    implicitHeight: codeServerAccessCol.implicitHeight + 24
+                    Column {
+                      id: codeServerAccessCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 10
+
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: "󰖟"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: "How to open and sign in to Code Server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        }
+                      }
+
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                      Column {
+                        width: parent.width
+                        spacing: 6
+                        Text { textFormat: Text.PlainText; text: "Local URL: http://localhost:" + hub.codeServerPort; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Tailnet: reachable via this device’s Tailnet IP/hostname on port " + hub.codeServerPort + " if the port is accessible on your network."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Text { textFormat: Text.PlainText; text: "Password: generated during setup and printed in the terminal. Config/state is kept in ~/.config/vember-code-server (preserved on uninstall)."; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      }
                     }
                   }
                 }
