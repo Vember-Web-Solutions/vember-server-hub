@@ -188,6 +188,7 @@ Item {
       serverRole: serverRole,
       preferredEditor: preferredEditor,
       tabOrder: normalizedTabOrder(tabOrder),
+      codeServerPort: codeServerPort,
       wizardCompleted: true
     });
     configWriteProc.command = ["sh", "-c", "mkdir -p \"$(dirname \"$2\")\"; printf '%s' \"$1\" > \"$2\"", "sh", payload, root.configPath];
@@ -277,40 +278,49 @@ Item {
     codeServerProc.running = true;
   }
 
-  function setupCodeServerTerminal(password) {
+  function setupCodeServerTerminal(password, port) {
     var pass = HubModel.trimText(password);
     if (pass.length === 0) {
       codeServerStatusText = "Set a password for Code Server before setup.";
       lastActionMessage = "Code Server setup needs a password.";
       return;
     }
+    var p = Number(port);
+    if (!isFinite(p) || Math.round(p) < 1 || Math.round(p) > 65535) p = Number(codeServerPort);
+    if (!isFinite(p) || Math.round(p) < 1 || Math.round(p) > 65535) p = 8443;
+    p = Math.round(p);
+    codeServerPort = p;
+    if (configReady || HubModel.trimText(serverName).length > 0) writeHubConfig(false);
+
     codeServerBusy = true;
-    codeServerStatusText = "Opening terminal to set up VS Code Server…";
+    codeServerStatusText = "Opening terminal to set up VS Code Server on port " + p + "…";
     codeServerActionProc.actionName = "setup";
     var inner = [
       "set -e",
       "PASS=\"$1\"",
+      "PORT=\"$2\"",
       "mkdir -p \"$HOME/.config/vember-code-server\" \"$HOME/Projects\"",
       "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then",
       "  echo 'Container vember-code-server already exists.'",
       "  echo 'State:' $(docker inspect -f '{{.State.Status}}' vember-code-server 2>/dev/null || echo unknown)",
+      "  echo 'Ports:' $(docker port vember-code-server 2>/dev/null || echo unknown)",
       "  echo ''",
-      "  echo 'Use Start in the hub to run it, or Uninstall to remove it and set it up again.'",
+      "  echo 'To change port/password, Uninstall the container in the hub, then run Set up again.'",
       "else",
       "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
       "  if ! docker info >/dev/null 2>&1; then echo 'Docker is installed but not running or not accessible (try: sudo systemctl start docker, and ensure your user can access docker).'; exit 1; fi",
-      "  docker run -d --name vember-code-server -p " + codeServerPort + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" -e PASSWORD=\"$PASS\" --restart unless-stopped codercom/code-server:latest",
+      "  docker run -d --name vember-code-server -p \"$PORT:8080\" -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" -e PASSWORD=\"$PASS\" --restart unless-stopped codercom/code-server:latest",
       "  echo ''",
       "  echo 'VS Code Server started.'",
-      "  echo 'URL: http://localhost:" + codeServerPort + "'",
+      "  echo \"URL: http://localhost:$PORT\"",
       "  echo 'Password: (the one you set in the hub)'",
       "  echo ''",
       "  echo 'Config kept in ~/.config/vember-code-server'",
       "fi"
     ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _close || true";
     codeServerActionProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc \"$1\" _ \"$2\" </dev/null >/dev/null 2>&1 &",
-      "sh", inner, pass];
+      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc \"$1\" _ \"$2\" \"$3\" </dev/null >/dev/null 2>&1 &",
+      "sh", inner, pass, String(p)];
     codeServerActionProc.running = true;
   }
 
@@ -1058,6 +1068,11 @@ Item {
           var role = HubModel.trimText(obj && obj.serverRole ? obj.serverRole : "");
           var editor = HubModel.trimText(obj && obj.preferredEditor ? obj.preferredEditor : "");
           var order = root.normalizedTabOrder(obj && obj.tabOrder ? obj.tabOrder : root.tabOrder);
+          var cfgPort = Number(obj && obj.codeServerPort ? obj.codeServerPort : 8443);
+          if (!isFinite(cfgPort)) cfgPort = 8443;
+          cfgPort = Math.round(cfgPort);
+          if (cfgPort < 1 || cfgPort > 65535) cfgPort = 8443;
+          root.codeServerPort = cfgPort;
           root.tabOrder = order;
           if (name.length > 0) {
             root.serverName = name;
@@ -1080,6 +1095,7 @@ Item {
           root.serverRole = "";
           root.preferredEditor = "";
           root.tabOrder = root.normalizedTabOrder([]);
+          root.codeServerPort = 8443;
           root.openWizard(root.defaultServerName());
         }
       }

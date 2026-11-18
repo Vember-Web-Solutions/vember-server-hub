@@ -16,6 +16,7 @@ PanelWindow {
   property bool confirmRemoveCodeServer: false
   property bool codeServerSetupOpen: false
   property string codeServerSetupPassword: ""
+  property string codeServerSetupPort: "8443"
   property bool settingsMenuOpen: false
   property bool arrangeTabsOpen: false
   property var arrangeTabOrderDraft: []
@@ -2296,6 +2297,7 @@ PanelWindow {
                           active: true
                           onClicked: {
                             panel.codeServerSetupPassword = "";
+                            panel.codeServerSetupPort = String(hub.codeServerPort || 8443);
                             panel.codeServerSetupOpen = true;
                           }
                         }
@@ -2582,8 +2584,48 @@ PanelWindow {
 
           Text {
             textFormat: Text.PlainText
-            text: "Setup runs in a terminal (so you can see Docker pull/start output). If a container named vember-code-server already exists, setup will not recreate it."
+            text: "Host port"
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.bold: true
+          }
+          Rectangle {
+            width: parent.width
+            radius: 8
+            color: softText(0.03)
+            border.color: accentSoft(0.2)
+            border.width: 1
+            implicitHeight: 40
+            TextInput {
+              id: codeServerPortInput
+              anchors.fill: parent
+              anchors.margins: 10
+              verticalAlignment: TextInput.AlignVCenter
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              selectByMouse: true
+              clip: true
+              inputMethodHints: Qt.ImhDigitsOnly
+              text: panel.codeServerSetupPort
+              onTextChanged: panel.codeServerSetupPort = text
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "If 8443 is in use, try another port (e.g. 8444, 13337, 3000). Changing port for an existing container requires Uninstall then Set up again."
             color: softText(0.75)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Setup runs in a terminal (so you can see Docker pull/start output). If a container named vember-code-server already exists, setup will not recreate it."
+            color: softText(0.72)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             wrapMode: Text.Wrap
@@ -2604,7 +2646,7 @@ PanelWindow {
               enabled: HubModel.trimText(panel.codeServerSetupPassword).length > 0 && !hub.codeServerBusy
               onClicked: {
                 panel.codeServerSetupOpen = false;
-                hub.setupCodeServerTerminal(panel.codeServerSetupPassword);
+                hub.setupCodeServerTerminal(panel.codeServerSetupPassword, panel.codeServerSetupPort);
                 panel.codeServerSetupPassword = "";
               }
             }
