@@ -21,6 +21,31 @@ PanelWindow {
   property bool updateInProgress: false
   property real updateProgress: 0
   property string updateStatusText: ""
+  property bool toastVisible: false
+  property string toastText: ""
+
+  Timer {
+    id: toastTimer
+    interval: 3500
+    repeat: false
+    onTriggered: panel.toastVisible = false
+  }
+
+  function showToastIfNeeded(msg) {
+    var text = HubModel.trimText(msg);
+    if (text.length === 0) return;
+    if (text.indexOf("Docker ") === 0 || text.indexOf("Prun") === 0) return;
+    panel.toastText = text;
+    panel.toastVisible = true;
+    toastTimer.restart();
+  }
+
+  Connections {
+    target: hub
+    function onLastActionMessageChanged() {
+      panel.showToastIfNeeded(hub.lastActionMessage);
+    }
+  }
 
   function tabDef(id) {
     if (id === "overview") return { id: "overview", label: "Overview", icon: "󰕮" };
@@ -272,17 +297,7 @@ PanelWindow {
         }
       }
 
-      Text {
-        visible: HubModel.trimText(hub.lastActionMessage).length > 0
-          && HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") !== 0
-          && HubModel.trimText(hub.lastActionMessage).indexOf("Prun") !== 0
-        textFormat: Text.PlainText
-        text: hub.lastActionMessage
-        color: Color.menu.text
-        font.family: Style.font.family
-        wrapMode: Text.Wrap
-        Layout.fillWidth: true
-      }
+      Item { Layout.fillWidth: true; Layout.preferredHeight: 0; visible: false }
 
       Flickable {
         Layout.fillWidth: true
@@ -2679,6 +2694,44 @@ PanelWindow {
             }
           }
         }
+      }
+    }
+
+    // Toast notification
+    Rectangle {
+      id: toastCard
+      visible: panel.toastVisible
+      opacity: panel.toastVisible ? 1 : 0
+      z: 170
+      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.bottom: parent.bottom
+      anchors.bottomMargin: 22
+      width: Math.min(parent.width - 48, Math.max(280, toastLabel.implicitWidth + 28))
+      height: toastLabel.implicitHeight + 18
+      radius: 10
+      color: Qt.rgba(Color.menu.background.r, Color.menu.background.g, Color.menu.background.b, 0.96)
+      border.color: accentSoft(0.35)
+      border.width: 1
+
+      Behavior on opacity { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+
+      Text {
+        id: toastLabel
+        anchors.centerIn: parent
+        width: parent.width - 20
+        textFormat: Text.PlainText
+        text: panel.toastText
+        color: Color.menu.text
+        font.family: Style.font.family
+        font.pixelSize: Style.font.body
+        wrapMode: Text.Wrap
+        horizontalAlignment: Text.AlignHCenter
+      }
+
+      MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: panel.toastVisible = false
       }
     }
 
