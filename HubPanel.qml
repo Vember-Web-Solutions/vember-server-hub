@@ -70,7 +70,7 @@ PanelWindow {
     if (id === "overview") return { id: "overview", label: "Overview", icon: "󰕮" };
     if (id === "access") return { id: "access", label: "Access", icon: "󰖂" };
     if (id === "containers") return { id: "containers", label: "Containers", icon: "󰡨" };
-    if (id === "games") return { id: "games", label: "Games", icon: "󰊴" };
+    if (id === "games") return { id: "games", label: "Gaming", icon: "󰊴" };
     if (id === "dev") return { id: "dev", label: "Dev", icon: "󰅨" };
     return { id: id, label: id, icon: "󰘔" };
   }
@@ -377,7 +377,7 @@ PanelWindow {
 
                 Text {
                   textFormat: Text.PlainText
-                  text: "Use the tabs to check access, manage containers, open repositories, and monitor games and storage on this server."
+                  text: "Use the tabs to check access, manage containers, open repositories, and monitor gaming and storage on this server."
                   color: softText(0.78)
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
@@ -730,7 +730,7 @@ PanelWindow {
                     }
                   }
 
-                  Text { textFormat: Text.PlainText; text: "Open Games tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  Text { textFormat: Text.PlainText; text: "Open Gaming tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                 }
               }
             }
@@ -1698,7 +1698,7 @@ PanelWindow {
             width: parent.width
             spacing: Style.spacing.md
 
-            // Games sub-nav
+            // Gaming sub-nav
             Row {
               spacing: 8
               Button {
@@ -1712,6 +1712,12 @@ PanelWindow {
                 text: "Apps"
                 active: panel.gamesSubTab === "apps"
                 onClicked: panel.gamesSubTab = "apps"
+              }
+              Button {
+                iconText: "󰒋"
+                text: "Servers"
+                active: panel.gamesSubTab === "servers"
+                onClicked: panel.gamesSubTab = "servers"
               }
               Button {
                 iconText: "󰋊"
@@ -2051,6 +2057,116 @@ PanelWindow {
                           text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
                           enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
                           onClicked: hub.installExtraApp(modelData.id)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Servers tab
+            Column {
+              visible: panel.gamesSubTab === "servers"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Rectangle {
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: gameServersCol.implicitHeight + 24
+                Column {
+                  id: gameServersCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14
+                  spacing: 10
+                  RowLayout {
+                    width: parent.width; spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Game servers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Detected game server containers (best-effort, by name/image). Manage full container details in the Containers tab."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    }
+                  }
+
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  property var detectedGameServers: {
+                    var out = [];
+                    var list = hub.dockerContainers || [];
+                    var keys = ["minecraft", "valheim", "factorio", "palworld", "terraria", "ark", "cs2", "csgo", "rust", "satisfactory", "7dtd", "zomboid", "projectzomboid", "enshrouded", "foundry", "vintage", "vrising", "conan", "dayz", "game", "gameserver", "pterodactyl", "crafty", "steamcmd"];
+                    for (var i = 0; i < list.length; i++) {
+                      var c = list[i] || {};
+                      var hay = ((c.name || "") + " " + (c.image || "")).toLowerCase();
+                      var match = false;
+                      for (var k = 0; k < keys.length; k++) { if (hay.indexOf(keys[k]) !== -1) { match = true; break; } }
+                      if (match) out.push(c);
+                    }
+                    return out;
+                  }
+
+                  Text {
+                    visible: (gameServersCol.detectedGameServers || []).length === 0
+                    textFormat: Text.PlainText
+                    text: HubModel.trimText(hub.dockerError).length > 0 ? hub.dockerError : "No game server containers detected. Install or run a game server container and it may appear here."
+                    color: HubModel.trimText(hub.dockerError).length > 0 ? "#ef4444" : softText(0.75)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  Repeater {
+                    model: gameServersCol.detectedGameServers || []
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: gameServersCol.width - 0
+                      radius: 8
+                      color: softText(0.03)
+                      border.color: softText(0.08)
+                      border.width: 1
+                      implicitHeight: gsRow.implicitHeight + 16
+                      Column {
+                        id: gsRow
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 6
+                        RowLayout {
+                          width: parent.width
+                          spacing: 8
+                          Rectangle { width: 10; height: 10; radius: 5; color: panel.dockerStateTone(modelData.state); Layout.alignment: Qt.AlignVCenter }
+                          ColumnLayout {
+                            Layout.fillWidth: true; spacing: 2
+                            Text { textFormat: Text.PlainText; text: modelData.name || "unknown"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                            Text { visible: HubModel.trimText(modelData.image || "").length > 0; textFormat: Text.PlainText; text: modelData.image; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; Layout.fillWidth: true }
+                          }
+                          Text { textFormat: Text.PlainText; text: modelData.state || ""; color: panel.dockerStateTone(modelData.state); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Text { visible: HubModel.trimText(modelData.status || "").length > 0; textFormat: Text.PlainText; text: modelData.status; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Flow {
+                          width: parent.width
+                          spacing: 8
+                          Button {
+                            iconText: "󰐊"
+                            text: "Start"
+                            enabled: !hub.dockerBusy
+                            onClicked: hub.runDockerAction("start", modelData.name)
+                          }
+                          Button {
+                            iconText: "󰓛"
+                            text: "Stop"
+                            enabled: !hub.dockerBusy
+                            onClicked: hub.runDockerAction("stop", modelData.name)
+                          }
+                          Button {
+                            iconText: "󰑐"
+                            text: "Restart"
+                            enabled: !hub.dockerBusy
+                            onClicked: hub.runDockerAction("restart", modelData.name)
+                          }
                         }
                       }
                     }
