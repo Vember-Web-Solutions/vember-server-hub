@@ -873,6 +873,16 @@ Item {
       omarchyUpdateStatus = "";
   }
 
+  function loadOmarchyUpdateLog() {
+    if (omarchyUpdateRunning)
+      return;
+    omarchyUpdateLogReadProc.running = false;
+    omarchyUpdateLogReadProc.command = ["sh", "-c",
+      "f=\"$1\"; [ -f \"$f\" ] || exit 0; tail -c 14000 \"$f\" 2>/dev/null || true",
+      "sh", homeDir + "/.cache/vember-server-hub/omarchy-update.log"];
+    omarchyUpdateLogReadProc.running = true;
+  }
+
   // --- Plugin self-update (GitHub) ---
   property var _pluginUpdatePuns: [
     "Fetching commits… this won’t take a commit-ment.",
@@ -1164,6 +1174,49 @@ Item {
           root.omarchyUpdateStatus = "Live log stopped.";
       }
     }
+  }
+
+  Process {
+    id: omarchyUpdateLogReadProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (root.omarchyUpdateRunning)
+          return;
+        var raw = String(text || "").replace(/\r/g, "");
+        // strip ANSI codes
+        var t = raw.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
+        t = t.replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, "");
+        t = t.replace(/\x1B\[\?[0-9;]*[a-zA-Z]/g, "");
+        // remove internal exit marker lines
+        var lines = t.split("\n");
+        var out = [];
+        var lastMarkerCode = null;
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          var m = line.match(/\[vember-update-exit:(-?\d*)\]/);
+          if (m) {
+            lastMarkerCode = m[1];
+            continue;
+          }
+          out.push(line);
+        }
+        // trim trailing empty lines
+        while (out.length > 0 && HubModel.trimText(out[out.length - 1]).length === 0) out.pop();
+        var joined = out.join("\n");
+        if (joined.length > 14000) joined = joined.slice(joined.length - 14000);
+        root.omarchyUpdateLog = joined;
+        if (HubModel.trimText(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
+          if (lastMarkerCode !== null) {
+            if (lastMarkerCode === "" ) root.omarchyUpdateStatus = "Omarchy update finished (exit code unknown).";
+            else if (Number(lastMarkerCode) === 0) root.omarchyUpdateStatus = "Omarchy update finished.";
+            else root.omarchyUpdateStatus = "Omarchy update exited (code " + lastMarkerCode + ").";
+          } else {
+            root.omarchyUpdateStatus = "Previous update log loaded.";
+          }
+        }
+      }
+    }
+    stderr: StdioCollector {}
   }
 
   // --- Processes: Launchers ---
@@ -1511,6 +1564,7 @@ Item {
   Component.onCompleted: {
     loadManifestInfo();
     loadHubConfig();
+    loadOmarchyUpdateLog();
   }
 
   Process {
