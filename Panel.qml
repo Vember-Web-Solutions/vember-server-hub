@@ -308,6 +308,7 @@ Item {
     var inner = [
       "set -e",
       "PASS=\"$1\"",
+      "echo \"Password received (length: ${#PASS}).\"",
       "if [ -z \"$PASS\" ]; then echo 'Password is empty; aborting.'; exit 1; fi",
       "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/Projects\"",
       "umask 077",
