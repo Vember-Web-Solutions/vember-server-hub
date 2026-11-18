@@ -23,6 +23,11 @@ PanelWindow {
   property string updateStatusText: ""
   property var toastItems: []
   property int toastSeq: 0
+  property bool isFullscreen: false
+
+  function toggleFullscreen() {
+    panel.isFullscreen = !panel.isFullscreen;
+  }
 
   function removeToastById(id) {
     var items = (panel.toastItems || []).slice(0);
@@ -100,6 +105,18 @@ PanelWindow {
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: hub.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
   exclusionMode: ExclusionMode.Ignore
+  focus: hub.opened
+
+  Shortcut {
+    sequences: ["F"]
+    enabled: hub.opened
+    onActivated: {
+      var item = panel.activeFocusItem;
+      if (item && (item.toString().indexOf("TextInput") !== -1 || item.toString().indexOf("TextEdit") !== -1 || item.toString().indexOf("TextField") !== -1))
+        return;
+      panel.toggleFullscreen();
+    }
+  }
 
   anchors {
     top: true
@@ -171,14 +188,15 @@ PanelWindow {
 
   Rectangle {
     id: card
-    readonly property int margin: Style.gapsOut
-    anchors.centerIn: parent
-    width: Math.min(panel.width - margin * 2, 1040)
-    height: Math.min(panel.height - margin * 2, 860)
-    radius: Style.cornerRadius
+    readonly property int margin: panel.isFullscreen ? 0 : Style.gapsOut
+    anchors.centerIn: panel.isFullscreen ? undefined : parent
+    anchors.fill: panel.isFullscreen ? parent : undefined
+    width: panel.isFullscreen ? undefined : Math.min(panel.width - margin * 2, 1040)
+    height: panel.isFullscreen ? undefined : Math.min(panel.height - margin * 2, 860)
+    radius: panel.isFullscreen ? 0 : Style.cornerRadius
     color: Color.menu.background
-    border.color: softText(0.14)
-    border.width: 1
+    border.color: panel.isFullscreen ? "transparent" : softText(0.14)
+    border.width: panel.isFullscreen ? 0 : 1
 
     MouseArea { anchors.fill: parent; onClicked: {} }
 
@@ -2456,6 +2474,17 @@ PanelWindow {
             text: "Arrange tabs"
             tooltipText: "Reorder navigation tabs"
             onClicked: panel.openArrangeTabsDialog()
+          }
+          Button {
+            width: parent.width
+            iconText: panel.isFullscreen ? "󰊓" : "󰊔"
+            text: panel.isFullscreen ? "Exit fullscreen" : "Fullscreen"
+            tooltipText: "Toggle fullscreen (F)"
+            active: panel.isFullscreen
+            onClicked: {
+              panel.settingsMenuOpen = false;
+              panel.toggleFullscreen();
+            }
           }
           Button {
             width: parent.width

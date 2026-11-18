@@ -3,7 +3,7 @@
   "id": "elena.vember-server-hub",
   "name": "Vember Server Hub",
   "version": "0.1.0",
-  "build": 7,
+  "build": 8,
   "author": "elenanight",
   "description": "Local server and system hub for Tailscale, Docker, games, and storage status",
   "license": "MIT",
