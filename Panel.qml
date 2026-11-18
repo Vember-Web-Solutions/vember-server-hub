@@ -844,7 +844,7 @@ Item {
     if (omarchyUpdateRunning)
       return;
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
-    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]}; echo \"[vember-update-exit:$code]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
+    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]:-$?}; echo \"[vember-update-exit:${code}]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
     omarchyUpdateStatus = "Running Omarchy update in terminal (interactive)… streaming live log below.";
     lastActionMessage = "Running Omarchy update in terminal.";
@@ -1131,12 +1131,15 @@ Item {
       t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
       t = t.replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, "");
       t = t.replace(/\x1B\[\?[0-9;]*[a-zA-Z]/g, "");
-      var marker = t.match(/\[vember-update-exit:(-?\d+)\]/);
+      var marker = t.match(/\[vember-update-exit:(-?\d*)\]/);
       if (marker) {
-        var code = Number(marker[1]);
+        var codeStr = marker[1];
+        var code = (codeStr === "" ? NaN : Number(codeStr));
         root.omarchyUpdateRunning = false;
         if (code === 0)
           root.omarchyUpdateStatus = "Omarchy update finished.";
+        else if (isNaN(code))
+          root.omarchyUpdateStatus = "Omarchy update finished (exit code unknown).";
         else
           root.omarchyUpdateStatus = "Omarchy update exited (code " + code + ").";
         omarchyUpdateLogProc.running = false;
