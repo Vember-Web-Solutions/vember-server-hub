@@ -1,0 +1,2509 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Wayland
+import qs.Commons
+import qs.Ui
+import "model/HubModel.js" as HubModel
+
+PanelWindow {
+  id: panel
+  required property var hub
+
+  property string currentTab: "overview"
+  property bool confirmPrune: false
+  property bool confirmRemoveSshKey: false
+  property bool confirmRemoveCodeServer: false
+  property bool tabReorderMode: false
+
+  function tabDef(id) {
+    if (id === "overview") return { id: "overview", label: "Overview", icon: "󰕮" };
+    if (id === "access") return { id: "access", label: "Access", icon: "󰖂" };
+    if (id === "containers") return { id: "containers", label: "Containers", icon: "󰡨" };
+    if (id === "games") return { id: "games", label: "Games", icon: "󰊴" };
+    if (id === "dev") return { id: "dev", label: "Dev", icon: "󰅨" };
+    return { id: id, label: id, icon: "󰘔" };
+  }
+
+  function orderedTabs() {
+    var order = (hub && hub.tabOrder && hub.tabOrder.length > 0) ? hub.tabOrder : ["overview", "access", "containers", "games", "dev"];
+    var out = [];
+    for (var i = 0; i < order.length; i++) out.push(tabDef(order[i]));
+    return out;
+  }
+
+  visible: hub.opened
+  screen: hub.targetScreen ? hub.targetScreen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
+  color: "transparent"
+  WlrLayershell.namespace: "elena-vember-server-hub"
+  WlrLayershell.layer: WlrLayer.Overlay
+  WlrLayershell.keyboardFocus: hub.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+  exclusionMode: ExclusionMode.Ignore
+
+  anchors {
+    top: true
+    bottom: true
+    left: true
+    right: true
+  }
+
+  function softText(alpha) {
+    return Qt.rgba(Color.menu.text.r, Color.menu.text.g, Color.menu.text.b, alpha)
+  }
+
+  function accentSoft(alpha) {
+    return Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, alpha)
+  }
+
+  function stateColor(active, okText) {
+    if (active) return accentSoft(0.22)
+    return softText(0.08)
+  }
+
+  function dockerStateTone(state) {
+    var s = HubModel.trimText(state).toLowerCase()
+    if (s === "running") return "#22c55e"
+    if (s === "restarting" || s === "paused" || s === "created") return "#eab308"
+    if (s === "exited" || s === "dead" || s === "removing") return "#ef4444"
+    return softText(0.5)
+  }
+
+  function dockerStateBg(state) {
+    var s = HubModel.trimText(state).toLowerCase()
+    if (s === "running") return Qt.rgba(0.13, 0.77, 0.37, 0.18)
+    if (s === "restarting" || s === "paused" || s === "created") return Qt.rgba(0.92, 0.70, 0.03, 0.18)
+    if (s === "exited" || s === "dead" || s === "removing") return Qt.rgba(0.94, 0.27, 0.27, 0.18)
+    return softText(0.08)
+  }
+
+  function storageUseColor(ratio) {
+    var r = Number(ratio || 0)
+    if (r >= 0.90) return "#ef4444"
+    if (r >= 0.75) return "#eab308"
+    return "#22c55e"
+  }
+
+  function runningDockerCount() {
+    var n = 0
+    for (var i = 0; i < hub.dockerContainers.length; i++) {
+      if (hub.dockerContainers[i] && hub.dockerContainers[i].running) n++
+    }
+    return n
+  }
+
+  function onlinePeerCount() {
+    var n = 0
+    for (var i = 0; i < hub.tailscalePeers.length; i++) {
+      if (hub.tailscalePeers[i] && hub.tailscalePeers[i].online) n++
+    }
+    return n
+  }
+
+  Rectangle {
+    anchors.fill: parent
+    color: Qt.rgba(0, 0, 0, 0.38)
+    MouseArea {
+      anchors.fill: parent
+      onClicked: hub.requestClose()
+    }
+  }
+
+  Rectangle {
+    id: card
+    readonly property int margin: Style.gapsOut
+    anchors.centerIn: parent
+    width: Math.min(panel.width - margin * 2, 1040)
+    height: Math.min(panel.height - margin * 2, 860)
+    radius: Style.cornerRadius
+    color: Color.menu.background
+    border.color: softText(0.14)
+    border.width: 1
+
+    MouseArea { anchors.fill: parent; onClicked: {} }
+
+    ColumnLayout {
+      anchors.fill: parent
+      anchors.margins: Style.spacing.panelPadding
+      spacing: Style.spacing.md
+
+      // Header bar
+      Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: headerRow.implicitHeight + 12
+        radius: 12
+        color: softText(0.04)
+        border.color: softText(0.08)
+        border.width: 1
+
+        RowLayout {
+          id: headerRow
+          anchors.fill: parent
+          anchors.margins: 8
+          spacing: Style.spacing.sm
+
+          // Left: title + icon
+          RowLayout {
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 8
+            Text {
+              textFormat: Text.PlainText
+              text: "󰒋"
+              color: Color.accent
+              font.family: Style.font.family
+              font.pixelSize: Style.font.iconLarge
+            }
+            Column {
+              spacing: 0
+              MouseArea {
+                width: childrenRect.width
+                height: childrenRect.height
+                cursorShape: Qt.PointingHandCursor
+                onClicked: hub.openWizard(hub.serverName || hub.defaultServerName())
+                Column {
+                  spacing: 0
+                  Text {
+                    textFormat: Text.PlainText
+                    text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : "Vember Server Hub"
+                    color: Color.menu.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.large
+                    font.bold: true
+                  }
+                  Text {
+                    visible: HubModel.trimText(hub.serverName).length > 0 && HubModel.trimText(hub.serverRole).length > 0
+                    textFormat: Text.PlainText
+                    text: hub.serverRole
+                    color: softText(0.65)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+              }
+            }
+          }
+
+          Item { Layout.fillWidth: true }
+
+          // Middle: nav items
+          Row {
+            Layout.alignment: Qt.AlignVCenter
+            spacing: Style.spacing.sm
+            Repeater {
+              model: panel.orderedTabs()
+              delegate: Row {
+                required property var modelData
+                required property int index
+                spacing: 2
+                Button {
+                  visible: panel.tabReorderMode
+                  iconText: "󰅁"
+                  tooltipText: "Move left"
+                  enabled: index > 0
+                  onClicked: hub.moveTab(modelData.id, -1)
+                }
+                Button {
+                  iconText: modelData.icon
+                  text: modelData.label
+                  active: panel.currentTab === modelData.id
+                  onClicked: panel.currentTab = modelData.id
+                }
+                Button {
+                  visible: panel.tabReorderMode
+                  iconText: "󰅂"
+                  tooltipText: "Move right"
+                  enabled: index < (panel.orderedTabs().length - 1)
+                  onClicked: hub.moveTab(modelData.id, 1)
+                }
+              }
+            }
+          }
+
+          Item { Layout.fillWidth: true }
+
+          // Right: arrange + refresh + hot reload + exit
+          RowLayout {
+            Layout.alignment: Qt.AlignVCenter
+            spacing: 6
+            Button {
+              iconText: panel.tabReorderMode ? "󰄬" : "󰁁"
+              text: panel.tabReorderMode ? "Done" : "Arrange"
+              tooltipText: panel.tabReorderMode ? "Finish arranging tabs (order saved automatically)" : "Reorder navigation tabs"
+              active: panel.tabReorderMode
+              onClicked: panel.tabReorderMode = !panel.tabReorderMode
+            }
+            Button {
+              iconText: "󰑐"
+              text: "Refresh"
+              tooltipText: "Refresh status data"
+              onClicked: hub.refreshAll()
+            }
+            Button {
+              iconText: "󰑓"
+              text: "Update"
+              tooltipText: "Hot reload (restart shell and reopen hub)"
+              active: true
+              onClicked: hub.hotReloadHub()
+            }
+            Button {
+              iconText: "󰅖"
+              tooltipText: "Exit"
+              onClicked: hub.requestClose()
+            }
+          }
+        }
+      }
+
+      Text {
+        visible: HubModel.trimText(hub.lastActionMessage).length > 0
+          && HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") !== 0
+          && HubModel.trimText(hub.lastActionMessage).indexOf("Prun") !== 0
+        textFormat: Text.PlainText
+        text: hub.lastActionMessage
+        color: Color.menu.text
+        font.family: Style.font.family
+        wrapMode: Text.Wrap
+        Layout.fillWidth: true
+      }
+
+      Flickable {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        contentWidth: width
+        contentHeight: contentCol.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        Column {
+          id: contentCol
+          width: parent.width
+          spacing: Style.spacing.md
+
+          // OVERVIEW TAB
+          Column {
+            visible: panel.currentTab === "overview"
+            width: parent.width
+            spacing: Style.spacing.md
+
+            Text {
+              textFormat: Text.PlainText
+              text: "Your local hub for Tailnet, Docker, games, and storage on this machine — quick status at a glance, with details in each tab."
+              color: softText(0.82)
+              font.family: Style.font.family
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
+
+            // Omarchy update
+            Rectangle {
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.04)
+              border.color: softText(0.08)
+              border.width: 1
+              implicitHeight: updCol.implicitHeight + 24
+              Column {
+                id: updCol
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 12; spacing: 8
+                RowLayout {
+                  width: parent.width; spacing: 8
+                  Text { textFormat: Text.PlainText; text: "󰚰"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                  Text { textFormat: Text.PlainText; text: "Omarchy update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+                }
+                Text { textFormat: Text.PlainText; text: "Open the Omarchy update in a terminal. The hub closes so the terminal can take focus."; color: softText(0.82); wrapMode: Text.Wrap; width: parent.width; font.family: Style.font.family }
+                Flow {
+                  width: parent.width
+                  spacing: 8
+                  Button {
+                    iconText: "󰑓"
+                    text: "Open update in terminal"
+                    tooltipText: "Launch omarchy-update in a terminal (closes hub)"
+                    onClicked: hub.openOmarchyUpdateTerminal()
+                  }
+                }
+              }
+            }
+
+            Text {
+              textFormat: Text.PlainText
+              text: "At a glance"
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.large
+              font.bold: true
+            }
+
+            Flow {
+              width: parent.width
+              spacing: 14
+
+              // Access glance
+              Rectangle {
+                width: 320
+                radius: 14
+                color: softText(0.045)
+                border.color: hub.tailscaleActive === "active" ? accentSoft(0.35) : softText(0.10)
+                border.width: 1
+                implicitHeight: glanceTs.implicitHeight + 20
+                MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "access" }
+                Column {
+                  id: glanceTs
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12; spacing: 8
+                  RowLayout {
+                    width: parent.width; spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰖂"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "vember os"
+                        color: softText(0.78)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                      }
+                    }
+                    Rectangle {
+                      radius: 10
+                      color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
+                      border.color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
+                      border.width: hub.tailscaleActive === "active" ? 1 : 0
+                      implicitWidth: glanceTsBadge.implicitWidth + 14
+                      implicitHeight: glanceTsBadge.implicitHeight + 8
+                      Text {
+                        id: glanceTsBadge
+                        anchors.centerIn: parent
+                        textFormat: Text.PlainText
+                        text: hub.tailscaleActive
+                        color: hub.tailscaleActive === "active" ? "#22c55e" : Color.menu.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: hub.tailscaleActive === "active"
+                      }
+                    }
+                  }
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Text { textFormat: Text.PlainText; text: "This device: vember os"; color: Color.menu.text; font.family: Style.font.family; wrapMode: Text.Wrap; width: parent.width }
+                  Text { textFormat: Text.PlainText; text: "Peers: " + panel.onlinePeerCount() + " online / " + hub.tailscalePeers.length + " total"; color: softText(0.82); font.family: Style.font.family }
+                  Text { textFormat: Text.PlainText; text: "tailscaled • enabled: " + hub.tailscaleEnabled; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  Text { textFormat: Text.PlainText; text: "Open Access tab for members and controls →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+              }
+
+              // Docker glance
+              Rectangle {
+                width: 320
+                radius: 14
+                color: softText(0.045)
+                border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
+                border.width: 1
+                implicitHeight: glanceDk.implicitHeight + 20
+                MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "containers" }
+                Column {
+                  id: glanceDk
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12; spacing: 8
+                  RowLayout {
+                    width: parent.width; spacing: 10
+                    Image {
+                      source: "file:///usr/share/icons/hicolor/256x256/apps/docker.png"
+                      sourceSize.width: 28; sourceSize.height: 28
+                      width: 28; height: 28
+                      fillMode: Image.PreserveAspectFit
+                    }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: hub.dockerContainers.length + " container(s)"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                  }
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                  Text { visible: HubModel.trimText(hub.dockerError).length > 0; textFormat: Text.PlainText; text: hub.dockerError; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Text { visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length === 0; textFormat: Text.PlainText; text: "No containers found."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Column {
+                    visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length > 0
+                    width: parent.width
+                    spacing: 4
+                    Repeater {
+                      model: Math.min(hub.dockerContainers.length, 5)
+                      delegate: RowLayout {
+                        required property int index
+                        width: parent ? parent.width : 0
+                        spacing: 8
+                        Rectangle {
+                          width: 8; height: 8; radius: 4
+                          color: panel.dockerStateTone(hub.dockerContainers[index].state)
+                          Layout.alignment: Qt.AlignVCenter
+                        }
+                        Text {
+                          textFormat: Text.PlainText
+                          text: hub.dockerContainers[index].name || "unknown"
+                          color: Color.menu.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          elide: Text.ElideRight
+                          Layout.fillWidth: true
+                        }
+                        Text {
+                          textFormat: Text.PlainText
+                          text: hub.dockerContainers[index].state || ""
+                          color: panel.dockerStateTone(hub.dockerContainers[index].state)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                        }
+                      }
+                    }
+                    Text {
+                      visible: hub.dockerContainers.length > 5
+                      textFormat: Text.PlainText
+                      text: "+" + (hub.dockerContainers.length - 5) + " more"
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+                  }
+                  Text { textFormat: Text.PlainText; text: "Open Containers tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+              }
+
+              // Games & storage glance
+              Rectangle {
+                width: 320
+                radius: 14
+                color: softText(0.045)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: glanceGm.implicitHeight + 20
+                MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "games" }
+                Column {
+                  id: glanceGm
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12; spacing: 8
+                  RowLayout {
+                    width: parent.width; spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Games & storage"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: hub.gameMount; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                    Rectangle {
+                      radius: 10
+                      color: hub.gameMountPresent ? accentSoft(0.22) : softText(0.1)
+                      implicitWidth: glanceMountBadge.implicitWidth + 14
+                      implicitHeight: glanceMountBadge.implicitHeight + 8
+                      Text { id: glanceMountBadge; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                  }
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Text {
+                    visible: !hub.gameMountPresent
+                    textFormat: Text.PlainText
+                    text: "Game partition not mounted"
+                    color: softText(0.8)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+                  Column {
+                    visible: hub.gameMountPresent
+                    width: parent.width
+                    spacing: 6
+                    Rectangle {
+                      width: parent.width
+                      height: 10
+                      radius: 5
+                      color: softText(0.12)
+                      clip: true
+                      Rectangle {
+                        height: parent.height
+                        radius: 5
+                        width: parent.width * hub.gameMountUseRatio
+                        color: panel.storageUseColor(hub.gameMountUseRatio)
+                        Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                      }
+                    }
+                    RowLayout {
+                      width: parent.width
+                      spacing: 8
+                      Text { textFormat: Text.PlainText; text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"; color: panel.storageUseColor(hub.gameMountUseRatio); font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                      Item { Layout.fillWidth: true }
+                      Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountUsedBytes) + " / " + HubModel.humanBytes(hub.gameMountTotalBytes); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                    Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountAvailBytes) + " free"; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  }
+                  Text { textFormat: Text.PlainText; text: "Steam: " + (hub.steamRunning ? "running" : "stopped") + " • games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "?"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  Text { textFormat: Text.PlainText; text: "Battle.net: " + (hub.bnetRunning ? "running" : "stopped") + " • games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "?"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  Text { textFormat: Text.PlainText; text: "Open Games tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+              }
+            }
+          }
+
+          // ACCESS TAB
+          Column {
+            visible: panel.currentTab === "access"
+            width: parent.width
+            spacing: Style.spacing.md
+
+            Rectangle {
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.04)
+              border.color: softText(0.08)
+              border.width: 1
+              implicitHeight: tsMain.implicitHeight + 24
+              Column {
+                id: tsMain
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 12; spacing: 10
+
+                RowLayout {
+                  id: tsTwoCol
+                  width: parent.width
+                  spacing: 16
+
+                  // Left: Tailnet / this device / controls
+                  Column {
+                    id: tsLeft
+                    Layout.preferredWidth: Math.max(280, parent.width * 0.42)
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 10
+
+                    RowLayout {
+                      width: parent.width; spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰖂"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "Tailnet"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text {
+                          textFormat: Text.PlainText
+                          text: HubModel.trimText(hub.tailscaleTailnetName).length > 0 ? hub.tailscaleTailnetName : "unknown"
+                          color: softText(0.85)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.body
+                          elide: Text.ElideRight
+                          Layout.fillWidth: true
+                        }
+                      }
+                      Rectangle {
+                        radius: 10
+                        color: hub.tailscaleActive === "active" ? accentSoft(0.22) : softText(0.1)
+                        implicitWidth: tsBadge.implicitWidth + 14
+                        implicitHeight: tsBadge.implicitHeight + 8
+                        Text { id: tsBadge; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.tailscaleActive; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+                    }
+
+                    Text { textFormat: Text.PlainText; text: "Tailnet connection status, this device, peers, and service controls."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                    Text { textFormat: Text.PlainText; text: "tailscaled • enabled: " + hub.tailscaleEnabled; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    Text { visible: HubModel.trimText(hub.tailscaleNote).length > 0; textFormat: Text.PlainText; text: hub.tailscaleNote; color: Color.menu.text; font.family: Style.font.family; wrapMode: Text.Wrap; width: parent.width }
+
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Text { textFormat: Text.PlainText; text: "This device"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Column {
+                      visible: !!hub.tailscaleSelf
+                      width: parent.width
+                      spacing: 3
+                      RowLayout {
+                        width: parent.width; spacing: 8
+                        Rectangle { width: 10; height: 10; radius: 5; color: "#22c55e" }
+                        Text { textFormat: Text.PlainText; text: hub.tailscaleSelf ? (hub.tailscaleSelf.hostName || "vemberos") : "This device"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true; elide: Text.ElideRight }
+                        Text { visible: hub.tailscaleSelf && HubModel.trimText(hub.tailscaleSelf.os).length > 0; textFormat: Text.PlainText; text: hub.tailscaleSelf ? hub.tailscaleSelf.os : ""; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+                      Text { visible: hub.tailscaleSelf && HubModel.trimText(hub.tailscaleSelf.dnsName).length > 0; textFormat: Text.PlainText; text: hub.tailscaleSelf ? hub.tailscaleSelf.dnsName : ""; color: softText(0.85); font.family: Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; width: parent.width }
+                    }
+                    Text { visible: !hub.tailscaleSelf; textFormat: Text.PlainText; text: "No device status available."; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Text { textFormat: Text.PlainText; text: "Service controls"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Flow {
+                      width: parent.width
+                      spacing: 8
+                      Button { iconText: "󰐊"; text: "Start"; tooltipText: "pkexec systemctl start tailscaled"; enabled: !hub.tailscaleBusy; onClicked: hub.runTailscaleAction("start") }
+                      Button { iconText: "󰓛"; text: "Stop"; tooltipText: "pkexec systemctl stop tailscaled"; enabled: !hub.tailscaleBusy; onClicked: hub.runTailscaleAction("stop") }
+                      Button { iconText: "󰑐"; text: "Restart"; tooltipText: "pkexec systemctl restart tailscaled"; enabled: !hub.tailscaleBusy; onClicked: hub.runTailscaleAction("restart") }
+                      Button { iconText: "󰆍"; text: "Start (terminal)"; tooltipText: "sudo in terminal"; onClicked: hub.runTailscaleActionInTerminal("start") }
+                      Button { iconText: "󰆍"; text: "Restart (terminal)"; tooltipText: "sudo in terminal"; onClicked: hub.runTailscaleActionInTerminal("restart") }
+                    }
+                  }
+
+                  // Divider
+                  Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 180
+                    color: softText(0.08)
+                  }
+
+                  // Right: Members
+                  Column {
+                    id: tsRight
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 8
+
+                    RowLayout {
+                      width: parent.width
+                      Text { textFormat: Text.PlainText; text: "Members"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "(" + hub.tailscalePeers.length + ")"; color: softText(0.75); font.family: Style.font.family }
+                      Item { Layout.fillWidth: true }
+                    }
+
+                    Text {
+                      visible: hub.tailscalePeers.length === 0
+                      textFormat: Text.PlainText
+                      text: "No peer members found."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                    }
+
+                    Column {
+                      width: parent.width
+                      spacing: 0
+                      Repeater {
+                        model: hub.tailscalePeers
+                        delegate: Column {
+                          required property var modelData
+                          required property int index
+                          width: tsRight.width
+                          spacing: 0
+
+                          Rectangle {
+                            visible: index > 0
+                            width: parent.width
+                            height: 1
+                            color: softText(0.07)
+                          }
+
+                          RowLayout {
+                            width: parent.width
+                            height: implicitHeight
+                            spacing: 10
+
+                            Item {
+                              Layout.preferredWidth: 14
+                              Layout.preferredHeight: 36
+                              Rectangle {
+                                anchors.centerIn: parent
+                                width: 10; height: 10; radius: 5
+                                color: modelData.online ? "#22c55e" : "#ef4444"
+                              }
+                            }
+
+                            Column {
+                              Layout.fillWidth: true
+                              Layout.topMargin: 8
+                              Layout.bottomMargin: 8
+                              spacing: 2
+                              RowLayout {
+                                width: parent.width; spacing: 8
+                                Text {
+                                  textFormat: Text.PlainText
+                                  text: modelData.hostName || modelData.dnsName || "Unknown"
+                                  color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true
+                                }
+                                Text {
+                                  textFormat: Text.PlainText
+                                  text: modelData.online ? "online" : "offline"
+                                  color: modelData.online ? "#22c55e" : "#ef4444"
+                                  font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                }
+                              }
+                              Text {
+                                visible: HubModel.trimText(modelData.dnsName).length > 0
+                                textFormat: Text.PlainText
+                                text: modelData.dnsName
+                                color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; width: parent.width
+                              }
+                            }
+
+                            Column {
+                              Layout.alignment: Qt.AlignVCenter
+                              spacing: 2
+                              Text {
+                                visible: modelData.ips && modelData.ips.length > 0
+                                textFormat: Text.PlainText
+                                text: modelData.ips && modelData.ips.length > 0 ? modelData.ips[0] : ""
+                                color: softText(0.88); font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                horizontalAlignment: Text.AlignRight
+                              }
+                              Text {
+                                visible: HubModel.trimText(modelData.os).length > 0
+                                textFormat: Text.PlainText
+                                text: modelData.os
+                                color: softText(0.65); font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                horizontalAlignment: Text.AlignRight
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // SSH
+            Rectangle {
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.04)
+              border.color: softText(0.08)
+              border.width: 1
+              implicitHeight: sshCol.implicitHeight + 24
+              Column {
+                id: sshCol
+                property string authKeysView: "keys"
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 12; spacing: 10
+
+                RowLayout {
+                  width: parent.width; spacing: 10
+                  Text { textFormat: Text.PlainText; text: "󰣀"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                  ColumnLayout {
+                    Layout.fillWidth: true; spacing: 2
+                    Text { textFormat: Text.PlainText; text: "SSH"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "SSH service status and authorized key management for remote access to this machine."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    Text { textFormat: Text.PlainText; text: "Host: " + (HubModel.trimText(hub.sshHostName).length > 0 ? hub.sshHostName : "vemberos"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.body }
+                  }
+                  Rectangle {
+                    radius: 10
+                    color: hub.sshActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
+                    border.color: hub.sshActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
+                    border.width: hub.sshActive === "active" ? 1 : 0
+                    implicitWidth: sshBadge.implicitWidth + 14
+                    implicitHeight: sshBadge.implicitHeight + 8
+                    Text {
+                      id: sshBadge
+                      anchors.centerIn: parent
+                      textFormat: Text.PlainText
+                      text: hub.sshActive
+                      color: hub.sshActive === "active" ? "#22c55e" : Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.bold: hub.sshActive === "active"
+                    }
+                  }
+                }
+
+                Text { textFormat: Text.PlainText; text: "sshd • enabled: " + hub.sshEnabled; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+
+                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                Text { textFormat: Text.PlainText; text: "Authorized keys"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body; font.bold: true }
+                Text { textFormat: Text.PlainText; text: "Manage public keys allowed to sign in over SSH. Add a key, select one to review/remove, or open the file for manual edits."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                Text {
+                  visible: HubModel.trimText(hub.sshAuthorizedKeysStatus).length > 0
+                  textFormat: Text.PlainText
+                  text: hub.sshAuthorizedKeysStatus
+                  color: softText(0.85)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.Wrap
+                  width: parent.width
+                }
+
+                Column {
+                  visible: HubModel.trimText(hub.sshGeneratedPublicKey).length > 0
+                  width: parent.width
+                  spacing: 6
+                  Text { textFormat: Text.PlainText; text: "Generated public key"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                  Rectangle {
+                    width: parent.width
+                    radius: 8
+                    color: softText(0.03)
+                    border.color: accentSoft(0.2)
+                    border.width: 1
+                    implicitHeight: Math.max(56, genPubKeyText.implicitHeight + 12)
+                    TextEdit {
+                      id: genPubKeyText
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 8
+                      text: hub.sshGeneratedPublicKey
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: TextEdit.WrapAnywhere
+                      readOnly: true
+                      selectByMouse: true
+                      selectionColor: accentSoft(0.35)
+                      selectedTextColor: Color.menu.text
+                    }
+                  }
+                }
+
+                // Nav bar
+                Rectangle {
+                  width: parent.width
+                  radius: 10
+                  color: softText(0.03)
+                  border.color: softText(0.08)
+                  border.width: 1
+                  implicitHeight: authNavRow.implicitHeight + 10
+                  Row {
+                    id: authNavRow
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                    anchors.margins: 6
+                    spacing: 6
+                    Button {
+                      iconText: "󰌋"
+                      text: "Keys"
+                      active: sshCol.authKeysView === "keys"
+                      onClicked: sshCol.authKeysView = "keys"
+                    }
+                    Button {
+                      iconText: "󰐕"
+                      text: "Add key"
+                      active: sshCol.authKeysView === "add"
+                      onClicked: sshCol.authKeysView = "add"
+                    }
+                    Button {
+                      iconText: "󰌆"
+                      text: hub.sshGenerateBusy ? "Generating…" : "Generate key"
+                      tooltipText: "Generate a new SSH identity keypair (~/.ssh/id_ed25519)"
+                      enabled: !hub.sshGenerateBusy
+                      onClicked: hub.generateSshIdentityKey()
+                    }
+                    Item { width: 8; height: 1 }
+                    Button {
+                      iconText: "󰏫"
+                      text: "Open editor"
+                      tooltipText: "Open ~/.ssh/authorized_keys in editor"
+                      onClicked: hub.openAuthorizedKeysEditor()
+                    }
+                  }
+                }
+
+                // Keys view (list + details)
+                RowLayout {
+                  visible: sshCol.authKeysView === "keys"
+                  width: parent.width
+                  spacing: 12
+
+                  // Left: keys list
+                  Column {
+                    id: authKeysLeft
+                    Layout.preferredWidth: Math.max(260, parent.width * 0.42)
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 6
+
+                    Text {
+                      visible: !hub.sshAuthorizedKeys || hub.sshAuthorizedKeys.length === 0
+                      textFormat: Text.PlainText
+                      text: "No authorized keys found."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    Repeater {
+                      model: hub.sshAuthorizedKeys || []
+                      delegate: Rectangle {
+                        required property var modelData
+                        required property int index
+                        width: authKeysLeft.width
+                        radius: 8
+                        color: hub.sshSelectedKeyIndex === index ? accentSoft(0.14) : softText(0.03)
+                        border.color: hub.sshSelectedKeyIndex === index ? accentSoft(0.35) : softText(0.08)
+                        border.width: 1
+                        implicitHeight: keyItemCol.implicitHeight + 12
+                        MouseArea {
+                          anchors.fill: parent
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: hub.sshSelectedKeyIndex = (hub.sshSelectedKeyIndex === index ? -1 : index)
+                        }
+                        Column {
+                          id: keyItemCol
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 8
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: HubModel.trimText(modelData.comment || "").length > 0 ? modelData.comment : (modelData.type || "Key")
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            elide: Text.ElideRight
+                            width: parent.width
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: (modelData.type || "key") + " • " + (modelData.keyPreview || "")
+                            color: softText(0.72)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                            width: parent.width
+                          }
+                        }
+                      }
+                    }
+                  }
+
+                  // Divider
+                  Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.fillHeight: true
+                    Layout.minimumHeight: 120
+                    color: softText(0.08)
+                  }
+
+                  // Right: details
+                  Column {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignTop
+                    spacing: 10
+
+                    Text { textFormat: Text.PlainText; text: "Selected key"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Text {
+                      visible: hub.sshSelectedKeyIndex < 0 || hub.sshSelectedKeyIndex >= (hub.sshAuthorizedKeys ? hub.sshAuthorizedKeys.length : 0)
+                      textFormat: Text.PlainText
+                      text: "Select a key to view details, remove it, or switch to Add key."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                    Column {
+                      visible: hub.sshSelectedKeyIndex >= 0 && hub.sshSelectedKeyIndex < (hub.sshAuthorizedKeys ? hub.sshAuthorizedKeys.length : 0)
+                      width: parent.width
+                      spacing: 6
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "Type: " + (hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex] ? (hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex].type || "unknown") : "")
+                        color: Color.menu.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "Comment: " + (hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex] && HubModel.trimText(hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex].comment).length > 0 ? hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex].comment : "(none)")
+                        color: Color.menu.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        width: parent.width
+                      }
+                      Rectangle {
+                        width: parent.width
+                        radius: 8
+                        color: softText(0.03)
+                        border.color: softText(0.08)
+                        border.width: 1
+                        implicitHeight: selKeyText.implicitHeight + 12
+                        Text {
+                          id: selKeyText
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 8
+                          textFormat: Text.PlainText
+                          text: hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex] ? (hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex].line || "") : ""
+                          color: softText(0.85)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          wrapMode: Text.WrapAnywhere
+                          width: parent.width
+                        }
+                      }
+                      Flow {
+                        width: parent.width
+                        spacing: 8
+                        Button {
+                          iconText: "󰆴"
+                          text: "Remove selected"
+                          tooltipText: "Remove the selected key from authorized_keys"
+                          enabled: hub.sshSelectedKeyIndex >= 0 && hub.sshSelectedKeyIndex < (hub.sshAuthorizedKeys ? hub.sshAuthorizedKeys.length : 0)
+                          onClicked: panel.confirmRemoveSshKey = true
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Add key view
+                Column {
+                  visible: sshCol.authKeysView === "add"
+                  width: parent.width
+                  spacing: 10
+                  Text { textFormat: Text.PlainText; text: "Add authorized key"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                  Text { textFormat: Text.PlainText; text: "Paste a public key (single line) to append to ~/.ssh/authorized_keys. Use Open editor for bulk or advanced edits."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Rectangle {
+                    width: parent.width
+                    radius: 8
+                    color: softText(0.03)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    implicitHeight: 90
+                    TextInput {
+                      id: newKeyInput
+                      anchors.fill: parent
+                      anchors.margins: 8
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: TextInput.WrapAnywhere
+                      selectByMouse: true
+                      clip: true
+                      text: hub.sshNewKeyText
+                      onTextChanged: hub.sshNewKeyText = text
+                    }
+                  }
+                  Flow {
+                    width: parent.width
+                    spacing: 8
+                    Button {
+                      iconText: "󰐕"
+                      text: "Add key"
+                      tooltipText: "Append this public key to authorized_keys"
+                      onClicked: hub.addAuthorizedKey()
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // CONTAINERS TAB
+          Column {
+            id: containersTab
+            visible: panel.currentTab === "containers"
+            width: parent.width
+            spacing: Style.spacing.md
+            property int selectedContainerIndex: -1
+
+            Text {
+              textFormat: Text.PlainText
+              text: "View and manage Docker containers. Select a container to see details and actions."
+              color: softText(0.8)
+              font.family: Style.font.family
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
+
+            Rectangle {
+              id: dockerBar
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.05)
+              border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
+              border.width: 1
+              implicitHeight: dkHeader.implicitHeight + 24
+
+              function dockerStatusText() {
+                if (HubModel.trimText(hub.dockerError).length > 0)
+                  return hub.dockerError;
+                if (hub.dockerPruneBusy)
+                  return "Pruning stopped containers…";
+                if (hub.dockerContainers.length === 0)
+                  return "No containers found.";
+                var msg = HubModel.trimText(hub.lastActionMessage);
+                if (msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0)
+                  return msg;
+                return hub.dockerContainers.length + " container(s)";
+              }
+
+              function dockerStatusColor() {
+                if (HubModel.trimText(hub.dockerError).length > 0)
+                  return "#ef4444";
+                var msg = HubModel.trimText(hub.lastActionMessage);
+                if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && msg.indexOf("failed") !== -1)
+                  return "#ef4444";
+                if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && (msg.indexOf("succeeded") !== -1 || msg.indexOf("Pruned") === 0))
+                  return "#22c55e";
+                return softText(0.78);
+              }
+
+              Column {
+                id: dkHeader
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 14; spacing: 8
+
+                RowLayout {
+                  width: parent.width
+                  spacing: 12
+                  Rectangle {
+                    width: 40; height: 40; radius: 10
+                    color: accentSoft(0.14)
+                    Image {
+                      anchors.centerIn: parent
+                      source: "file:///usr/share/icons/hicolor/256x256/apps/docker.png"
+                      sourceSize.width: 24; sourceSize.height: 24
+                      width: 24; height: 24
+                      fillMode: Image.PreserveAspectFit
+                    }
+                  }
+                  ColumnLayout {
+                    Layout.fillWidth: true; spacing: 2
+                    Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  }
+                  Button {
+                    iconText: "󰃢"
+                    text: hub.dockerPruneBusy ? "Pruning…" : "Prune stopped"
+                    tooltipText: "Remove all stopped containers (docker container prune -f)"
+                    enabled: !hub.dockerPruneBusy && !hub.dockerBusy
+                    onClicked: panel.confirmPrune = true
+                  }
+                }
+
+                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                RowLayout {
+                  width: parent.width
+                  spacing: 8
+                  Rectangle {
+                    visible: HubModel.trimText(hub.dockerError).length > 0 || hub.dockerContainers.length === 0 || hub.dockerPruneBusy || HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") === 0 || HubModel.trimText(hub.lastActionMessage).indexOf("Prun") === 0
+                    width: 8; height: 8; radius: 4
+                    color: dockerBar.dockerStatusColor()
+                    Layout.alignment: Qt.AlignVCenter
+                  }
+                  Text {
+                    Layout.fillWidth: true
+                    textFormat: Text.PlainText
+                    text: dockerBar.dockerStatusText()
+                    color: dockerBar.dockerStatusColor()
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.Wrap
+                  }
+                }
+              }
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: 12
+
+              // Left: container list
+              Column {
+                id: containersLeft
+                Layout.preferredWidth: Math.max(280, parent.width * 0.42)
+                Layout.alignment: Qt.AlignTop
+                spacing: 6
+
+                Text {
+                  visible: hub.dockerContainers.length === 0
+                  textFormat: Text.PlainText
+                  text: "No containers found."
+                  color: softText(0.7)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                }
+
+                Repeater {
+                  model: hub.dockerContainers
+                  delegate: Rectangle {
+                    required property var modelData
+                    required property int index
+                    width: containersLeft.width
+                    radius: 8
+                    color: containersTab.selectedContainerIndex === index ? accentSoft(0.14) : softText(0.03)
+                    border.color: containersTab.selectedContainerIndex === index ? accentSoft(0.35) : softText(0.08)
+                    border.width: 1
+                    implicitHeight: ctrItemCol.implicitHeight + 12
+                    MouseArea {
+                      anchors.fill: parent
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: containersTab.selectedContainerIndex = index
+                    }
+                    RowLayout {
+                      id: ctrItemCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 8
+                      spacing: 8
+                      Rectangle {
+                        width: 10; height: 10; radius: 5
+                        color: panel.dockerStateTone(modelData.state)
+                        Layout.alignment: Qt.AlignVCenter
+                      }
+                      Column {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text {
+                          textFormat: Text.PlainText
+                          text: modelData.name || "unknown"
+                          color: Color.menu.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          font.bold: true
+                          elide: Text.ElideRight
+                          width: parent.width
+                        }
+                        Text {
+                          visible: HubModel.trimText(modelData.image).length > 0
+                          textFormat: Text.PlainText
+                          text: modelData.image
+                          color: softText(0.7)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          elide: Text.ElideRight
+                          width: parent.width
+                        }
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: modelData.state || ""
+                        color: panel.dockerStateTone(modelData.state)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Divider
+              Rectangle {
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                Layout.minimumHeight: 160
+                color: softText(0.08)
+              }
+
+              // Right: details
+              Column {
+                id: containerDetails
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignTop
+                spacing: 10
+
+                property var selected: (containersTab.selectedContainerIndex >= 0 && containersTab.selectedContainerIndex < hub.dockerContainers.length) ? hub.dockerContainers[containersTab.selectedContainerIndex] : null
+                property bool selBusy: selected ? (hub.dockerBusy && hub.dockerBusyName === selected.name) : false
+                property bool selPulling: selected ? (hub.dockerPullActive && hub.dockerPullingName === selected.name) : false
+                property bool selPullResult: selected ? (!hub.dockerPullActive && hub.dockerPullingName === selected.name && HubModel.trimText(hub.dockerPullStatus).length > 0) : false
+
+                Text {
+                  visible: !containerDetails.selected
+                  textFormat: Text.PlainText
+                  text: "Select a container to view details and actions."
+                  color: softText(0.7)
+                  font.family: Style.font.family
+                  wrapMode: Text.Wrap
+                  width: parent.width
+                }
+
+                Column {
+                  visible: !!containerDetails.selected
+                  width: parent.width
+                  spacing: 10
+
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Rectangle {
+                      width: 12; height: 12; radius: 6
+                      color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
+                      Layout.alignment: Qt.AlignVCenter
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      text: containerDetails.selected ? (containerDetails.selected.name || "unknown") : ""
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.large
+                      font.bold: true
+                      Layout.fillWidth: true
+                      elide: Text.ElideRight
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      text: containerDetails.selected ? (containerDetails.selected.state || "") : ""
+                      color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.bold: true
+                    }
+                  }
+
+                  Text {
+                    visible: HubModel.trimText(containerDetails.selected ? (containerDetails.selected.image || "") : "").length > 0
+                    textFormat: Text.PlainText
+                    text: "Image: " + (containerDetails.selected ? (containerDetails.selected.image || "") : "")
+                    color: softText(0.85)
+                    font.family: Style.font.family
+                    wrapMode: Text.WrapAnywhere
+                    width: parent.width
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "Status: " + (containerDetails.selected ? (containerDetails.selected.status || containerDetails.selected.state || "unknown") : "")
+                    color: Color.menu.text
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  // Pull progress/result
+                  Column {
+                    visible: containerDetails.selPulling || containerDetails.selPullResult
+                    width: parent.width
+                    spacing: 6
+                    Rectangle {
+                      width: parent.width
+                      radius: 8
+                      color: accentSoft(0.10)
+                      border.color: accentSoft(0.20)
+                      border.width: 1
+                      implicitHeight: pullInfoCol.implicitHeight + 12
+                      Column {
+                        id: pullInfoCol
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 6
+                        Text {
+                          textFormat: Text.PlainText
+                          text: containerDetails.selPulling ? hub.dockerPullStatus : (hub.dockerPullResult.length > 0 ? hub.dockerPullResult : hub.dockerPullStatus)
+                          color: Color.menu.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          wrapMode: Text.Wrap
+                          width: parent.width
+                        }
+                        Rectangle {
+                          visible: containerDetails.selPulling
+                          width: parent.width
+                          height: 8
+                          radius: 4
+                          color: softText(0.12)
+                          clip: true
+                          Rectangle {
+                            id: selProgressFill
+                            height: parent.height
+                            radius: 4
+                            color: Color.accent
+                            width: hub.dockerPullPercent >= 0 ? (parent.width * hub.dockerPullPercent) : (parent.width * 0.35)
+                            x: hub.dockerPullPercent >= 0 ? 0 : -width
+                            Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                            SequentialAnimation on x {
+                              running: hub.dockerPullPercent < 0 && containerDetails.selPulling
+                              loops: Animation.Infinite
+                              NumberAnimation { from: -selProgressFill.width; to: selProgressTrackW.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
+                            }
+                          }
+                          Item { id: selProgressTrackW; anchors.fill: parent }
+                        }
+                      }
+                    }
+                  }
+
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  Flow {
+                    width: parent.width
+                    spacing: 8
+                    Button {
+                      iconText: "󰐊"
+                      text: "Start"
+                      enabled: !containerDetails.selBusy && !!containerDetails.selected
+                      onClicked: if (containerDetails.selected) hub.runDockerAction("start", containerDetails.selected.name)
+                    }
+                    Button {
+                      iconText: "󰓛"
+                      text: "Stop"
+                      enabled: !containerDetails.selBusy && !!containerDetails.selected
+                      onClicked: if (containerDetails.selected) hub.runDockerAction("stop", containerDetails.selected.name)
+                    }
+                    Button {
+                      iconText: "󰑐"
+                      text: "Restart"
+                      enabled: !containerDetails.selBusy && !!containerDetails.selected
+                      onClicked: if (containerDetails.selected) hub.runDockerAction("restart", containerDetails.selected.name)
+                    }
+                    Button {
+                      iconText: "󰚰"
+                      text: containerDetails.selPulling ? "Pulling…" : "Pull image"
+                      enabled: !containerDetails.selBusy && !!containerDetails.selected && HubModel.trimText(containerDetails.selected.image || "").length > 0
+                      tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
+                      onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // GAMES TAB
+          Column {
+            visible: panel.currentTab === "games"
+            width: parent.width
+            spacing: Style.spacing.md
+
+            Rectangle {
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.05)
+              border.color: accentSoft(0.18)
+              border.width: 1
+              implicitHeight: gamesUnified.implicitHeight + 24
+              Column {
+                id: gamesUnified
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 14; spacing: 12
+
+                RowLayout {
+                  width: parent.width; spacing: 10
+                  Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                  ColumnLayout {
+                    Layout.fillWidth: true; spacing: 2
+                    Text { textFormat: Text.PlainText; text: "Games"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "Unified launchers and status for installed game clients (ready to expand for local game servers)"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  }
+                }
+
+                Rectangle {
+                  width: parent.width
+                  radius: 12
+                  color: accentSoft(0.08)
+                  border.color: accentSoft(0.18)
+                  border.width: 1
+                  implicitHeight: spaceRow.implicitHeight + 16
+                  RowLayout {
+                    id: spaceRow
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 10; spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰋊"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Game partition • " + hub.gameMount; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                      Column {
+                        visible: hub.gameMountPresent
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Rectangle {
+                          width: parent.width
+                          height: 12
+                          radius: 6
+                          color: softText(0.12)
+                          clip: true
+                          Rectangle {
+                            height: parent.height
+                            radius: 6
+                            width: parent.width * hub.gameMountUseRatio
+                            color: panel.storageUseColor(hub.gameMountUseRatio)
+                            Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                          }
+                        }
+                        RowLayout {
+                          width: parent.width
+                          spacing: 8
+                          Text {
+                            textFormat: Text.PlainText
+                            text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"
+                            color: panel.storageUseColor(hub.gameMountUseRatio)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                          }
+                          Item { Layout.fillWidth: true }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: HubModel.humanBytes(hub.gameMountUsedBytes) + " used • " + HubModel.humanBytes(hub.gameMountAvailBytes) + " free • " + HubModel.humanBytes(hub.gameMountTotalBytes) + " total"
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
+                      }
+                      Text {
+                        visible: !hub.gameMountPresent
+                        textFormat: Text.PlainText
+                        text: "Not mounted / not found"
+                        color: softText(0.85); font.family: Style.font.family; wrapMode: Text.Wrap; Layout.fillWidth: true
+                      }
+                      Text { visible: HubModel.trimText(hub.gameMountError).length > 0; textFormat: Text.PlainText; text: hub.gameMountError; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    }
+                    Rectangle {
+                      radius: 10
+                      color: hub.gameMountPresent ? accentSoft(0.22) : softText(0.1)
+                      implicitWidth: mountBadge2.implicitWidth + 14
+                      implicitHeight: mountBadge2.implicitHeight + 8
+                      Text { id: mountBadge2; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                  }
+                }
+
+                Flow {
+                  width: parent.width
+                  spacing: 14
+
+                  Rectangle {
+                    width: 320
+                    radius: 14
+                    color: softText(0.045)
+                    border.color: hub.steamRunning ? accentSoft(0.35) : softText(0.10)
+                    border.width: 1
+                    implicitHeight: steamCard.implicitHeight + 20
+                    Column {
+                      id: steamCard
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12; spacing: 8
+                      RowLayout {
+                        width: parent.width; spacing: 10
+                        Image {
+                          source: "file:///usr/share/icons/hicolor/256x256/apps/steam.png"
+                          sourceSize.width: 36; sourceSize.height: 36
+                          width: 36; height: 36
+                          fillMode: Image.PreserveAspectFit
+                        }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: hub.steamInstalled ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Rectangle {
+                          radius: 10
+                          color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                          border.color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                          border.width: hub.steamRunning ? 1 : 0
+                          implicitWidth: steamStatusRow.implicitWidth + 14
+                          implicitHeight: steamStatusRow.implicitHeight + 8
+                          Row {
+                            id: steamStatusRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.steamRunning ? "#22c55e" : softText(0.45) }
+                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.steamRunning ? "running" : "not running"; color: hub.steamRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.steamRunning }
+                          }
+                        }
+                      }
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                      Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
+                      Text { visible: HubModel.trimText(hub.steamNote).length > 0; textFormat: Text.PlainText; text: hub.steamNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Text { textFormat: Text.PlainText; text: "Count excludes Proton and Steam runtimes/redistributables (best-effort)."; color: softText(0.62); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Text { textFormat: Text.PlainText; text: "Update ready: unknown (best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      Flow {
+                        width: parent.width; spacing: 8
+                        Button {
+                          iconText: "󰐊"
+                          text: "Launch Steam"
+                          tooltipText: "Launch Steam"
+                          enabled: hub.steamInstalled
+                          onClicked: hub.launchSteam()
+                        }
+                      }
+                    }
+                  }
+
+                  Rectangle {
+                    width: 320
+                    radius: 14
+                    color: softText(0.045)
+                    border.color: hub.bnetRunning ? accentSoft(0.35) : softText(0.10)
+                    border.width: 1
+                    implicitHeight: bnetCard.implicitHeight + 20
+                    Column {
+                      id: bnetCard
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12; spacing: 8
+                      RowLayout {
+                        width: parent.width; spacing: 10
+                        Image {
+                          source: "file:///usr/share/icons/hicolor/256x256/apps/battle-net.png"
+                          sourceSize.width: 36; sourceSize.height: 36
+                          width: 36; height: 36
+                          fillMode: Image.PreserveAspectFit
+                        }
+                        ColumnLayout {
+                          Layout.fillWidth: true; spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: hub.bnetInstalled ? "Installed / prefix present" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Rectangle {
+                          radius: 10
+                          color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                          border.color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                          border.width: hub.bnetRunning ? 1 : 0
+                          implicitWidth: bnetStatusRow.implicitWidth + 14
+                          implicitHeight: bnetStatusRow.implicitHeight + 8
+                          Row {
+                            id: bnetStatusRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.bnetRunning ? "#22c55e" : softText(0.45) }
+                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.bnetRunning ? "running" : "not running"; color: hub.bnetRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.bnetRunning }
+                          }
+                        }
+                      }
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                      Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
+                      Text { visible: HubModel.trimText(hub.bnetNote).length > 0; textFormat: Text.PlainText; text: hub.bnetNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Text { textFormat: Text.PlainText; text: "Detected from Battle.net install folders (build/product markers, best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Text { textFormat: Text.PlainText; text: "Update ready: unknown (best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      Flow {
+                        width: parent.width; spacing: 8
+                        Button {
+                          iconText: "󰐊"
+                          text: "Launch Battle.net"
+                          tooltipText: "Launch Battle.net"
+                          enabled: hub.bnetInstalled
+                          onClicked: hub.launchBattleNet()
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // DEV TAB
+          Column {
+            visible: panel.currentTab === "dev"
+            width: parent.width
+            spacing: Style.spacing.md
+
+            Text {
+              textFormat: Text.PlainText
+              text: "Development environment: cloned repos, toolchain status, and quick install helpers for this server."
+              color: softText(0.8)
+              font.family: Style.font.family
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
+
+            Text {
+              visible: HubModel.trimText(hub.devStatus).length > 0
+              textFormat: Text.PlainText
+              text: hub.devStatus
+              color: softText(0.78)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
+            Text {
+              visible: HubModel.trimText(hub.devError).length > 0
+              textFormat: Text.PlainText
+              text: hub.devError
+              color: "#ef4444"
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
+
+            RowLayout {
+              width: parent.width
+              spacing: 12
+
+              // Left: tools
+              Rectangle {
+                Layout.preferredWidth: Math.max(320, parent.width * 0.48)
+                Layout.alignment: Qt.AlignTop
+                radius: Style.cornerRadius
+                color: softText(0.04)
+                border.color: softText(0.08)
+                border.width: 1
+                implicitHeight: devToolsCol.implicitHeight + 24
+                Column {
+                  id: devToolsCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12
+                  spacing: 10
+
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "uv • Python • GitHub CLI • Zed • VS Code"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                  }
+
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  Repeater {
+                    model: hub.devTools || []
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: devToolsCol.width - 0
+                      radius: 8
+                      color: softText(0.03)
+                      border.color: softText(0.08)
+                      border.width: 1
+                      implicitHeight: toolRow.implicitHeight + 12
+                      RowLayout {
+                        id: toolRow
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 8
+                        Rectangle {
+                          width: 10; height: 10; radius: 5
+                          color: modelData.installed ? "#22c55e" : softText(0.35)
+                          Layout.alignment: Qt.AlignVCenter
+                        }
+                        Column {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: HubModel.devToolLabel(modelData.id)
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.bold: true
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.installed ? (HubModel.trimText(modelData.version).length > 0 ? modelData.version : (modelData.path || "Installed")) : "Not installed"
+                            color: modelData.installed ? softText(0.78) : softText(0.65)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                            width: parent.width
+                          }
+                          Text {
+                            visible: modelData.installed && HubModel.trimText(modelData.path).length > 0
+                            textFormat: Text.PlainText
+                            text: modelData.path
+                            color: softText(0.6)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                            width: parent.width
+                          }
+                        }
+                        Column {
+                          visible: !modelData.installed
+                          spacing: 4
+                          Layout.alignment: Qt.AlignVCenter
+                          Row {
+                            spacing: 6
+                            Button {
+                              iconText: "󰏔"
+                              text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
+                              tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
+                              enabled: !hub.devInstallBusy
+                              onClicked: hub.runDevInstallSilent(modelData.id)
+                            }
+                            Button {
+                              iconText: "󰆍"
+                              text: "Terminal"
+                              tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
+                              enabled: !hub.devInstallBusy
+                              onClicked: hub.openDevInstallTerminal(modelData.id)
+                            }
+                          }
+                          Text {
+                            visible: hub.devInstallBusy && hub.devInstallToolId === modelData.id
+                            textFormat: Text.PlainText
+                            text: "Running…"
+                            color: softText(0.7)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
+                        Text {
+                          visible: modelData.installed
+                          textFormat: Text.PlainText
+                          text: "Installed"
+                          color: "#22c55e"
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              // Right: repos + notes
+              Column {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignTop
+                spacing: 12
+
+                Rectangle {
+                  width: parent.width
+                  radius: Style.cornerRadius
+                  color: softText(0.04)
+                  border.color: softText(0.08)
+                  border.width: 1
+                  implicitHeight: devReposCol.implicitHeight + 24
+                  Column {
+                    id: devReposCol
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 12
+                    spacing: 10
+
+                    RowLayout {
+                      width: parent.width
+                      spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "Cloned repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Scanned from common dev folders under your home directory."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                      }
+                      Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Column {
+                      width: parent.width
+                      spacing: 6
+                      Text { textFormat: Text.PlainText; text: "Open repos in"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                      Row {
+                        spacing: 8
+                        Button {
+                          text: "Zed"
+                          iconText: "󰅨"
+                          active: hub.preferredEditor === "zed"
+                          enabled: {
+                            var ok = false;
+                            var tools = hub.devTools || [];
+                            for (var i = 0; i < tools.length; i++) { if (tools[i].id === "zed" && tools[i].installed) { ok = true; break; } }
+                            return ok;
+                          }
+                          tooltipText: "Use Zed to open repositories"
+                          onClicked: hub.setPreferredEditor("zed")
+                        }
+                        Button {
+                          text: "VS Code"
+                          iconText: "󰨞"
+                          active: hub.preferredEditor === "vscode"
+                          enabled: {
+                            var ok = false;
+                            var tools = hub.devTools || [];
+                            for (var i = 0; i < tools.length; i++) { if (tools[i].id === "vscode" && tools[i].installed) { ok = true; break; } }
+                            return ok;
+                          }
+                          tooltipText: "Use VS Code to open repositories"
+                          onClicked: hub.setPreferredEditor("vscode")
+                        }
+                      }
+                      Text {
+                        visible: HubModel.trimText(hub.preferredEditor).length === 0
+                        textFormat: Text.PlainText
+                        text: "Select an installed editor, then click a repository to open it."
+                        color: softText(0.7)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        width: parent.width
+                      }
+                    }
+
+                    Text {
+                      visible: !hub.devRepos || hub.devRepos.length === 0
+                      textFormat: Text.PlainText
+                      text: hub.devBusy ? "Scanning…" : "No repositories found in scanned locations."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
+                    Repeater {
+                      model: hub.devRepos || []
+                      delegate: Rectangle {
+                        required property var modelData
+                        width: devReposCol.width - 0
+                        radius: 8
+                        color: softText(0.03)
+                        border.color: softText(0.08)
+                        border.width: 1
+                        implicitHeight: repoRow.implicitHeight + 10
+                        MouseArea {
+                          anchors.fill: parent
+                          cursorShape: Qt.PointingHandCursor
+                          enabled: HubModel.trimText(hub.preferredEditor).length > 0
+                          onClicked: hub.openRepoInEditor(modelData.path)
+                        }
+                        Column {
+                          id: repoRow
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 8
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.name || modelData.path || "repo"
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.bold: true
+                            elide: Text.ElideRight
+                            width: parent.width
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.path || ""
+                            color: softText(0.68)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                            width: parent.width
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+
+                Rectangle {
+                  width: parent.width
+                  radius: Style.cornerRadius
+                  color: softText(0.04)
+                  border.color: accentSoft(hub.codeServerRunning ? 0.28 : 0.14)
+                  border.width: 1
+                  implicitHeight: codeServerCol.implicitHeight + 24
+                  Column {
+                    id: codeServerCol
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 12
+                    spacing: 10
+
+                    RowLayout {
+                      width: parent.width
+                      spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰨞"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "VS Code Server (Docker)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Browser-based VS Code via code-server container (" + hub.codeServerPort + ")"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                      }
+                      Rectangle {
+                        radius: 10
+                        color: hub.codeServerRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
+                        border.color: hub.codeServerRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
+                        border.width: hub.codeServerRunning ? 1 : 0
+                        implicitWidth: codeServerBadge.implicitWidth + 14
+                        implicitHeight: codeServerBadge.implicitHeight + 8
+                        Text {
+                          id: codeServerBadge
+                          anchors.centerIn: parent
+                          textFormat: Text.PlainText
+                          text: hub.codeServerPresent ? hub.codeServerState : "not set up"
+                          color: hub.codeServerRunning ? "#22c55e" : Color.menu.text
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                          font.bold: hub.codeServerRunning
+                        }
+                      }
+                    }
+
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Text {
+                      visible: hub.codeServerPresent && HubModel.trimText(hub.codeServerStatusText).length > 0
+                      textFormat: Text.PlainText
+                      text: hub.codeServerStatusText
+                      color: softText(0.8)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                    Text {
+                      visible: !hub.codeServerPresent
+                      textFormat: Text.PlainText
+                      text: "Not set up yet. Setup creates container `vember-code-server` (codercom/code-server), mounts your home into the container, and generates a password shown in the terminal."
+                      color: softText(0.78)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                    Text {
+                      visible: hub.codeServerPresent
+                      textFormat: Text.PlainText
+                      text: "URL: http://localhost:" + hub.codeServerPort + " (accessible over Tailnet via this device IP/hostname if port is reachable)"
+                      color: softText(0.78)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+
+                    Flow {
+                      width: parent.width
+                      spacing: 8
+                      Button {
+                        visible: !hub.codeServerPresent
+                        iconText: "󰏔"
+                        text: hub.codeServerBusy ? "Working…" : "Set up"
+                        tooltipText: "Open terminal to create and start VS Code Server container"
+                        enabled: !hub.codeServerBusy
+                        onClicked: hub.setupCodeServerTerminal()
+                      }
+                      Button {
+                        visible: hub.codeServerPresent && !hub.codeServerRunning
+                        iconText: "󰐊"
+                        text: "Start"
+                        enabled: !hub.codeServerBusy
+                        onClicked: hub.startCodeServer()
+                      }
+                      Button {
+                        visible: hub.codeServerPresent && hub.codeServerRunning
+                        iconText: "󰓛"
+                        text: "Stop"
+                        enabled: !hub.codeServerBusy
+                        onClicked: hub.stopCodeServer()
+                      }
+                      Button {
+                        visible: hub.codeServerPresent
+                        iconText: "󰖟"
+                        text: "Open"
+                        tooltipText: "Open VS Code Server in browser"
+                        enabled: hub.codeServerRunning
+                        onClicked: hub.openCodeServer()
+                      }
+                      Button {
+                        iconText: "󰑐"
+                        text: "Refresh status"
+                        tooltipText: "Refresh VS Code Server container status"
+                        enabled: !hub.codeServerBusy
+                        onClicked: hub.refreshCodeServer()
+                      }
+                      Button {
+                        visible: hub.codeServerPresent
+                        iconText: "󰆴"
+                        text: "Uninstall"
+                        tooltipText: "Remove the VS Code Server container"
+                        enabled: !hub.codeServerBusy
+                        onClicked: panel.confirmRemoveCodeServer = true
+                      }
+                    }
+                  }
+                }
+
+                Rectangle {
+                  width: parent.width
+                  radius: Style.cornerRadius
+                  color: accentSoft(0.08)
+                  border.color: accentSoft(0.18)
+                  border.width: 1
+                  implicitHeight: devNoteCol.implicitHeight + 20
+                  Column {
+                    id: devNoteCol
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 10
+                    spacing: 6
+                    Text { textFormat: Text.PlainText; text: "Dev environment notes"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Text {
+                      textFormat: Text.PlainText
+                      text: "Tool installs try a silent/background command first (where safe) and refresh this section; use Terminal if sudo/password or AUR interaction is needed. Repo and tool status also refresh automatically with the hub."
+                      color: softText(0.82)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+        }
+      }
+
+      // Footer
+      Rectangle {
+        Layout.fillWidth: true
+        implicitHeight: footerRow.implicitHeight + 10
+        radius: 10
+        color: softText(0.03)
+        border.color: softText(0.06)
+        border.width: 1
+
+        RowLayout {
+          id: footerRow
+          anchors.fill: parent
+          anchors.leftMargin: 10
+          anchors.rightMargin: 10
+          anchors.topMargin: 5
+          anchors.bottomMargin: 5
+          spacing: 8
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Vember Server Hub v" + (hub.pluginVersion || "0.1.0")
+            color: softText(0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            font.bold: true
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: "•"
+            color: softText(0.45)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: "Built by elenanight"
+            color: softText(0.7)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+          Item { Layout.fillWidth: true }
+          Text {
+            textFormat: Text.PlainText
+            text: "build " + (hub.pluginBuild || 1) + " • © 2026"
+            color: softText(0.55)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+          }
+        }
+      }
+    }
+
+    // Confirm prune popup
+    Rectangle {
+      visible: panel.confirmPrune
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 100
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.confirmPrune = false
+      }
+
+      Rectangle {
+        id: pruneDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 460)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: pruneDialogCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: pruneDialogCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰃢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            Text { textFormat: Text.PlainText; text: "Prune stopped containers?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "This will remove all stopped containers (docker container prune -f). Running containers are not affected. This cannot be undone."
+            color: softText(0.85)
+            font.family: Style.font.family
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: panel.confirmPrune = false
+            }
+            Button {
+              iconText: "󰃢"
+              text: hub.dockerPruneBusy ? "Pruning…" : "Prune"
+              enabled: !hub.dockerPruneBusy
+              onClicked: {
+                panel.confirmPrune = false;
+                hub.pruneStoppedContainers();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Confirm remove SSH key popup
+    Rectangle {
+      visible: panel.confirmRemoveSshKey
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 100
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.confirmRemoveSshKey = false
+      }
+
+      Rectangle {
+        id: removeKeyDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 480)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: removeKeyDialogCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: removeKeyDialogCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          readonly property var selectedKey: (hub.sshSelectedKeyIndex >= 0 && hub.sshSelectedKeyIndex < (hub.sshAuthorizedKeys ? hub.sshAuthorizedKeys.length : 0)) ? hub.sshAuthorizedKeys[hub.sshSelectedKeyIndex] : null
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰆴"; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            Text { textFormat: Text.PlainText; text: "Remove authorized key?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "This will remove the selected key from ~/.ssh/authorized_keys. This cannot be undone."
+            color: softText(0.85)
+            font.family: Style.font.family
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Text {
+            visible: !!removeKeyDialogCol.selectedKey
+            textFormat: Text.PlainText
+            text: removeKeyDialogCol.selectedKey ? ((HubModel.trimText(removeKeyDialogCol.selectedKey.comment || "").length > 0 ? removeKeyDialogCol.selectedKey.comment : (removeKeyDialogCol.selectedKey.type || "Key")) + " • " + (removeKeyDialogCol.selectedKey.keyPreview || "")) : ""
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: panel.confirmRemoveSshKey = false
+            }
+            Button {
+              iconText: "󰆴"
+              text: "Remove"
+              enabled: hub.sshSelectedKeyIndex >= 0 && hub.sshSelectedKeyIndex < (hub.sshAuthorizedKeys ? hub.sshAuthorizedKeys.length : 0)
+              onClicked: {
+                panel.confirmRemoveSshKey = false;
+                hub.removeSelectedAuthorizedKey();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Confirm remove VS Code Server container popup
+    Rectangle {
+      visible: panel.confirmRemoveCodeServer
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 100
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.confirmRemoveCodeServer = false
+      }
+
+      Rectangle {
+        id: removeCodeServerDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 480)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: removeCodeServerCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: removeCodeServerCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰆴"; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            Text { textFormat: Text.PlainText; text: "Uninstall VS Code Server?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "This will remove the `vember-code-server` Docker container (forced if running). Local config/data in ~/.config/vember-code-server is kept."
+            color: softText(0.85)
+            font.family: Style.font.family
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: panel.confirmRemoveCodeServer = false
+            }
+            Button {
+              iconText: "󰆴"
+              text: "Uninstall"
+              enabled: !hub.codeServerBusy
+              onClicked: {
+                panel.confirmRemoveCodeServer = false;
+                hub.uninstallCodeServer();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // First-use wizard: server name
+    Rectangle {
+      visible: hub.wizardOpen
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 120
+
+      MouseArea { anchors.fill: parent; onClicked: {} }
+
+      Rectangle {
+        id: wizardDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 520)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: wizardCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: wizardCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 16
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            ColumnLayout {
+              Layout.fillWidth: true
+              spacing: 2
+              Text { textFormat: Text.PlainText; text: "Welcome to Vember Server Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Name this server to personalize your hub."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Server name"
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.bold: true
+          }
+          Rectangle {
+            width: parent.width
+            radius: 8
+            color: softText(0.03)
+            border.color: accentSoft(0.2)
+            border.width: 1
+            implicitHeight: 40
+            TextInput {
+              id: serverNameInput
+              anchors.fill: parent
+              anchors.margins: 10
+              verticalAlignment: TextInput.AlignVCenter
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              selectByMouse: true
+              clip: true
+              text: hub.serverNameDraft
+              onTextChanged: hub.serverNameDraft = text
+            }
+          }
+
+          Text {
+            textFormat: Text.PlainText
+            text: "Server role (optional)"
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.bold: true
+          }
+          Rectangle {
+            width: parent.width
+            radius: 8
+            color: softText(0.03)
+            border.color: accentSoft(0.2)
+            border.width: 1
+            implicitHeight: 40
+            TextInput {
+              id: serverRoleInput
+              anchors.fill: parent
+              anchors.margins: 10
+              verticalAlignment: TextInput.AlignVCenter
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.body
+              selectByMouse: true
+              clip: true
+              text: hub.serverRoleDraft
+              onTextChanged: hub.serverRoleDraft = text
+            }
+          }
+          Text {
+            textFormat: Text.PlainText
+            text: "Examples: NAS, file server, gaming server, coding/dev server, media server, or mixed. Defaults to hostname for the name (" + hub.defaultServerName() + ")."
+            color: softText(0.72)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Use hostname"
+              onClicked: {
+                hub.serverNameDraft = hub.defaultServerName();
+                serverNameInput.text = hub.serverNameDraft;
+              }
+            }
+            Button {
+              iconText: "󰄬"
+              text: "Save"
+              active: true
+              onClicked: hub.saveServerName(hub.serverNameDraft)
+            }
+          }
+        }
+      }
+    }
+  }
+}

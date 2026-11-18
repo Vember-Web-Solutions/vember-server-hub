@@ -1,0 +1,11 @@
+# Local instance config (server name, preferences, etc.)
+config.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

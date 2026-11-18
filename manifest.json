@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "elena.vember-server-hub",
+  "name": "Vember Server Hub",
+  "version": "0.1.0",
+  "build": 1,
+  "author": "elenanight",
+  "description": "Local server and system hub for Tailscale, Docker, games, and storage status",
+  "license": "MIT",
+  "kinds": ["panel", "bar-widget"],
+  "entryPoints": {
+    "panel": "Panel.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Vember Server Hub",
+    "description": "Open the Vember Server Hub panel",
+    "category": "Plugin",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
