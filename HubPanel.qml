@@ -107,14 +107,13 @@ PanelWindow {
   exclusionMode: ExclusionMode.Ignore
   focus: hub.opened
 
-  Shortcut {
-    sequences: ["F"]
-    enabled: hub.opened
-    onActivated: {
+  Keys.onPressed: function(event) {
+    if (event.key === Qt.Key_F && !(event.modifiers & Qt.ControlModifier) && !(event.modifiers & Qt.AltModifier) && !(event.modifiers & Qt.MetaModifier)) {
       var item = panel.activeFocusItem;
       if (item && (item.toString().indexOf("TextInput") !== -1 || item.toString().indexOf("TextEdit") !== -1 || item.toString().indexOf("TextField") !== -1))
         return;
       panel.toggleFullscreen();
+      event.accepted = true;
     }
   }
 
@@ -2902,6 +2901,14 @@ PanelWindow {
           Row {
             spacing: 8
             anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: {
+                hub.serverNameDraft = HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName();
+                hub.serverRoleDraft = hub.serverRole || "";
+                hub.wizardOpen = false;
+              }
+            }
             Button {
               text: "Use hostname"
               onClicked: {
