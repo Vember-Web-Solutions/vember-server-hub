@@ -1813,9 +1813,11 @@ PanelWindow {
                   id: libraryCol
                   anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                   anchors.margins: 14
-                  spacing: 10
+                  spacing: 12
 
-                  property int totalKnownGames: (hub.steamGameCount >= 0 ? hub.steamGameCount : 0) + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0)
+                  property int steamCount: hub.steamGameCount >= 0 ? hub.steamGameCount : 0
+                  property int bnetCount: hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0
+                  property int totalKnownGames: steamCount + bnetCount
                   property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0
                   property var installedExtraLaunchers: {
                     var out = [];
@@ -1828,29 +1830,103 @@ PanelWindow {
                   }
                   property bool hasAnyInstalled: hub.steamInstalled || hub.bnetInstalled || installedExtraLaunchers.length > 0
 
-                  RowLayout {
+                  Column {
                     width: parent.width
-                    spacing: 10
-                    Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-                    ColumnLayout {
-                      Layout.fillWidth: true
-                      spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Game library"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text {
-                        textFormat: Text.PlainText
-                        text: libraryCol.hasKnownCounts
-                          ? ("Total detected games: " + libraryCol.totalKnownGames + " (from launchers that report counts)")
-                          : "Total detected games: unknown (no launcher counts available yet)"
-                        color: softText(0.78)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.Wrap
-                        Layout.fillWidth: true
-                      }
+                    spacing: 2
+                    Text {
+                      textFormat: Text.PlainText
+                      text: libraryCol.hasKnownCounts ? String(libraryCol.totalKnownGames) : "—"
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Math.round(Style.font.large * 2.2)
+                      font.bold: true
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      text: libraryCol.hasKnownCounts ? "games detected" : "game count unavailable"
+                      color: softText(0.72)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
                     }
                   }
 
-                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Column {
+                    visible: libraryCol.hasAnyInstalled
+                    width: parent.width
+                    spacing: 10
+
+                    // Steam
+                    Column {
+                      visible: hub.steamInstalled
+                      width: parent.width
+                      spacing: 4
+                      RowLayout {
+                        width: parent.width
+                        spacing: 8
+                        Rectangle { width: 10; height: 10; radius: 2; color: "#66c0f4"; Layout.alignment: Qt.AlignVCenter }
+                        Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true }
+                        Text { textFormat: Text.PlainText; text: hub.steamGameCount >= 0 ? String(hub.steamGameCount) : "—"; color: "#66c0f4"; font.family: Style.font.family; font.bold: true }
+                      }
+                      Rectangle {
+                        width: parent.width
+                        height: 6
+                        radius: 3
+                        color: softText(0.10)
+                        clip: true
+                        Rectangle {
+                          height: parent.height
+                          radius: 3
+                          width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.steamCount / libraryCol.totalKnownGames) : 0
+                          color: "#66c0f4"
+                          Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                        }
+                      }
+                    }
+
+                    // Battle.net
+                    Column {
+                      visible: hub.bnetInstalled
+                      width: parent.width
+                      spacing: 4
+                      RowLayout {
+                        width: parent.width
+                        spacing: 8
+                        Rectangle { width: 10; height: 10; radius: 2; color: "#00aeff"; Layout.alignment: Qt.AlignVCenter }
+                        Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true }
+                        Text { textFormat: Text.PlainText; text: hub.bnetGameCount >= 0 ? String(hub.bnetGameCount) : "—"; color: "#00aeff"; font.family: Style.font.family; font.bold: true }
+                      }
+                      Rectangle {
+                        width: parent.width
+                        height: 6
+                        radius: 3
+                        color: softText(0.10)
+                        clip: true
+                        Rectangle {
+                          height: parent.height
+                          radius: 3
+                          width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.bnetCount / libraryCol.totalKnownGames) : 0
+                          color: "#00aeff"
+                          Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                        }
+                      }
+                    }
+
+                    Text {
+                      visible: libraryCol.installedExtraLaunchers.length > 0
+                      textFormat: Text.PlainText
+                      text: {
+                        var names = [];
+                        var list = libraryCol.installedExtraLaunchers || [];
+                        for (var i = 0; i < list.length; i++) { if (list[i] && list[i].name) names.push(list[i].name); }
+                        return "Also installed: " + names.join(", ");
+                      }
+                      color: softText(0.65)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+                  }
 
                   Text {
                     visible: !libraryCol.hasAnyInstalled
@@ -1860,93 +1936,6 @@ PanelWindow {
                     font.family: Style.font.family
                     wrapMode: Text.Wrap
                     width: parent.width
-                  }
-
-                  Column {
-                    visible: libraryCol.hasAnyInstalled
-                    width: parent.width
-                    spacing: 8
-
-                    // Steam
-                    Rectangle {
-                      visible: hub.steamInstalled
-                      width: parent.width
-                      radius: 10
-                      color: softText(0.03)
-                      border.color: softText(0.08)
-                      border.width: 1
-                      implicitHeight: steamRow.implicitHeight + 14
-                      RowLayout {
-                        id: steamRow
-                        anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                        anchors.margins: 10
-                        spacing: 10
-                        Text { textFormat: Text.PlainText; text: "󰓓"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 22 }
-                        ColumnLayout {
-                          Layout.fillWidth: true
-                          spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: (hub.steamGameCount >= 0 ? (hub.steamGameCount + " games detected") : "Game count unknown") + (hub.steamRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                      }
-                    }
-
-                    // Battle.net
-                    Rectangle {
-                      visible: hub.bnetInstalled
-                      width: parent.width
-                      radius: 10
-                      color: softText(0.03)
-                      border.color: softText(0.08)
-                      border.width: 1
-                      implicitHeight: bnetRow.implicitHeight + 14
-                      RowLayout {
-                        id: bnetRow
-                        anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                        anchors.margins: 10
-                        spacing: 10
-                        Text { textFormat: Text.PlainText; text: "󰖺"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 22 }
-                        ColumnLayout {
-                          Layout.fillWidth: true
-                          spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: (hub.bnetGameCount >= 0 ? (hub.bnetGameCount + " games detected") : "Game count unknown") + (hub.bnetRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                      }
-                    }
-
-                    // Other installed launchers/mod tools (no per-launcher game counts tracked)
-                    Repeater {
-                      model: libraryCol.installedExtraLaunchers
-                      delegate: Rectangle {
-                        required property var modelData
-                        width: libraryCol.width
-                        radius: 10
-                        color: softText(0.03)
-                        border.color: softText(0.08)
-                        border.width: 1
-                        implicitHeight: extraRow.implicitHeight + 14
-                        RowLayout {
-                          id: extraRow
-                          anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                          anchors.margins: 10
-                          spacing: 10
-                          Text {
-                            textFormat: Text.PlainText
-                            text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰊴"))))
-                            color: Color.accent
-                            font.family: Style.font.family
-                            font.pixelSize: 22
-                          }
-                          ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-                            Text { textFormat: Text.PlainText; text: "Installed" + (modelData.running ? " • running" : "") + " • game count not tracked"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
-                          }
-                        }
-                      }
-                    }
                   }
                 }
               }
