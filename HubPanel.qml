@@ -1732,6 +1732,7 @@ PanelWindow {
               width: parent.width
               spacing: Style.spacing.md
 
+              // Launcher bar (installed launchers only)
               Rectangle {
                 width: parent.width
                 radius: Style.cornerRadius
@@ -1750,17 +1751,17 @@ PanelWindow {
                     width: parent.width
                     spacing: 8
                     Button {
+                      visible: hub.steamInstalled
                       iconText: "󰓓"
                       text: "Steam"
-                      enabled: hub.steamInstalled
-                      tooltipText: hub.steamInstalled ? "Launch Steam" : "Steam not detected"
+                      tooltipText: "Launch Steam"
                       onClicked: hub.launchSteam()
                     }
                     Button {
+                      visible: hub.bnetInstalled
                       iconText: "󰖺"
                       text: "Battle.net"
-                      enabled: hub.bnetInstalled
-                      tooltipText: hub.bnetInstalled ? "Launch Battle.net" : "Battle.net not detected"
+                      tooltipText: "Launch Battle.net"
                       onClicked: hub.launchBattleNet()
                     }
                     Repeater {
@@ -1769,7 +1770,7 @@ PanelWindow {
                         var apps = hub.extraApps || [];
                         for (var i = 0; i < apps.length; i++) {
                           var a = apps[i];
-                          if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
+                          if (a && a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
                         }
                         return out;
                       }
@@ -1777,10 +1778,21 @@ PanelWindow {
                         required property var modelData
                         iconText: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰐊"))))
                         text: modelData.name || modelData.id
-                        enabled: !!modelData.installed
-                        tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
+                        tooltipText: "Launch " + (modelData.name || modelData.id)
                         onClicked: hub.launchExtraApp(modelData.id)
                       }
+                    }
+                    Text {
+                      visible: !hub.steamInstalled && !hub.bnetInstalled && (function() {
+                        var apps = hub.extraApps || [];
+                        for (var i = 0; i < apps.length; i++) { var a = apps[i]; if (a && a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) return false; }
+                        return true;
+                      })()
+                      textFormat: Text.PlainText
+                      text: "No installed launchers detected."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
                     }
                   }
                 }
@@ -1789,187 +1801,224 @@ PanelWindow {
               Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
               Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
 
-              Flow {
+              // Game library summary (total + per-launcher breakdown)
+              Rectangle {
                 width: parent.width
-                spacing: 14
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: libraryCol.implicitHeight + 24
+                Column {
+                  id: libraryCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14
+                  spacing: 10
 
-                Rectangle {
-                  width: 320
-                  radius: 14
-                  color: softText(0.045)
-                  border.color: hub.steamRunning ? accentSoft(0.35) : softText(0.10)
-                  border.width: 1
-                  implicitHeight: steamCard.implicitHeight + 20
-                  Column {
-                    id: steamCard
-                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                    anchors.margins: 12; spacing: 8
-                    RowLayout {
-                      width: parent.width; spacing: 10
-                      Text { textFormat: Text.PlainText; text: "󰓓"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
-                      ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                        Text { textFormat: Text.PlainText; text: hub.steamInstalled ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                      }
-                      Rectangle {
-                        radius: 10
-                        color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                        border.color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                        border.width: hub.steamRunning ? 1 : 0
-                        implicitWidth: steamStatusRow.implicitWidth + 14
-                        implicitHeight: steamStatusRow.implicitHeight + 8
-                        Row {
-                          id: steamStatusRow
-                          anchors.centerIn: parent
-                          spacing: 6
-                          Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.steamRunning ? "#22c55e" : softText(0.45) }
-                          Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.steamRunning ? "running" : "not running"; color: hub.steamRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.steamRunning }
-                        }
-                      }
-                    }
-                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                    Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
-                    Text { visible: HubModel.trimText(hub.steamNote).length > 0; textFormat: Text.PlainText; text: hub.steamNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                    Flow {
-                      width: parent.width; spacing: 8
-                      Button {
-                        iconText: "󰐊"
-                        text: "Launch"
-                        tooltipText: "Launch Steam"
-                        enabled: hub.steamInstalled
-                        onClicked: hub.launchSteam()
-                      }
-                    }
-                  }
-                }
-
-                Rectangle {
-                  width: 320
-                  radius: 14
-                  color: softText(0.045)
-                  border.color: hub.bnetRunning ? accentSoft(0.35) : softText(0.10)
-                  border.width: 1
-                  implicitHeight: bnetCard.implicitHeight + 20
-                  Column {
-                    id: bnetCard
-                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                    anchors.margins: 12; spacing: 8
-                    RowLayout {
-                      width: parent.width; spacing: 10
-                      Text { textFormat: Text.PlainText; text: "󰖺"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
-                      ColumnLayout {
-                        Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                        Text { textFormat: Text.PlainText; text: hub.bnetInstalled ? "Installed / prefix present" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                      }
-                      Rectangle {
-                        radius: 10
-                        color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                        border.color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                        border.width: hub.bnetRunning ? 1 : 0
-                        implicitWidth: bnetStatusRow.implicitWidth + 14
-                        implicitHeight: bnetStatusRow.implicitHeight + 8
-                        Row {
-                          id: bnetStatusRow
-                          anchors.centerIn: parent
-                          spacing: 6
-                          Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.bnetRunning ? "#22c55e" : softText(0.45) }
-                          Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.bnetRunning ? "running" : "not running"; color: hub.bnetRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.bnetRunning }
-                        }
-                      }
-                    }
-                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                    Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
-                    Text { visible: HubModel.trimText(hub.bnetNote).length > 0; textFormat: Text.PlainText; text: hub.bnetNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                    Flow {
-                      width: parent.width; spacing: 8
-                      Button {
-                        iconText: "󰐊"
-                        text: "Launch"
-                        tooltipText: "Launch Battle.net"
-                        enabled: hub.bnetInstalled
-                        onClicked: hub.launchBattleNet()
-                      }
-                    }
-                  }
-                }
-
-                Repeater {
-                  model: {
+                  property int totalKnownGames: (hub.steamGameCount >= 0 ? hub.steamGameCount : 0) + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0)
+                  property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0
+                  property var installedExtraLaunchers: {
                     var out = [];
                     var apps = hub.extraApps || [];
                     for (var i = 0; i < apps.length; i++) {
                       var a = apps[i];
-                      if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
+                      if (a && a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
                     }
                     return out;
                   }
-                  delegate: Rectangle {
-                    required property var modelData
-                    width: 320
-                    radius: 14
-                    color: softText(0.045)
-                    border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
-                    border.width: 1
-                    implicitHeight: extraCardCol.implicitHeight + 20
-                    Column {
-                      id: extraCardCol
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12
-                      spacing: 8
+                  property bool hasAnyInstalled: hub.steamInstalled || hub.bnetInstalled || installedExtraLaunchers.length > 0
+
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true
+                      spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Game library"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: libraryCol.hasKnownCounts
+                          ? ("Total detected games: " + libraryCol.totalKnownGames + " (from launchers that report counts)")
+                          : "Total detected games: unknown (no launcher counts available yet)"
+                        color: softText(0.78)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                      }
+                    }
+                  }
+
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  Text {
+                    visible: !libraryCol.hasAnyInstalled
+                    textFormat: Text.PlainText
+                    text: "No game launchers detected. Add one below to get started."
+                    color: softText(0.75)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  Column {
+                    visible: libraryCol.hasAnyInstalled
+                    width: parent.width
+                    spacing: 8
+
+                    // Steam
+                    Rectangle {
+                      visible: hub.steamInstalled
+                      width: parent.width
+                      radius: 10
+                      color: softText(0.03)
+                      border.color: softText(0.08)
+                      border.width: 1
+                      implicitHeight: steamRow.implicitHeight + 14
                       RowLayout {
-                        width: parent.width
+                        id: steamRow
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: 10
                         spacing: 10
-                        Text {
-                          textFormat: Text.PlainText
-                          text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰀻"))))
-                          color: Color.accent
-                          font.family: Style.font.family
-                          font.pixelSize: 28
-                        }
+                        Text { textFormat: Text.PlainText; text: "󰓓"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 22 }
                         ColumnLayout {
                           Layout.fillWidth: true
                           spacing: 2
-                          Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                          Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: (hub.steamGameCount >= 0 ? (hub.steamGameCount + " games detected") : "Game count unknown") + (hub.steamRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         }
-                        Rectangle {
-                          radius: 10
-                          color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                          border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                          border.width: modelData.running ? 1 : 0
-                          implicitWidth: extraStatus.implicitWidth + 14
-                          implicitHeight: extraStatus.implicitHeight + 8
-                          Row {
-                            id: extraStatus
-                            anchors.centerIn: parent
-                            spacing: 6
-                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
-                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                        Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchSteam() }
+                      }
+                    }
+
+                    // Battle.net
+                    Rectangle {
+                      visible: hub.bnetInstalled
+                      width: parent.width
+                      radius: 10
+                      color: softText(0.03)
+                      border.color: softText(0.08)
+                      border.width: 1
+                      implicitHeight: bnetRow.implicitHeight + 14
+                      RowLayout {
+                        id: bnetRow
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        anchors.margins: 10
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: "󰖺"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 22 }
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: (hub.bnetGameCount >= 0 ? (hub.bnetGameCount + " games detected") : "Game count unknown") + (hub.bnetRunning ? " • running" : ""); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchBattleNet() }
+                      }
+                    }
+
+                    // Other installed launchers/mod tools (no per-launcher game counts tracked)
+                    Repeater {
+                      model: libraryCol.installedExtraLaunchers
+                      delegate: Rectangle {
+                        required property var modelData
+                        width: libraryCol.width
+                        radius: 10
+                        color: softText(0.03)
+                        border.color: softText(0.08)
+                        border.width: 1
+                        implicitHeight: extraRow.implicitHeight + 14
+                        RowLayout {
+                          id: extraRow
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                          anchors.margins: 10
+                          spacing: 10
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰊴"))))
+                            color: Color.accent
+                            font.family: Style.font.family
+                            font.pixelSize: 22
                           }
+                          ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: "Installed" + (modelData.running ? " • running" : "") + " • game count not tracked"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                          }
+                          Button { iconText: "󰐊"; text: "Launch"; onClicked: hub.launchExtraApp(modelData.id) }
                         }
                       }
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                      Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Text { visible: HubModel.trimText(modelData.note || "").length > 0; textFormat: Text.PlainText; text: modelData.note; color: softText(0.65); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; width: parent.width }
-                      Flow {
-                        width: parent.width
+                    }
+                  }
+                }
+              }
+
+              // Available to add (not installed)
+              Column {
+                width: parent.width
+                spacing: 8
+                property var offerItems: {
+                  var out = [];
+                  if (!hub.steamInstalled) out.push({ kind: "steam", id: "steam", name: "Steam", description: "Valve game platform and library.", icon: "󰓓" });
+                  if (!hub.bnetInstalled) out.push({ kind: "bnet", id: "battlenet", name: "Battle.net", description: "Blizzard launcher (best-effort detection/prefix).", icon: "󰖺" });
+                  var apps = hub.extraApps || [];
+                  for (var i = 0; i < apps.length; i++) {
+                    var a = apps[i];
+                    if (a && !a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push({ kind: "extra", id: a.id, name: a.name, description: a.description || "", icon: a.id === "heroic" ? "󰊗" : (a.id === "lutris" ? "󰺷" : (a.id === "prismlauncher" ? "󰍳" : (a.id === "minecraft-launcher" ? "󰍳" : (a.id === "curseforge" ? "󰏗" : "󰊴")))) });
+                  }
+                  return out;
+                }
+                visible: offerItems.length > 0
+
+                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Text { textFormat: Text.PlainText; text: "Install launchers to track and launch games from this hub."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
+                Flow {
+                  width: parent.width
+                  spacing: 14
+                  Repeater {
+                    model: parent.parent.offerItems
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: 320
+                      radius: 14
+                      color: softText(0.045)
+                      border.color: softText(0.10)
+                      border.width: 1
+                      implicitHeight: offerCol.implicitHeight + 20
+                      Column {
+                        id: offerCol
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 12
                         spacing: 8
-                        Button {
-                          iconText: "󰐊"
-                          text: "Launch"
-                          enabled: modelData.installed
-                          tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
-                          onClicked: hub.launchExtraApp(modelData.id)
+                        RowLayout {
+                          width: parent.width
+                          spacing: 10
+                          Text { textFormat: Text.PlainText; text: modelData.icon || "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                          ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: "Not installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                          }
                         }
-                        Button {
-                          visible: !modelData.installed
-                          iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
-                          text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : (modelData.id === "minecraft-launcher" ? "Add" : "Install")
-                          tooltipText: modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)
-                          enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
-                          onClicked: hub.installExtraApp(modelData.id)
+                        Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                        Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Flow {
+                          width: parent.width
+                          spacing: 8
+                          Button {
+                            iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
+                            text: (modelData.kind === "extra" && hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : (modelData.id === "minecraft-launcher" ? "Add" : "Install")
+                            tooltipText: modelData.kind === "steam" ? "Install Steam (use your package manager / Omarchy tools)" : (modelData.kind === "bnet" ? "Install Battle.net (see setup instructions)" : (modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)))
+                            enabled: !(modelData.kind === "extra" && HubModel.trimText(hub.extraAppInstallBusyId).length > 0)
+                            onClicked: {
+                              if (modelData.kind === "extra") hub.installExtraApp(modelData.id);
+                              else if (modelData.kind === "steam") hub.lastActionMessage = "Install Steam via your system package manager or Omarchy app install.";
+                              else if (modelData.kind === "bnet") hub.lastActionMessage = "Battle.net setup is manual/best-effort; install a launcher or configure your prefix.";
+                            }
+                          }
                         }
                       }
                     }
@@ -1987,80 +2036,143 @@ PanelWindow {
               Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
               Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
 
-              Flow {
+              // Installed apps
+              Column {
                 width: parent.width
-                spacing: 14
-                Repeater {
-                  model: {
-                    var out = [];
-                    var apps = hub.extraApps || [];
-                    for (var i = 0; i < apps.length; i++) {
-                      var a = apps[i];
-                      if (a && a.category === "apps") out.push(a);
-                    }
-                    return out;
+                spacing: 8
+                property var installedApps: {
+                  var out = [];
+                  var apps = hub.extraApps || [];
+                  for (var i = 0; i < apps.length; i++) {
+                    var a = apps[i];
+                    if (a && a.category === "apps" && a.installed) out.push(a);
                   }
-                  delegate: Rectangle {
-                    required property var modelData
-                    width: 320
-                    radius: 14
-                    color: softText(0.045)
-                    border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
-                    border.width: 1
-                    implicitHeight: appCardCol.implicitHeight + 20
-                    Column {
-                      id: appCardCol
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12
-                      spacing: 8
-                      RowLayout {
-                        width: parent.width
-                        spacing: 10
-                        Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
-                        ColumnLayout {
-                          Layout.fillWidth: true
-                          spacing: 2
-                          Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                        Rectangle {
-                          radius: 10
-                          color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                          border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                          border.width: modelData.running ? 1 : 0
-                          implicitWidth: appStatus.implicitWidth + 14
-                          implicitHeight: appStatus.implicitHeight + 8
-                          Row {
-                            id: appStatus
-                            anchors.centerIn: parent
-                            spacing: 6
-                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
-                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                  return out;
+                }
+                visible: installedApps.length > 0
+
+                Text { textFormat: Text.PlainText; text: "Installed apps"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Flow {
+                  width: parent.width
+                  spacing: 14
+                  Repeater {
+                    model: parent.parent.installedApps
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: 320
+                      radius: 14
+                      color: softText(0.045)
+                      border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
+                      border.width: 1
+                      implicitHeight: appInstalledCol.implicitHeight + 20
+                      Column {
+                        id: appInstalledCol
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 12
+                        spacing: 8
+                        RowLayout {
+                          width: parent.width
+                          spacing: 10
+                          Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                          ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: modelData.running ? "Installed • running" : "Installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                           }
                         }
-                      }
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                      Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Flow {
-                        width: parent.width
-                        spacing: 8
-                        Button {
-                          iconText: "󰐊"
-                          text: "Launch"
-                          enabled: modelData.installed
-                          onClicked: hub.launchExtraApp(modelData.id)
-                        }
-                        Button {
-                          visible: !modelData.installed
-                          iconText: "󰏔"
-                          text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
-                          enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
-                          onClicked: hub.installExtraApp(modelData.id)
+                        Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                        Text { visible: HubModel.trimText(modelData.description || "").length > 0; textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Flow {
+                          width: parent.width
+                          spacing: 8
+                          Button {
+                            iconText: "󰐊"
+                            text: "Launch"
+                            onClicked: hub.launchExtraApp(modelData.id)
+                          }
                         }
                       }
                     }
                   }
                 }
+              }
+
+              // Offers (not installed)
+              Column {
+                width: parent.width
+                spacing: 8
+                property var offerApps: {
+                  var out = [];
+                  var apps = hub.extraApps || [];
+                  for (var i = 0; i < apps.length; i++) {
+                    var a = apps[i];
+                    if (a && a.category === "apps" && !a.installed) out.push(a);
+                  }
+                  return out;
+                }
+                visible: offerApps.length > 0
+
+                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Flow {
+                  width: parent.width
+                  spacing: 14
+                  Repeater {
+                    model: parent.parent.offerApps
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: 320
+                      radius: 14
+                      color: softText(0.045)
+                      border.color: softText(0.10)
+                      border.width: 1
+                      implicitHeight: appOfferCol.implicitHeight + 20
+                      Column {
+                        id: appOfferCol
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 12
+                        spacing: 8
+                        RowLayout {
+                          width: parent.width
+                          spacing: 10
+                          Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                          ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: "Not installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                          }
+                        }
+                        Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                        Text { visible: HubModel.trimText(modelData.description || "").length > 0; textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Flow {
+                          width: parent.width
+                          spacing: 8
+                          Button {
+                            iconText: "󰏔"
+                            text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
+                            enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                            onClicked: hub.installExtraApp(modelData.id)
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+
+              Text {
+                visible: (function() {
+                  var apps = hub.extraApps || [];
+                  var hasAny = false;
+                  for (var i = 0; i < apps.length; i++) { if (apps[i] && apps[i].category === "apps") { hasAny = true; break; } }
+                  return !hasAny;
+                })() && !hub.extraAppsScanBusy
+                textFormat: Text.PlainText
+                text: "No app offers configured."
+                color: softText(0.7)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
               }
             }
 
