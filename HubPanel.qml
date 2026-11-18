@@ -105,17 +105,6 @@ PanelWindow {
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: hub.opened ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
   exclusionMode: ExclusionMode.Ignore
-  focus: hub.opened
-
-  Keys.onPressed: function(event) {
-    if (event.key === Qt.Key_F && !(event.modifiers & Qt.ControlModifier) && !(event.modifiers & Qt.AltModifier) && !(event.modifiers & Qt.MetaModifier)) {
-      var item = panel.activeFocusItem;
-      if (item && (item.toString().indexOf("TextInput") !== -1 || item.toString().indexOf("TextEdit") !== -1 || item.toString().indexOf("TextField") !== -1))
-        return;
-      panel.toggleFullscreen();
-      event.accepted = true;
-    }
-  }
 
   anchors {
     top: true
