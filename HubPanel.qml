@@ -1301,6 +1301,12 @@ PanelWindow {
                 onClicked: panel.containersSubTab = "containers"
               }
               Button {
+                iconText: "󰃢"
+                text: "Prune"
+                active: panel.containersSubTab === "prune"
+                onClicked: panel.containersSubTab = "prune"
+              }
+              Button {
                 iconText: "󰡨"
                 text: "Docker Hub"
                 active: panel.containersSubTab === "hub"
@@ -1320,96 +1326,6 @@ PanelWindow {
                 font.family: Style.font.family
                 wrapMode: Text.Wrap
                 width: parent.width
-              }
-
-              Rectangle {
-                id: dockerBar
-                width: parent.width
-                radius: Style.cornerRadius
-                color: softText(0.05)
-                border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
-                border.width: 1
-                implicitHeight: dkHeader.implicitHeight + 24
-
-                function dockerStatusText() {
-                  if (HubModel.trimText(hub.dockerError).length > 0)
-                    return hub.dockerError;
-                  if (hub.dockerPruneBusy)
-                    return "Pruning stopped containers…";
-                  if (hub.dockerContainers.length === 0)
-                    return "No containers found.";
-                  var msg = HubModel.trimText(hub.lastActionMessage);
-                  if (msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0)
-                    return msg;
-                  return hub.dockerContainers.length + " container(s)";
-                }
-
-                function dockerStatusColor() {
-                  if (HubModel.trimText(hub.dockerError).length > 0)
-                    return "#ef4444";
-                  var msg = HubModel.trimText(hub.lastActionMessage);
-                  if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && msg.indexOf("failed") !== -1)
-                    return "#ef4444";
-                  if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && (msg.indexOf("succeeded") !== -1 || msg.indexOf("Pruned") === 0))
-                    return "#22c55e";
-                  return softText(0.78);
-                }
-
-                Column {
-                  id: dkHeader
-                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                  anchors.margins: 14; spacing: 8
-
-                  RowLayout {
-                    width: parent.width
-                    spacing: 12
-                    Rectangle {
-                      width: 40; height: 40; radius: 10
-                      color: accentSoft(0.14)
-                      Image {
-                        anchors.centerIn: parent
-                        source: "file:///usr/share/icons/hicolor/256x256/apps/docker.png"
-                        sourceSize.width: 24; sourceSize.height: 24
-                        width: 24; height: 24
-                        fillMode: Image.PreserveAspectFit
-                      }
-                    }
-                    ColumnLayout {
-                      Layout.fillWidth: true; spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    }
-                    Button {
-                      iconText: "󰃢"
-                      text: hub.dockerPruneBusy ? "Pruning…" : "Prune stopped"
-                      tooltipText: "Remove all stopped containers (docker container prune -f)"
-                      enabled: !hub.dockerPruneBusy && !hub.dockerBusy
-                      onClicked: panel.confirmPrune = true
-                    }
-                  }
-
-                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                  RowLayout {
-                    width: parent.width
-                    spacing: 8
-                    Rectangle {
-                      visible: HubModel.trimText(hub.dockerError).length > 0 || hub.dockerContainers.length === 0 || hub.dockerPruneBusy || HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") === 0 || HubModel.trimText(hub.lastActionMessage).indexOf("Prun") === 0
-                      width: 8; height: 8; radius: 4
-                      color: dockerBar.dockerStatusColor()
-                      Layout.alignment: Qt.AlignVCenter
-                    }
-                    Text {
-                      Layout.fillWidth: true
-                      textFormat: Text.PlainText
-                      text: dockerBar.dockerStatusText()
-                      color: dockerBar.dockerStatusColor()
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      wrapMode: Text.Wrap
-                    }
-                  }
-                }
               }
 
               RowLayout {
@@ -1707,6 +1623,78 @@ PanelWindow {
                         tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
                         onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
                       }
+                    }
+                  }
+                }
+              }
+            }
+
+            Column {
+              visible: panel.containersSubTab === "prune"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Rectangle {
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: pruneCol.implicitHeight + 24
+                Column {
+                  id: pruneCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14
+                  spacing: 12
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰃢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true
+                      spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Prune stopped containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Remove all stopped containers to free disk space (docker container prune -f). Running containers are not affected."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    }
+                  }
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "Containers: " + panel.runningDockerCount() + " running / " + (hub.dockerContainers ? hub.dockerContainers.length : 0) + " total"
+                    color: softText(0.85)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+                  Text {
+                    visible: HubModel.trimText(hub.dockerError).length > 0
+                    textFormat: Text.PlainText
+                    text: hub.dockerError
+                    color: "#ef4444"
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+                  Text {
+                    visible: hub.dockerPruneBusy || HubModel.trimText(hub.lastActionMessage).indexOf("Prun") === 0 || HubModel.trimText(hub.lastActionMessage).indexOf("Docker container prune") === 0
+                    textFormat: Text.PlainText
+                    text: hub.dockerPruneBusy ? "Pruning stopped containers…" : hub.lastActionMessage
+                    color: (!hub.dockerPruneBusy && hub.lastActionMessage.indexOf("failed") !== -1) ? "#ef4444" : softText(0.85)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+                  Flow {
+                    width: parent.width
+                    spacing: 8
+                    Button {
+                      iconText: "󰃢"
+                      text: hub.dockerPruneBusy ? "Pruning…" : "Prune stopped containers"
+                      active: true
+                      tooltipText: "Remove all stopped containers (docker container prune -f)"
+                      enabled: !hub.dockerPruneBusy && !hub.dockerBusy
+                      onClicked: panel.confirmPrune = true
                     }
                   }
                 }
