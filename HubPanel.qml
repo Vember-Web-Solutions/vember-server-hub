@@ -2704,41 +2704,71 @@ PanelWindow {
       }
     }
 
-    // Toast notification
-    Rectangle {
-      id: toastCard
-      visible: panel.toastVisible
-      opacity: panel.toastVisible ? 1 : 0
+    // Toast notifications (stacked, bottom-right)
+    Column {
+      id: toastStack
       z: 170
-      anchors.horizontalCenter: parent.horizontalCenter
+      anchors.right: parent.right
       anchors.bottom: parent.bottom
-      anchors.bottomMargin: 22
-      width: Math.min(parent.width - 48, Math.max(280, toastLabel.implicitWidth + 28))
-      height: toastLabel.implicitHeight + 18
-      radius: 10
-      color: Qt.rgba(Color.menu.background.r, Color.menu.background.g, Color.menu.background.b, 0.96)
-      border.color: accentSoft(0.35)
-      border.width: 1
+      anchors.rightMargin: 16
+      anchors.bottomMargin: 16
+      spacing: 8
+      width: Math.min(360, parent.width - 32)
 
-      Behavior on opacity { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+      Repeater {
+        model: panel.toastItems || []
+        delegate: Rectangle {
+          id: toastItem
+          required property var modelData
+          required property int index
+          width: toastStack.width
+          radius: 10
+          color: Qt.rgba(Color.menu.background.r, Color.menu.background.g, Color.menu.background.b, 0.97)
+          border.color: accentSoft(0.35)
+          border.width: 1
+          implicitHeight: toastItemLabel.implicitHeight + 18
+          opacity: 0
 
-      Text {
-        id: toastLabel
-        anchors.centerIn: parent
-        width: parent.width - 20
-        textFormat: Text.PlainText
-        text: panel.toastText
-        color: Color.menu.text
-        font.family: Style.font.family
-        font.pixelSize: Style.font.body
-        wrapMode: Text.Wrap
-        horizontalAlignment: Text.AlignHCenter
-      }
+          transform: Translate {
+            id: toastSlide
+            y: 14
+          }
 
-      MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onClicked: panel.advanceToast()
+          Component.onCompleted: {
+            opacity = 1;
+            toastSlide.y = 0;
+          }
+
+          Behavior on opacity { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+          Behavior on y { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+
+          Timer {
+            interval: 4200
+            repeat: false
+            running: true
+            onTriggered: panel.removeToastById(toastItem.modelData.id)
+          }
+
+          Text {
+            id: toastItemLabel
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: 10
+            textFormat: Text.PlainText
+            text: toastItem.modelData.text || ""
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            wrapMode: Text.Wrap
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: panel.removeToastById(toastItem.modelData.id)
+          }
+        }
       }
     }
 
