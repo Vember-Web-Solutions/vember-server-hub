@@ -844,7 +844,7 @@ Item {
     if (omarchyUpdateRunning)
       return;
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
-    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]:-$?}; echo \"[vember-update-exit:${code}]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
+    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi; echo \"[vember-update-exit:${code}]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
     omarchyUpdateStatus = "Running Omarchy update in default terminal (interactive)… streaming live log below.";
     lastActionMessage = "Running Omarchy update in default terminal.";
