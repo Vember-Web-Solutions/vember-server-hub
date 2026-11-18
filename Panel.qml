@@ -484,6 +484,25 @@ Item {
       "else",
       "  echo 'Workspace extension recommendations already exist: ~/Projects/.vscode/extensions.json'",
       "fi",
+      "if [ ! -f \"$HOME/Projects/.vscode/settings.json\" ]; then cat > \"$HOME/Projects/.vscode/settings.json\" <<'JSON'",
+      "{",
+      "  \"python.defaultInterpreterPath\": \"python3\",",
+      "  \"python.terminal.activateEnvironment\": true,",
+      "  \"ruff.enable\": true,",
+      "  \"editor.formatOnSave\": true,",
+      "  \"[python]\": {",
+      "    \"editor.defaultFormatter\": \"charliermarsh.ruff\",",
+      "    \"editor.codeActionsOnSave\": {",
+      "      \"source.fixAll.ruff\": \"explicit\",",
+      "      \"source.organizeImports.ruff\": \"explicit\"",
+      "    }",
+      "  }",
+      "}",
+      "JSON",
+      "  echo 'Created workspace settings: ~/Projects/.vscode/settings.json'",
+      "else",
+      "  echo 'Workspace settings already exist: ~/Projects/.vscode/settings.json'",
+      "fi",
       "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then echo 'EXISTS'; exit 10; fi",
       "if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 11; fi",
       "if ! docker info >/dev/null 2>&1; then echo 'Docker is not running or not accessible (try starting docker and ensuring access).'; exit 12; fi",
@@ -1747,7 +1766,6 @@ Item {
         root.codeServerStatusText = root.codeServerSetupDetail;
         root._appendCodeServerSetupLog("Image pull complete. Creating container…");
         var p = root.codeServerPort;
-        var workspaceTarget = "/home/coder/home/Projects/vember-python.code-workspace";
         codeServerSetupRunProc.command = ["docker", "run", "-d",
           "--name", "vember-code-server",
           "-p", String(p) + ":8080",
@@ -1758,8 +1776,7 @@ Item {
           "-e", "PATH=/home/coder/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "--env-file", root.homeDir + "/.config/vember-code-server/code-server.env",
           "--restart", "unless-stopped",
-          "codercom/code-server:latest",
-          workspaceTarget];
+          "codercom/code-server:latest"];
         root.codeServerSetupProvisionAfterStart = true;
         codeServerSetupRunProc.running = true;
       } else {

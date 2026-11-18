@@ -2662,7 +2662,7 @@ PanelWindow {
                         Text { textFormat: Text.PlainText; text: "~/.config/vember-code-server/bin → /home/coder/.local/bin (uv/uvx)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
 
                         Text { textFormat: Text.PlainText; text: "Default open"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        Text { textFormat: Text.PlainText; text: "~/Projects/vember-python.code-workspace"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                        Text { textFormat: Text.PlainText; text: "No folder (open a project when needed)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
 
                         Text { textFormat: Text.PlainText; text: "Restart"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         Text { textFormat: Text.PlainText; text: "unless-stopped"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
