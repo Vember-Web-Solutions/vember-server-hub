@@ -2030,7 +2030,7 @@ Item {
   // --- Plugin self-update processes/timers ---
   Timer {
     id: pluginUpdateCheckTimer
-    interval: 30 * 60 * 1000
+    interval: 5 * 60 * 1000
     repeat: true
     running: root.opened
     onTriggered: if (!root.updateCheckBusy && !root.pluginUpdateBusy) root.checkPluginUpdate(false)
