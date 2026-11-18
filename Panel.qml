@@ -293,9 +293,12 @@ Item {
       "mkdir -p \"$HOME/.config/vember-code-server\" \"$HOME/Projects\"",
       "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then",
       "  echo 'Container vember-code-server already exists.'",
-      "  echo 'Use Start to run it, or Uninstall to remove it and set it up again.'",
+      "  echo 'State:' $(docker inspect -f '{{.State.Status}}' vember-code-server 2>/dev/null || echo unknown)",
+      "  echo ''",
+      "  echo 'Use Start in the hub to run it, or Uninstall to remove it and set it up again.'",
       "else",
       "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
+      "  if ! docker info >/dev/null 2>&1; then echo 'Docker is installed but not running or not accessible (try: sudo systemctl start docker, and ensure your user can access docker).'; exit 1; fi",
       "  docker run -d --name vember-code-server -p " + codeServerPort + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" -e PASSWORD=\"$PASS\" --restart unless-stopped codercom/code-server:latest",
       "  echo ''",
       "  echo 'VS Code Server started.'",
@@ -304,10 +307,10 @@ Item {
       "  echo ''",
       "  echo 'Config kept in ~/.config/vember-code-server'",
       "fi"
-    ].join("\n");
-    var script = "bash -lc " + JSON.stringify(inner + "\necho\necho 'Press Enter to close...'\nread -r _") + " _ " + JSON.stringify(pass);
+    ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _";
     codeServerActionProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation " + JSON.stringify(script) + " </dev/null >/dev/null 2>&1 &"];
+      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc \"$1\" _ \"$2\" </dev/null >/dev/null 2>&1 &",
+      "sh", inner, pass];
     codeServerActionProc.running = true;
   }
 
