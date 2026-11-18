@@ -335,12 +335,12 @@ PanelWindow {
               color: accentSoft(0.08)
               border.color: accentSoft(0.20)
               border.width: 1
-              implicitHeight: heroCol.implicitHeight + 28
+              implicitHeight: heroCol.implicitHeight + 24
               Column {
                 id: heroCol
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                 anchors.margins: 14
-                spacing: 12
+                spacing: 0
 
                 RowLayout {
                   width: parent.width
@@ -384,34 +384,6 @@ PanelWindow {
                       font.pixelSize: Style.font.caption
                       font.bold: hub.tailscaleActive === "active"
                     }
-                  }
-                }
-
-                Column {
-                  width: parent.width
-                  spacing: 10
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: "Quick status across access, containers, development, and storage on this machine."
-                    color: softText(0.78)
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.Wrap
-                    width: parent.width
-                  }
-
-                  Flow {
-                    width: parent.width
-                    spacing: 8
-                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat1.implicitWidth + 14; implicitHeight: heroStat1.implicitHeight + 8
-                      Text { id: heroStat1; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Containers: " + panel.runningDockerCount() + "/" + hub.dockerContainers.length + " running"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
-                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat2.implicitWidth + 14; implicitHeight: heroStat2.implicitHeight + 8
-                      Text { id: heroStat2; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Peers: " + panel.onlinePeerCount() + "/" + hub.tailscalePeers.length + " online"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
-                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat3.implicitWidth + 14; implicitHeight: heroStat3.implicitHeight + 8
-                      Text { id: heroStat3; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Repos: " + (hub.devRepos ? hub.devRepos.length : 0); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
-                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat4.implicitWidth + 14; implicitHeight: heroStat4.implicitHeight + 8
-                      Text { id: heroStat4; anchors.centerIn: parent; textFormat: Text.PlainText; text: "SSH: " + hub.sshActive; color: hub.sshActive === "active" ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
                   }
                 }
               }
