@@ -181,6 +181,7 @@ Item {
   function writeHubConfig(restartAfter) {
     pendingConfigRestart = !!restartAfter;
     if (pendingConfigRestart) restartingForServerName = true;
+    else restartingForServerName = false;
     configWriteProc.running = false;
     var payload = JSON.stringify({
       serverName: serverName,
