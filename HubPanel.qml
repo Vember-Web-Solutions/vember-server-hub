@@ -2592,7 +2592,7 @@ PanelWindow {
                     Text {
                       visible: !hub.codeServerPresent
                       textFormat: Text.PlainText
-                      text: "Set a password and port in the hub. Setup creates the container, installs uv and Python extensions (ms-python.python, ms-python.debugpy, charliermarsh.ruff), and prepares a default Python workspace in ~/Projects. Progress and debug logs are shown in the panel. Password is stored in a restricted env file (not in config.yaml)."
+                      text: "Set a password and port in the hub. Setup creates the container, installs Python, uv, and GitHub CLI (gh), installs Python extensions (ms-python.python, ms-python.debugpy, charliermarsh.ruff), and prepares a default Python workspace in ~/Projects. Progress and debug logs are shown in the panel. Password is stored in a restricted env file (not in config.yaml)."
                       color: softText(0.72)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -2804,7 +2804,7 @@ PanelWindow {
               Layout.fillWidth: true
               spacing: 2
               Text { textFormat: Text.PlainText; text: "Set up VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-              Text { textFormat: Text.PlainText; text: "Create the code-server Docker container, set your sign-in password/port, provision uv and Python extensions, and prepare a default Python workspace in ~/Projects."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: "Create the code-server Docker container, set your sign-in password/port, provision Python, uv, GitHub CLI (gh), and Python extensions, and prepare a default Python workspace in ~/Projects."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
             }
           }
 
