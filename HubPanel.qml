@@ -15,6 +15,11 @@ PanelWindow {
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
   property bool tabReorderMode: false
+  property bool settingsMenuOpen: false
+  property bool updateDialogOpen: false
+  property bool updateInProgress: false
+  property real updateProgress: 0
+  property string updateStatusText: ""
 
   function tabDef(id) {
     if (id === "overview") return { id: "overview", label: "Overview", icon: "󰕮" };
@@ -220,29 +225,37 @@ PanelWindow {
 
           Item { Layout.fillWidth: true }
 
-          // Right: arrange + refresh + hot reload + exit
+          // Right: update-ready + reload + settings + exit
           RowLayout {
             Layout.alignment: Qt.AlignVCenter
             spacing: 6
             Button {
-              iconText: panel.tabReorderMode ? "󰄬" : "󰁁"
-              text: panel.tabReorderMode ? "Done" : "Arrange"
-              tooltipText: panel.tabReorderMode ? "Finish arranging tabs (order saved automatically)" : "Reorder navigation tabs"
-              active: panel.tabReorderMode
-              onClicked: panel.tabReorderMode = !panel.tabReorderMode
-            }
-            Button {
-              iconText: "󰑐"
-              text: "Refresh"
-              tooltipText: "Refresh status data"
-              onClicked: hub.refreshAll()
+              visible: hub.updateAvailable
+              iconText: "󰚰"
+              text: "Update ready"
+              tooltipText: "A new build is available on GitHub"
+              active: true
+              onClicked: {
+                panel.settingsMenuOpen = false;
+                panel.updateStatusText = "Ready to update from GitHub.";
+                panel.updateProgress = 0;
+                panel.updateInProgress = false;
+                panel.updateDialogOpen = true;
+              }
             }
             Button {
               iconText: "󰑓"
-              text: "Update"
-              tooltipText: "Hot reload (restart shell and reopen hub)"
+              text: "Reload"
+              tooltipText: "Reload hub (restart shell and reopen)"
               active: true
               onClicked: hub.hotReloadHub()
+            }
+            Button {
+              id: settingsMenuButton
+              iconText: "󰍜"
+              tooltipText: "Settings"
+              active: panel.settingsMenuOpen
+              onClicked: panel.settingsMenuOpen = !panel.settingsMenuOpen
             }
             Button {
               iconText: "󰅖"
@@ -2371,6 +2384,182 @@ PanelWindow {
               onClicked: {
                 panel.confirmRemoveCodeServer = false;
                 hub.uninstallCodeServer();
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Settings menu
+    Rectangle {
+      visible: panel.settingsMenuOpen
+      anchors.fill: parent
+      color: "transparent"
+      z: 150
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.settingsMenuOpen = false
+      }
+      Rectangle {
+        id: settingsMenuCard
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: 64
+        anchors.rightMargin: 16
+        width: 240
+        radius: 12
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: settingsMenuCol.implicitHeight + 12
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: settingsMenuCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 6
+          spacing: 2
+
+          Button {
+            width: parent.width
+            iconText: panel.tabReorderMode ? "󰄬" : "󰁁"
+            text: panel.tabReorderMode ? "Done arranging tabs" : "Arrange tabs"
+            tooltipText: "Reorder navigation tabs (saved automatically)"
+            active: panel.tabReorderMode
+            onClicked: {
+              panel.tabReorderMode = !panel.tabReorderMode;
+              panel.settingsMenuOpen = false;
+            }
+          }
+          Button {
+            width: parent.width
+            iconText: "󰒋"
+            text: "Server settings"
+            tooltipText: "Rename server or change role"
+            onClicked: {
+              panel.settingsMenuOpen = false;
+              hub.openWizard(hub.serverName || hub.defaultServerName());
+            }
+          }
+          Button {
+            width: parent.width
+            iconText: "󰚰"
+            text: hub.updateAvailable ? "Update ready" : "Check for updates"
+            tooltipText: hub.updateAvailable ? "A new build is available on GitHub" : "Check GitHub for a newer build (coming soon)"
+            onClicked: {
+              panel.settingsMenuOpen = false;
+              if (hub.updateAvailable) {
+                panel.updateStatusText = "Preparing update…";
+                panel.updateProgress = 0;
+                panel.updateInProgress = false;
+                panel.updateDialogOpen = true;
+              } else {
+                hub.lastActionMessage = "Update checks from GitHub are not configured yet.";
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Update dialog (GitHub build update)
+    Rectangle {
+      visible: panel.updateDialogOpen
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 160
+
+      MouseArea { anchors.fill: parent; onClicked: { if (!panel.updateInProgress) panel.updateDialogOpen = false; } }
+
+      Rectangle {
+        id: updateDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 500)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: updateDialogCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: updateDialogCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰚰"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            ColumnLayout {
+              Layout.fillWidth: true
+              spacing: 2
+              Text { textFormat: Text.PlainText; text: hub.updateAvailable ? "Update ready" : "Plugin update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text {
+                textFormat: Text.PlainText
+                text: hub.updateAvailable ? ("New build available" + (HubModel.trimText(hub.updateAvailableBuild).length > 0 ? (": " + hub.updateAvailableBuild) : "") + ".") : "Check GitHub for a newer build."
+                color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true
+              }
+            }
+          }
+
+          Text {
+            visible: HubModel.trimText(panel.updateStatusText).length > 0
+            textFormat: Text.PlainText
+            text: panel.updateStatusText
+            color: softText(0.85)
+            font.family: Style.font.family
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Rectangle {
+            width: parent.width
+            height: 10
+            radius: 5
+            color: softText(0.12)
+            clip: true
+            Rectangle {
+              id: updateProgressFill
+              height: parent.height
+              radius: 5
+              color: Color.accent
+              width: panel.updateProgress > 0 ? (parent.width * Math.max(0, Math.min(1, panel.updateProgress))) : (panel.updateInProgress ? parent.width * 0.35 : 0)
+              x: (panel.updateInProgress && panel.updateProgress <= 0) ? -width : 0
+              Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
+              SequentialAnimation on x {
+                running: panel.updateInProgress && panel.updateProgress <= 0 && panel.updateDialogOpen
+                loops: Animation.Infinite
+                NumberAnimation { from: -updateProgressFill.width; to: updateDialog.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
+              }
+            }
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: panel.updateInProgress ? "Updating…" : "Close"
+              enabled: !panel.updateInProgress
+              onClicked: panel.updateDialogOpen = false
+            }
+            Button {
+              visible: hub.updateAvailable
+              iconText: "󰚰"
+              text: panel.updateInProgress ? "Updating…" : "Update now"
+              active: true
+              enabled: !panel.updateInProgress
+              onClicked: {
+                // Future: download/apply update from GitHub and show real progress.
+                panel.updateInProgress = true;
+                panel.updateProgress = 0;
+                panel.updateStatusText = "Update install from GitHub is not wired yet. Configure repo/release source to enable.";
+                panel.updateInProgress = false;
               }
             }
           }

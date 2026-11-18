@@ -28,6 +28,9 @@ Item {
   property bool wizardOpen: false
   property bool restartingForServerName: false
   property bool pendingConfigRestart: false
+  property bool updateAvailable: false
+  property string updateAvailableVersion: ""
+  property string updateAvailableBuild: ""
 
   property string tailscaleActive: "unknown"
   property string tailscaleEnabled: "unknown"
