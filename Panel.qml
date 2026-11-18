@@ -112,6 +112,10 @@ Item {
   property string codeServerSetupDetail: ""
   property real codeServerSetupProgress: -1
   property int codeServerSetupPollsLeft: 0
+  property string codeServerSetupLog: ""
+  property double codeServerSetupBytesDone: 0
+  property double codeServerSetupBytesTotal: 0
+  property var _codeServerPullLayers: ({})
 
   function open(payloadJson) {
     if (Quickshell.screens && Quickshell.screens.length > 0)
@@ -282,6 +286,85 @@ Item {
     codeServerProc.running = true;
   }
 
+  function _appendCodeServerSetupLog(line) {
+    var t = String(line || "").replace(/\r/g, "");
+    t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
+    if (HubModel.trimText(t).length === 0) return;
+    var next = (root.codeServerSetupLog.length > 0 ? (root.codeServerSetupLog + "\n") : "") + t;
+    if (next.length > 12000) next = next.slice(next.length - 12000);
+    root.codeServerSetupLog = next;
+  }
+
+  function _parseDockerSize(s) {
+    var m = String(s || "").trim().match(/^([0-9.]+)\s*([kKmMgGtT]?)(i?B)?$/);
+    if (!m) return NaN;
+    var n = parseFloat(m[1]);
+    if (!isFinite(n)) return NaN;
+    var u = (m[2] || "").toUpperCase();
+    var mul = 1;
+    if (u === "K") mul = 1024;
+    else if (u === "M") mul = 1024 * 1024;
+    else if (u === "G") mul = 1024 * 1024 * 1024;
+    else if (u === "T") mul = 1024 * 1024 * 1024 * 1024;
+    return n * mul;
+  }
+
+  function _updateCodeServerPullProgressFromLine(line) {
+    var t = String(line || "");
+    var m = t.match(/^([a-f0-9]+):\s+(Downloading|Extracting)\s+(?:\[[^\]]*\]\s*)?([0-9.]+\s*[kKmMgGtT]?i?B)\s*\/\s*([0-9.]+\s*[kKmMgGtT]?i?B)/);
+    if (m) {
+      var id = m[1];
+      var cur = _parseDockerSize(m[3]);
+      var tot = _parseDockerSize(m[4]);
+      if (isFinite(cur) && isFinite(tot) && tot > 0) {
+        var layers = _codeServerPullLayers || {};
+        layers[id] = { current: cur, total: tot };
+        _codeServerPullLayers = layers;
+        var done = 0, total = 0;
+        for (var k in layers) {
+          if (!layers.hasOwnProperty(k)) continue;
+          var L = layers[k];
+          if (L && isFinite(L.total) && L.total > 0) {
+            total += L.total;
+            done += Math.min(L.current || 0, L.total);
+          }
+        }
+        if (total > 0) {
+          root.codeServerSetupBytesDone = done;
+          root.codeServerSetupBytesTotal = total;
+          root.codeServerSetupProgress = Math.max(0, Math.min(1, done / total));
+          root.codeServerSetupDetail = "Downloading image… " + HubModel.humanBytes(done) + " / " + HubModel.humanBytes(total);
+        }
+      }
+      return;
+    }
+    if (/:\s+(Download complete|Pull complete|Already exists)/.test(t)) {
+      var m2 = t.match(/^([a-f0-9]+):/);
+      if (m2) {
+        var id2 = m2[1];
+        var layers2 = _codeServerPullLayers || {};
+        if (layers2[id2] && isFinite(layers2[id2].total)) {
+          layers2[id2].current = layers2[id2].total;
+          _codeServerPullLayers = layers2;
+          var done2 = 0, total2 = 0;
+          for (var k2 in layers2) {
+            if (!layers2.hasOwnProperty(k2)) continue;
+            var L2 = layers2[k2];
+            if (L2 && isFinite(L2.total) && L2.total > 0) {
+              total2 += L2.total;
+              done2 += Math.min(L2.current || 0, L2.total);
+            }
+          }
+          if (total2 > 0) {
+            root.codeServerSetupBytesDone = done2;
+            root.codeServerSetupBytesTotal = total2;
+            root.codeServerSetupProgress = Math.max(0, Math.min(1, done2 / total2));
+          }
+        }
+      }
+    }
+  }
+
   function setupCodeServerTerminal(password, port) {
     var pass = HubModel.trimText(password);
     if (pass.length === 0) {
@@ -290,6 +373,7 @@ Item {
       codeServerSetupStage = "error";
       codeServerSetupDetail = "Password required.";
       codeServerSetupProgress = 0;
+      _appendCodeServerSetupLog("Error: password required.");
       return;
     }
     var p = Number(port);
@@ -300,14 +384,23 @@ Item {
     if (configReady || HubModel.trimText(serverName).length > 0) writeHubConfig(false);
 
     codeServerBusy = true;
-    codeServerSetupStage = "launching";
+    codeServerSetupStage = "preparing";
     codeServerSetupProgress = -1;
-    codeServerSetupDetail = "Opening terminal to run Docker setup (image pull may take a while)…";
-    codeServerStatusText = "Opening terminal to set up VS Code Server on port " + p + "…";
-    codeServerActionProc.actionName = "setup";
-    var inner = [
+    codeServerSetupBytesDone = 0;
+    codeServerSetupBytesTotal = 0;
+    _codeServerPullLayers = ({});
+    codeServerSetupLog = "";
+    codeServerSetupDetail = "Preparing configuration and checking Docker…";
+    codeServerStatusText = codeServerSetupDetail;
+    codeServerSetupPollsLeft = 0;
+    codeServerSetupPollTimer.stop();
+
+    _appendCodeServerSetupLog("Starting setup for port " + p + "…");
+
+    var prep = [
       "set -e",
       "PASS=\"$1\"",
+      "PORT=\"$2\"",
       "echo \"Password received (length: ${#PASS}).\"",
       "if [ -z \"$PASS\" ]; then echo 'Password is empty; aborting.'; exit 1; fi",
       "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/Projects\"",
@@ -316,32 +409,16 @@ Item {
       "printf 'PASSWORD=\"%s\"\\n' \"$ESCAPED_PASS\" > \"$HOME/.config/vember-code-server/code-server.env\"",
       "{ echo 'bind-addr: 0.0.0.0:8080'; echo 'auth: password'; echo 'cert: false'; } > \"$HOME/.config/vember-code-server/code-server/config.yaml\"",
       "umask 022",
-      "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then",
-      "  echo 'Container vember-code-server already exists.'",
-      "  echo 'State:' $(docker inspect -f '{{.State.Status}}' vember-code-server 2>/dev/null || echo unknown)",
-      "  echo 'Ports:' $(docker port vember-code-server 2>/dev/null || echo unknown)",
-      "  echo ''",
-      "  echo 'Password saved to ~/.config/vember-code-server/code-server.env (mode 600) and removed from config.yaml.'",
-      "  echo 'To apply: Uninstall the container in the hub, then Set up again (required to switch to --env-file).'",
-      "  echo 'To change port, Uninstall then Set up again.'",
-      "else",
-      "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
-      "  if ! docker info >/dev/null 2>&1; then echo 'Docker is installed but not running or not accessible (try: sudo systemctl start docker, and ensure your user can access docker).'; exit 1; fi",
-      "  echo 'Pulling/starting code-server container on port " + p + "…'",
-      "  docker run -d --name vember-code-server -p " + p + ":8080 -v \"$HOME/.config/vember-code-server:/home/coder/.config\" -v \"$HOME:/home/coder/home\" --env-file \"$HOME/.config/vember-code-server/code-server.env\" --restart unless-stopped codercom/code-server:latest",
-      "  echo ''",
-      "  echo 'VS Code Server started.'",
-      "  echo 'URL: http://localhost:" + p + "'",
-      "  echo 'Password: (the one you set in the hub)'",
-      "  echo 'Password stored in ~/.config/vember-code-server/code-server.env (mode 600).'",
-      "  echo ''",
-      "  echo 'Config kept in ~/.config/vember-code-server'",
-      "fi"
-    ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _close || true";
-    codeServerActionProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc \"$1\" _ \"$2\" </dev/null >/dev/null 2>&1 &",
-      "sh", inner, pass];
-    codeServerActionProc.running = true;
+      "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then echo 'EXISTS'; exit 10; fi",
+      "if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 11; fi",
+      "if ! docker info >/dev/null 2>&1; then echo 'Docker is not running or not accessible (try starting docker and ensuring access).'; exit 12; fi",
+      "echo 'READY'"
+    ].join("\n");
+    codeServerSetupPrepProc.passwordArg = pass;
+    codeServerSetupPrepProc.portArg = String(p);
+    codeServerSetupPrepProc.running = false;
+    codeServerSetupPrepProc.command = ["sh", "-c", prep, "sh", pass, String(p)];
+    codeServerSetupPrepProc.running = true;
   }
 
   function startCodeServer() {
@@ -1295,12 +1372,6 @@ Item {
     onTriggered: {
       if (root.codeServerSetupPollsLeft <= 0) {
         running = false;
-        if (root.codeServerBusy && root.codeServerSetupStage === "running") {
-          root.codeServerBusy = false;
-          root.codeServerSetupStage = "checking";
-          root.codeServerSetupDetail = "Setup terminal may still be running. Refresh status or check the terminal for progress/errors.";
-          root.codeServerStatusText = root.codeServerSetupDetail;
-        }
         return;
       }
       root.codeServerSetupPollsLeft -= 1;
@@ -1314,9 +1385,132 @@ Item {
         root.codeServerSetupDetail = "VS Code Server is running on port " + root.codeServerPort + ".";
         root.codeServerStatusText = root.codeServerSetupDetail;
         root.devStatus = "VS Code Server ready at http://localhost:" + root.codeServerPort;
-      } else if (root.codeServerPresent && !root.codeServerRunning) {
-        // container exists but not running yet; keep waiting unless last poll
-        root.codeServerSetupDetail = "Container created, waiting for it to start…";
+        root._appendCodeServerSetupLog("Ready: running on port " + root.codeServerPort);
+      }
+    }
+  }
+
+  Process {
+    id: codeServerSetupPrepProc
+    property string passwordArg: ""
+    property string portArg: ""
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._appendCodeServerSetupLog(line);
+      }
+    }
+    stderr: SplitParser {
+      onRead: function(line) {
+        root._appendCodeServerSetupLog("ERR: " + line);
+      }
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        // READY
+        root.codeServerSetupStage = "pulling";
+        root.codeServerSetupProgress = 0;
+        root.codeServerSetupDetail = "Pulling image codercom/code-server:latest…";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root._appendCodeServerSetupLog("Preflight OK. Pulling image…");
+        root._codeServerPullLayers = ({});
+        codeServerSetupPullProc.running = false;
+        codeServerSetupPullProc.command = ["docker", "pull", "codercom/code-server:latest"];
+        codeServerSetupPullProc.running = true;
+      } else if (code === 10) {
+        root.codeServerSetupStage = "exists";
+        root.codeServerSetupProgress = 0;
+        root.codeServerSetupDetail = "Container already exists. Password/env saved; Uninstall then Set up to apply port/password on a new container.";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.codeServerBusy = false;
+        root.refreshCodeServer();
+      } else {
+        root.codeServerBusy = false;
+        root.codeServerSetupStage = "error";
+        root.codeServerSetupProgress = 0;
+        var msg = "Setup preflight failed (code " + code + "). See debug log.";
+        if (code === 11) msg = "Docker is not installed or not in PATH.";
+        else if (code === 12) msg = "Docker is not running or not accessible.";
+        root.codeServerSetupDetail = msg;
+        root.codeServerStatusText = msg;
+        root.devStatus = msg;
+        root._appendCodeServerSetupLog(msg);
+        root.refreshCodeServer();
+      }
+    }
+  }
+
+  Process {
+    id: codeServerSetupPullProc
+    stdout: SplitParser {
+      onRead: function(line) {
+        root._appendCodeServerSetupLog(line);
+        root._updateCodeServerPullProgressFromLine(line);
+      }
+    }
+    stderr: SplitParser {
+      onRead: function(line) {
+        root._appendCodeServerSetupLog(line);
+        root._updateCodeServerPullProgressFromLine(line);
+      }
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.codeServerSetupStage = "creating";
+        root.codeServerSetupProgress = 1;
+        root.codeServerSetupBytesDone = root.codeServerSetupBytesTotal > 0 ? root.codeServerSetupBytesTotal : root.codeServerSetupBytesDone;
+        root.codeServerSetupDetail = "Image ready. Creating container…";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root._appendCodeServerSetupLog("Image pull complete. Creating container…");
+        var p = root.codeServerPort;
+        codeServerSetupRunProc.command = ["docker", "run", "-d",
+          "--name", "vember-code-server",
+          "-p", String(p) + ":8080",
+          "-v", root.homeDir + "/.config/vember-code-server:/home/coder/.config",
+          "-v", root.homeDir + ":/home/coder/home",
+          "--env-file", root.homeDir + "/.config/vember-code-server/code-server.env",
+          "--restart", "unless-stopped",
+          "codercom/code-server:latest"];
+        codeServerSetupRunProc.running = true;
+      } else {
+        root.codeServerBusy = false;
+        root.codeServerSetupStage = "error";
+        root.codeServerSetupProgress = 0;
+        root.codeServerSetupDetail = "Image pull failed (code " + code + "). See debug log.";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.devStatus = root.codeServerSetupDetail;
+        root.refreshCodeServer();
+      }
+    }
+  }
+
+  Process {
+    id: codeServerSetupRunProc
+    stdout: SplitParser {
+      onRead: function(line) { root._appendCodeServerSetupLog(line); }
+    }
+    stderr: SplitParser {
+      onRead: function(line) { root._appendCodeServerSetupLog("ERR: " + line); }
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.codeServerSetupStage = "starting";
+        root.codeServerSetupProgress = 1;
+        root.codeServerSetupDetail = "Container created. Waiting for it to run…";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root._appendCodeServerSetupLog("Container created. Waiting for running state…");
+        root.codeServerSetupPollsLeft = 20;
+        codeServerSetupPollTimer.restart();
+        root.refreshCodeServer();
+        root.refreshDocker();
+      } else {
+        root.codeServerBusy = false;
+        root.codeServerSetupStage = "error";
+        root.codeServerSetupProgress = 0;
+        root.codeServerSetupDetail = "Failed to create/start container (code " + code + "). See debug log.";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.devStatus = root.codeServerSetupDetail;
+        root.refreshCodeServer();
+        root.refreshDocker();
       }
     }
   }
@@ -1327,30 +1521,13 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
+      root.codeServerBusy = false;
       if (actionName === "setup") {
-        if (code === 0) {
-          root.codeServerSetupStage = "running";
-          root.codeServerSetupProgress = -1;
-          root.codeServerSetupDetail = "Setup terminal opened. Docker may be pulling the image and starting the container…";
-          root.codeServerStatusText = root.codeServerSetupDetail;
-          root.devStatus = "VS Code Server setup running in terminal. Watching for container status…";
-          root.codeServerSetupPollsLeft = 40; // ~2 minutes
-          codeServerSetupPollTimer.restart();
-        } else {
-          root.codeServerBusy = false;
-          root.codeServerSetupStage = "error";
-          root.codeServerSetupProgress = 0;
-          root.codeServerSetupDetail = "Failed to open setup terminal (code " + code + ").";
-          root.codeServerStatusText = root.codeServerSetupDetail;
-          root.devStatus = root.codeServerSetupDetail;
-        }
+        // legacy path no longer used
+      } else if (code === 0) {
+        root.devStatus = "VS Code Server " + actionName + " succeeded.";
       } else {
-        root.codeServerBusy = false;
-        if (code === 0) {
-          root.devStatus = "VS Code Server " + actionName + " succeeded.";
-        } else {
-          root.devStatus = "VS Code Server " + actionName + " failed (code " + code + ").";
-        }
+        root.devStatus = "VS Code Server " + actionName + " failed (code " + code + ").";
       }
       root.refreshCodeServer();
       root.refreshDocker();

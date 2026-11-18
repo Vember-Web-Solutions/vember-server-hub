@@ -2282,19 +2282,31 @@ PanelWindow {
                     }
 
                     Column {
-                      visible: hub.codeServerBusy || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking"
+                      visible: hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking" || hub.codeServerSetupStage === "error" || hub.codeServerSetupStage === "exists" || hub.codeServerSetupStage === "done"
                       width: parent.width
                       spacing: 6
+
                       Text {
                         textFormat: Text.PlainText
                         text: HubModel.trimText(hub.codeServerSetupDetail).length > 0 ? hub.codeServerSetupDetail : "Setting up VS Code Server…"
-                        color: softText(0.78)
+                        color: hub.codeServerSetupStage === "error" ? "#ef4444" : softText(0.82)
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
                         wrapMode: Text.Wrap
                         width: parent.width
                       }
+
+                      Text {
+                        visible: hub.codeServerSetupBytesTotal > 0
+                        textFormat: Text.PlainText
+                        text: HubModel.humanBytes(hub.codeServerSetupBytesDone) + " / " + HubModel.humanBytes(hub.codeServerSetupBytesTotal) + " (" + Math.round(Math.max(0, Math.min(1, hub.codeServerSetupProgress)) * 100) + "%)"
+                        color: softText(0.75)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
+
                       Rectangle {
+                        visible: hub.codeServerBusy || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "preparing"
                         width: parent.width
                         height: 8
                         radius: 4
@@ -2304,26 +2316,50 @@ PanelWindow {
                           id: codeServerSetupProgressFill
                           height: parent.height
                           radius: 4
-                          color: Color.accent
-                          width: hub.codeServerSetupProgress > 0 ? (parent.width * Math.max(0, Math.min(1, hub.codeServerSetupProgress))) : parent.width * 0.35
+                          color: hub.codeServerSetupStage === "error" ? "#ef4444" : Color.accent
+                          width: hub.codeServerSetupProgress > 0 ? (parent.width * Math.max(0, Math.min(1, hub.codeServerSetupProgress))) : (parent.width * 0.35)
                           x: hub.codeServerSetupProgress > 0 ? 0 : -width
                           Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
                           SequentialAnimation on x {
-                            running: (hub.codeServerSetupProgress <= 0) && (hub.codeServerBusy || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking")
+                            running: (hub.codeServerSetupProgress <= 0) && (hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting")
                             loops: Animation.Infinite
                             NumberAnimation { from: -codeServerSetupProgressFill.width; to: codeServerSetupProgressFill.parent ? codeServerSetupProgressFill.parent.width : 300; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
                           }
                         }
                       }
-                      Text {
-                        visible: hub.codeServerSetupStage === "running"
-                        textFormat: Text.PlainText
-                        text: "Docker image download/start progress is shown in the setup terminal. Full in-panel pull progress comes later."
-                        color: softText(0.65)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.Wrap
+
+                      Rectangle {
+                        visible: HubModel.trimText(hub.codeServerSetupLog).length > 0
                         width: parent.width
+                        radius: 8
+                        color: softText(0.03)
+                        border.color: softText(0.08)
+                        border.width: 1
+                        implicitHeight: Math.min(180, setupLogText.implicitHeight + 16)
+                        clip: true
+
+                        Flickable {
+                          id: setupLogFlick
+                          anchors.fill: parent
+                          anchors.margins: 8
+                          contentWidth: width
+                          contentHeight: setupLogText.implicitHeight
+                          clip: true
+                          boundsBehavior: Flickable.StopAtBounds
+                          Text {
+                            id: setupLogText
+                            width: setupLogFlick.width
+                            textFormat: Text.PlainText
+                            text: hub.codeServerSetupLog
+                            color: softText(0.78)
+                            font.family: Style.font.mono
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.WrapAnywhere
+                          }
+                          onContentHeightChanged: {
+                            if (contentHeight > height) contentY = contentHeight - height;
+                          }
+                        }
                       }
                     }
 
