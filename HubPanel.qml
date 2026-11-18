@@ -326,55 +326,117 @@ PanelWindow {
           Column {
             visible: panel.currentTab === "overview"
             width: parent.width
-            spacing: Style.spacing.md
+            spacing: Style.spacing.lg
 
-            Text {
-              textFormat: Text.PlainText
-              text: "Your local hub for Tailnet, Docker, games, and storage on this machine — quick status at a glance, with details in each tab."
-              color: softText(0.82)
-              font.family: Style.font.family
-              wrapMode: Text.Wrap
-              width: parent.width
-            }
-
-            // Omarchy update
+            // Hero / server summary
             Rectangle {
               width: parent.width
               radius: Style.cornerRadius
-              color: softText(0.04)
-              border.color: softText(0.08)
+              color: accentSoft(0.08)
+              border.color: accentSoft(0.20)
               border.width: 1
-              implicitHeight: updCol.implicitHeight + 24
+              implicitHeight: heroCol.implicitHeight + 28
               Column {
-                id: updCol
+                id: heroCol
                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                anchors.margins: 12; spacing: 8
+                anchors.margins: 14
+                spacing: 12
+
                 RowLayout {
-                  width: parent.width; spacing: 8
-                  Text { textFormat: Text.PlainText; text: "󰚰"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
-                  Text { textFormat: Text.PlainText; text: "Omarchy update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
-                }
-                Text { textFormat: Text.PlainText; text: "Open the Omarchy update in a terminal. The hub closes so the terminal can take focus."; color: softText(0.82); wrapMode: Text.Wrap; width: parent.width; font.family: Style.font.family }
-                Flow {
                   width: parent.width
-                  spacing: 8
-                  Button {
-                    iconText: "󰑓"
-                    text: "Open update in terminal"
-                    tooltipText: "Launch omarchy-update in a terminal (closes hub)"
-                    onClicked: hub.openOmarchyUpdateTerminal()
+                  spacing: 12
+                  Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                  ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+                    Text {
+                      textFormat: Text.PlainText
+                      text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName()
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.large
+                      font.bold: true
+                    }
+                    Text {
+                      textFormat: Text.PlainText
+                      text: (HubModel.trimText(hub.serverRole).length > 0 ? (hub.serverRole + " • ") : "") + "Host: " + hub.defaultServerName()
+                      color: softText(0.78)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      elide: Text.ElideRight
+                      Layout.fillWidth: true
+                    }
+                  }
+                  Rectangle {
+                    radius: 10
+                    color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.18) : softText(0.1)
+                    border.color: hub.tailscaleActive === "active" ? Qt.rgba(0.13, 0.77, 0.37, 0.35) : "transparent"
+                    border.width: hub.tailscaleActive === "active" ? 1 : 0
+                    implicitWidth: heroNetBadge.implicitWidth + 14
+                    implicitHeight: heroNetBadge.implicitHeight + 8
+                    Text {
+                      id: heroNetBadge
+                      anchors.centerIn: parent
+                      textFormat: Text.PlainText
+                      text: hub.tailscaleActive === "active" ? "Tailnet online" : "Tailnet " + hub.tailscaleActive
+                      color: hub.tailscaleActive === "active" ? "#22c55e" : Color.menu.text
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      font.bold: hub.tailscaleActive === "active"
+                    }
+                  }
+                }
+
+                Column {
+                  width: parent.width
+                  spacing: 10
+
+                  Text {
+                    textFormat: Text.PlainText
+                    text: "Quick status across access, containers, development, and storage on this machine."
+                    color: softText(0.78)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  Flow {
+                    width: parent.width
+                    spacing: 8
+                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat1.implicitWidth + 14; implicitHeight: heroStat1.implicitHeight + 8
+                      Text { id: heroStat1; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Containers: " + panel.runningDockerCount() + "/" + hub.dockerContainers.length + " running"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
+                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat2.implicitWidth + 14; implicitHeight: heroStat2.implicitHeight + 8
+                      Text { id: heroStat2; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Peers: " + panel.onlinePeerCount() + "/" + hub.tailscalePeers.length + " online"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
+                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat3.implicitWidth + 14; implicitHeight: heroStat3.implicitHeight + 8
+                      Text { id: heroStat3; anchors.centerIn: parent; textFormat: Text.PlainText; text: "Repos: " + (hub.devRepos ? hub.devRepos.length : 0); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
+                    Rectangle { radius: 8; color: softText(0.08); implicitWidth: heroStat4.implicitWidth + 14; implicitHeight: heroStat4.implicitHeight + 8
+                      Text { id: heroStat4; anchors.centerIn: parent; textFormat: Text.PlainText; text: "SSH: " + hub.sshActive; color: hub.sshActive === "active" ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption } }
                   }
                 }
               }
             }
 
-            Text {
-              textFormat: Text.PlainText
-              text: "At a glance"
-              color: Color.menu.text
-              font.family: Style.font.family
-              font.pixelSize: Style.font.large
-              font.bold: true
+            Column {
+              width: parent.width
+              spacing: Style.spacing.sm
+
+              Text {
+                textFormat: Text.PlainText
+                text: "At a glance"
+                color: Color.menu.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.large
+                font.bold: true
+              }
+
+              Text {
+                textFormat: Text.PlainText
+                text: "Open a card for details and controls."
+                color: softText(0.72)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+              }
             }
 
             Flow {
@@ -388,12 +450,12 @@ PanelWindow {
                 color: softText(0.045)
                 border.color: hub.tailscaleActive === "active" ? accentSoft(0.35) : softText(0.10)
                 border.width: 1
-                implicitHeight: glanceTs.implicitHeight + 20
+                implicitHeight: glanceTs.implicitHeight + 24
                 MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "access" }
                 Column {
                   id: glanceTs
                   anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                  anchors.margins: 12; spacing: 8
+                  anchors.margins: 14; spacing: 10
                   RowLayout {
                     width: parent.width; spacing: 10
                     Text { textFormat: Text.PlainText; text: "󰖂"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
@@ -402,7 +464,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
                       Text {
                         textFormat: Text.PlainText
-                        text: "vember os"
+                        text: HubModel.trimText(hub.tailscaleTailnetName).length > 0 ? hub.tailscaleTailnetName : (HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName())
                         color: softText(0.78)
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
@@ -429,27 +491,34 @@ PanelWindow {
                       }
                     }
                   }
+
                   Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                  Text { textFormat: Text.PlainText; text: "This device: vember os"; color: Color.menu.text; font.family: Style.font.family; wrapMode: Text.Wrap; width: parent.width }
-                  Text { textFormat: Text.PlainText; text: "Peers: " + panel.onlinePeerCount() + " online / " + hub.tailscalePeers.length + " total"; color: softText(0.82); font.family: Style.font.family }
-                  Text { textFormat: Text.PlainText; text: "tailscaled • enabled: " + hub.tailscaleEnabled; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                  Text { textFormat: Text.PlainText; text: "Open Access tab for members and controls →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+
+                  Column {
+                    width: parent.width
+                    spacing: 6
+                    Text { textFormat: Text.PlainText; text: "Peers: " + panel.onlinePeerCount() + " online / " + hub.tailscalePeers.length + " total"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Text { visible: HubModel.trimText(hub.tailscaleIp).length > 0; textFormat: Text.PlainText; text: "Tailnet IP: " + hub.tailscaleIp; color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.caption; elide: Text.ElideRight; width: parent.width }
+                    Text { textFormat: Text.PlainText; text: "SSH " + hub.sshActive + " • tailscaled " + hub.tailscaleEnabled; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  }
+
+                  Text { textFormat: Text.PlainText; text: "Open Access tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                 }
               }
 
-              // Docker glance
+              // Containers glance
               Rectangle {
                 width: 320
                 radius: 14
                 color: softText(0.045)
                 border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
                 border.width: 1
-                implicitHeight: glanceDk.implicitHeight + 20
+                implicitHeight: glanceDk.implicitHeight + 24
                 MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "containers" }
                 Column {
                   id: glanceDk
                   anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                  anchors.margins: 12; spacing: 8
+                  anchors.margins: 14; spacing: 10
                   RowLayout {
                     width: parent.width; spacing: 10
                     Image {
@@ -461,56 +530,107 @@ PanelWindow {
                     ColumnLayout {
                       Layout.fillWidth: true; spacing: 2
                       Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text { textFormat: Text.PlainText; text: hub.dockerContainers.length + " container(s)"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      Text { textFormat: Text.PlainText; text: panel.runningDockerCount() + " running of " + hub.dockerContainers.length; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
                   }
+
                   Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                  Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-                  Text { visible: HubModel.trimText(hub.dockerError).length > 0; textFormat: Text.PlainText; text: hub.dockerError; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                  Text { visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length === 0; textFormat: Text.PlainText; text: "No containers found."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
                   Column {
-                    visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length > 0
                     width: parent.width
-                    spacing: 4
-                    Repeater {
-                      model: Math.min(hub.dockerContainers.length, 5)
-                      delegate: RowLayout {
-                        required property int index
-                        width: parent ? parent.width : 0
-                        spacing: 8
-                        Rectangle {
-                          width: 8; height: 8; radius: 4
-                          color: panel.dockerStateTone(hub.dockerContainers[index].state)
-                          Layout.alignment: Qt.AlignVCenter
-                        }
-                        Text {
-                          textFormat: Text.PlainText
-                          text: hub.dockerContainers[index].name || "unknown"
-                          color: Color.menu.text
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
-                          elide: Text.ElideRight
-                          Layout.fillWidth: true
-                        }
-                        Text {
-                          textFormat: Text.PlainText
-                          text: hub.dockerContainers[index].state || ""
-                          color: panel.dockerStateTone(hub.dockerContainers[index].state)
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
+                    spacing: 6
+                    Text { visible: HubModel.trimText(hub.dockerError).length > 0; textFormat: Text.PlainText; text: hub.dockerError; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                    Text { visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length === 0; textFormat: Text.PlainText; text: "No containers found."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                    Column {
+                      visible: HubModel.trimText(hub.dockerError).length === 0 && hub.dockerContainers.length > 0
+                      width: parent.width
+                      spacing: 4
+                      Repeater {
+                        model: Math.min(hub.dockerContainers.length, 5)
+                        delegate: RowLayout {
+                          required property int index
+                          width: parent ? parent.width : 0
+                          spacing: 8
+                          Rectangle {
+                            width: 8; height: 8; radius: 4
+                            color: panel.dockerStateTone(hub.dockerContainers[index].state)
+                            Layout.alignment: Qt.AlignVCenter
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: hub.dockerContainers[index].name || "unknown"
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                          }
+                          Text {
+                            textFormat: Text.PlainText
+                            text: hub.dockerContainers[index].state || ""
+                            color: panel.dockerStateTone(hub.dockerContainers[index].state)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                          }
                         }
                       }
-                    }
-                    Text {
-                      visible: hub.dockerContainers.length > 5
-                      textFormat: Text.PlainText
-                      text: "+" + (hub.dockerContainers.length - 5) + " more"
-                      color: softText(0.7)
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
+                      Text {
+                        visible: hub.dockerContainers.length > 5
+                        textFormat: Text.PlainText
+                        text: "+" + (hub.dockerContainers.length - 5) + " more"
+                        color: softText(0.7)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                      }
                     }
                   }
+
                   Text { textFormat: Text.PlainText; text: "Open Containers tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+              }
+
+              // Dev glance
+              Rectangle {
+                width: 320
+                radius: 14
+                color: softText(0.045)
+                border.color: hub.codeServerRunning ? accentSoft(0.30) : accentSoft(0.16)
+                border.width: 1
+                implicitHeight: glanceDev.implicitHeight + 24
+                MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "dev" }
+                Column {
+                  id: glanceDev
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14; spacing: 10
+                  RowLayout {
+                    width: parent.width; spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Development"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: HubModel.trimText(hub.preferredEditor).length > 0 ? ("Editor: " + HubModel.devToolLabel(hub.preferredEditor)) : "No preferred editor set"
+                        color: softText(0.78)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                      }
+                    }
+                  }
+
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  Column {
+                    width: parent.width
+                    spacing: 6
+                    Text { textFormat: Text.PlainText; text: "Repositories: " + (hub.devRepos ? hub.devRepos.length : 0); color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "VS Code Server: " + (hub.codeServerPresent ? hub.codeServerState : "not set up"); color: hub.codeServerRunning ? "#22c55e" : softText(0.82); font.family: Style.font.family }
+                    Text { visible: HubModel.trimText(hub.devStatus).length > 0; textFormat: Text.PlainText; text: hub.devStatus; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  }
+
+                  Text { textFormat: Text.PlainText; text: "Open Dev tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                 }
               }
 
@@ -521,12 +641,12 @@ PanelWindow {
                 color: softText(0.045)
                 border.color: accentSoft(0.18)
                 border.width: 1
-                implicitHeight: glanceGm.implicitHeight + 20
+                implicitHeight: glanceGm.implicitHeight + 24
                 MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "games" }
                 Column {
                   id: glanceGm
                   anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                  anchors.margins: 12; spacing: 8
+                  anchors.margins: 14; spacing: 10
                   RowLayout {
                     width: parent.width; spacing: 10
                     Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
@@ -543,46 +663,87 @@ PanelWindow {
                       Text { id: glanceMountBadge; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
                   }
+
                   Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                  Text {
-                    visible: !hub.gameMountPresent
-                    textFormat: Text.PlainText
-                    text: "Game partition not mounted"
-                    color: softText(0.8)
-                    font.family: Style.font.family
-                    wrapMode: Text.Wrap
-                    width: parent.width
-                  }
+
                   Column {
-                    visible: hub.gameMountPresent
                     width: parent.width
-                    spacing: 6
-                    Rectangle {
+                    spacing: 8
+                    Text {
+                      visible: !hub.gameMountPresent
+                      textFormat: Text.PlainText
+                      text: "Game partition not mounted"
+                      color: softText(0.8)
+                      font.family: Style.font.family
+                      wrapMode: Text.Wrap
                       width: parent.width
-                      height: 10
-                      radius: 5
-                      color: softText(0.12)
-                      clip: true
+                    }
+                    Column {
+                      visible: hub.gameMountPresent
+                      width: parent.width
+                      spacing: 6
                       Rectangle {
-                        height: parent.height
+                        width: parent.width
+                        height: 10
                         radius: 5
-                        width: parent.width * hub.gameMountUseRatio
-                        color: panel.storageUseColor(hub.gameMountUseRatio)
-                        Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                        color: softText(0.12)
+                        clip: true
+                        Rectangle {
+                          height: parent.height
+                          radius: 5
+                          width: parent.width * hub.gameMountUseRatio
+                          color: panel.storageUseColor(hub.gameMountUseRatio)
+                          Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                        }
                       }
+                      RowLayout {
+                        width: parent.width
+                        spacing: 8
+                        Text { textFormat: Text.PlainText; text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"; color: panel.storageUseColor(hub.gameMountUseRatio); font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+                        Item { Layout.fillWidth: true }
+                        Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountUsedBytes) + " / " + HubModel.humanBytes(hub.gameMountTotalBytes); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+                      Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountAvailBytes) + " free"; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
-                    RowLayout {
+                    Column {
                       width: parent.width
-                      spacing: 8
-                      Text { textFormat: Text.PlainText; text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"; color: panel.storageUseColor(hub.gameMountUseRatio); font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                      Item { Layout.fillWidth: true }
-                      Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountUsedBytes) + " / " + HubModel.humanBytes(hub.gameMountTotalBytes); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Steam: " + (hub.steamRunning ? "running" : "stopped") + " • games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "?"); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      Text { textFormat: Text.PlainText; text: "Battle.net: " + (hub.bnetRunning ? "running" : "stopped") + " • games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "?"); color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
-                    Text { textFormat: Text.PlainText; text: HubModel.humanBytes(hub.gameMountAvailBytes) + " free"; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                   }
-                  Text { textFormat: Text.PlainText; text: "Steam: " + (hub.steamRunning ? "running" : "stopped") + " • games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "?"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                  Text { textFormat: Text.PlainText; text: "Battle.net: " + (hub.bnetRunning ? "running" : "stopped") + " • games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "?"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+
                   Text { textFormat: Text.PlainText; text: "Open Games tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                }
+              }
+            }
+
+            // Omarchy update (compact)
+            Rectangle {
+              width: parent.width
+              radius: Style.cornerRadius
+              color: softText(0.04)
+              border.color: softText(0.08)
+              border.width: 1
+              implicitHeight: updCol.implicitHeight + 24
+              Column {
+                id: updCol
+                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                anchors.margins: 14; spacing: 10
+                RowLayout {
+                  width: parent.width; spacing: 12
+                  Text { textFormat: Text.PlainText; text: "󰚰"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                  ColumnLayout {
+                    Layout.fillWidth: true; spacing: 2
+                    Text { textFormat: Text.PlainText; text: "Omarchy update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "Launch system update in a terminal. The hub closes to hand off focus."; color: softText(0.76); wrapMode: Text.Wrap; Layout.fillWidth: true; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                  }
+                  Button {
+                    iconText: "󰑓"
+                    text: "Open in terminal"
+                    tooltipText: "Launch omarchy-update in a terminal (closes hub)"
+                    onClicked: hub.openOmarchyUpdateTerminal()
+                  }
                 }
               }
             }
