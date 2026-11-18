@@ -29,6 +29,7 @@ PanelWindow {
   property bool isFullscreen: false
   property string devSubTab: "workspace"
   property string accessSubTab: "tailnet"
+  property string gamesSubTab: "launchers"
 
 
   function toggleFullscreen() {
@@ -1697,39 +1698,387 @@ PanelWindow {
             width: parent.width
             spacing: Style.spacing.md
 
-            Rectangle {
-              width: parent.width
-              radius: Style.cornerRadius
-              color: softText(0.05)
-              border.color: accentSoft(0.18)
-              border.width: 1
-              implicitHeight: gamesUnified.implicitHeight + 24
-              Column {
-                id: gamesUnified
-                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                anchors.margins: 14; spacing: 12
+            // Games sub-nav
+            Row {
+              spacing: 8
+              Button {
+                iconText: "󰊴"
+                text: "Launchers"
+                active: panel.gamesSubTab === "launchers"
+                onClicked: panel.gamesSubTab = "launchers"
+              }
+              Button {
+                iconText: "󰀻"
+                text: "Apps"
+                active: panel.gamesSubTab === "apps"
+                onClicked: panel.gamesSubTab = "apps"
+              }
+              Button {
+                iconText: "󰋊"
+                text: "Storage"
+                active: panel.gamesSubTab === "storage"
+                onClicked: panel.gamesSubTab = "storage"
+              }
+            }
 
-                RowLayout {
-                  width: parent.width; spacing: 10
-                  Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-                  ColumnLayout {
-                    Layout.fillWidth: true; spacing: 2
-                    Text { textFormat: Text.PlainText; text: "Games"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                    Text { textFormat: Text.PlainText; text: "Unified launchers and status for installed game clients (ready to expand for local game servers)"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+            // Launchers tab
+            Column {
+              visible: panel.gamesSubTab === "launchers"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Rectangle {
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: launcherBarCol.implicitHeight + 20
+                Column {
+                  id: launcherBarCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 10
+                  spacing: 8
+                  Text { textFormat: Text.PlainText; text: "Launcher bar"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+                  Text { textFormat: Text.PlainText; text: "Quick launch for installed game launchers."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                  Flow {
+                    width: parent.width
+                    spacing: 8
+                    Button {
+                      iconText: "󰓓"
+                      text: "Steam"
+                      enabled: hub.steamInstalled
+                      tooltipText: hub.steamInstalled ? "Launch Steam" : "Steam not detected"
+                      onClicked: hub.launchSteam()
+                    }
+                    Button {
+                      iconText: "󰖺"
+                      text: "Battle.net"
+                      enabled: hub.bnetInstalled
+                      tooltipText: hub.bnetInstalled ? "Launch Battle.net" : "Battle.net not detected"
+                      onClicked: hub.launchBattleNet()
+                    }
+                    Repeater {
+                      model: {
+                        var out = [];
+                        var apps = hub.extraApps || [];
+                        for (var i = 0; i < apps.length; i++) {
+                          var a = apps[i];
+                          if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
+                        }
+                        return out;
+                      }
+                      delegate: Button {
+                        required property var modelData
+                        iconText: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰐊"))))
+                        text: modelData.name || modelData.id
+                        enabled: !!modelData.installed
+                        tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
+                        onClicked: hub.launchExtraApp(modelData.id)
+                      }
+                    }
+                  }
+                }
+              }
+
+              Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+              Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
+              Flow {
+                width: parent.width
+                spacing: 14
+
+                Rectangle {
+                  width: 320
+                  radius: 14
+                  color: softText(0.045)
+                  border.color: hub.steamRunning ? accentSoft(0.35) : softText(0.10)
+                  border.width: 1
+                  implicitHeight: steamCard.implicitHeight + 20
+                  Column {
+                    id: steamCard
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 12; spacing: 8
+                    RowLayout {
+                      width: parent.width; spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰓓"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: hub.steamInstalled ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+                      Rectangle {
+                        radius: 10
+                        color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                        border.color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                        border.width: hub.steamRunning ? 1 : 0
+                        implicitWidth: steamStatusRow.implicitWidth + 14
+                        implicitHeight: steamStatusRow.implicitHeight + 8
+                        Row {
+                          id: steamStatusRow
+                          anchors.centerIn: parent
+                          spacing: 6
+                          Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.steamRunning ? "#22c55e" : softText(0.45) }
+                          Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.steamRunning ? "running" : "not running"; color: hub.steamRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.steamRunning }
+                        }
+                      }
+                    }
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                    Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
+                    Text { visible: HubModel.trimText(hub.steamNote).length > 0; textFormat: Text.PlainText; text: hub.steamNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                    Flow {
+                      width: parent.width; spacing: 8
+                      Button {
+                        iconText: "󰐊"
+                        text: "Launch"
+                        tooltipText: "Launch Steam"
+                        enabled: hub.steamInstalled
+                        onClicked: hub.launchSteam()
+                      }
+                    }
                   }
                 }
 
                 Rectangle {
-                  width: parent.width
-                  radius: 12
-                  color: accentSoft(0.08)
-                  border.color: accentSoft(0.18)
+                  width: 320
+                  radius: 14
+                  color: softText(0.045)
+                  border.color: hub.bnetRunning ? accentSoft(0.35) : softText(0.10)
                   border.width: 1
-                  implicitHeight: spaceRow.implicitHeight + 16
-                  RowLayout {
-                    id: spaceRow
+                  implicitHeight: bnetCard.implicitHeight + 20
+                  Column {
+                    id: bnetCard
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                    anchors.margins: 10; spacing: 10
+                    anchors.margins: 12; spacing: 8
+                    RowLayout {
+                      width: parent.width; spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰖺"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: hub.bnetInstalled ? "Installed / prefix present" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                      }
+                      Rectangle {
+                        radius: 10
+                        color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                        border.color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                        border.width: hub.bnetRunning ? 1 : 0
+                        implicitWidth: bnetStatusRow.implicitWidth + 14
+                        implicitHeight: bnetStatusRow.implicitHeight + 8
+                        Row {
+                          id: bnetStatusRow
+                          anchors.centerIn: parent
+                          spacing: 6
+                          Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.bnetRunning ? "#22c55e" : softText(0.45) }
+                          Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.bnetRunning ? "running" : "not running"; color: hub.bnetRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.bnetRunning }
+                        }
+                      }
+                    }
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                    Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
+                    Text { visible: HubModel.trimText(hub.bnetNote).length > 0; textFormat: Text.PlainText; text: hub.bnetNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                    Flow {
+                      width: parent.width; spacing: 8
+                      Button {
+                        iconText: "󰐊"
+                        text: "Launch"
+                        tooltipText: "Launch Battle.net"
+                        enabled: hub.bnetInstalled
+                        onClicked: hub.launchBattleNet()
+                      }
+                    }
+                  }
+                }
+
+                Repeater {
+                  model: {
+                    var out = [];
+                    var apps = hub.extraApps || [];
+                    for (var i = 0; i < apps.length; i++) {
+                      var a = apps[i];
+                      if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
+                    }
+                    return out;
+                  }
+                  delegate: Rectangle {
+                    required property var modelData
+                    width: 320
+                    radius: 14
+                    color: softText(0.045)
+                    border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
+                    border.width: 1
+                    implicitHeight: extraCardCol.implicitHeight + 20
+                    Column {
+                      id: extraCardCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 8
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text {
+                          textFormat: Text.PlainText
+                          text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰀻"))))
+                          color: Color.accent
+                          font.family: Style.font.family
+                          font.pixelSize: 28
+                        }
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Rectangle {
+                          radius: 10
+                          color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                          border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                          border.width: modelData.running ? 1 : 0
+                          implicitWidth: extraStatus.implicitWidth + 14
+                          implicitHeight: extraStatus.implicitHeight + 8
+                          Row {
+                            id: extraStatus
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
+                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                          }
+                        }
+                      }
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                      Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Text { visible: HubModel.trimText(modelData.note || "").length > 0; textFormat: Text.PlainText; text: modelData.note; color: softText(0.65); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; width: parent.width }
+                      Flow {
+                        width: parent.width
+                        spacing: 8
+                        Button {
+                          iconText: "󰐊"
+                          text: "Launch"
+                          enabled: modelData.installed
+                          tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
+                          onClicked: hub.launchExtraApp(modelData.id)
+                        }
+                        Button {
+                          visible: !modelData.installed
+                          iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
+                          text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : (modelData.id === "minecraft-launcher" ? "Add" : "Install")
+                          tooltipText: modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)
+                          enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                          onClicked: hub.installExtraApp(modelData.id)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Apps tab
+            Column {
+              visible: panel.gamesSubTab === "apps"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+              Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
+              Flow {
+                width: parent.width
+                spacing: 14
+                Repeater {
+                  model: {
+                    var out = [];
+                    var apps = hub.extraApps || [];
+                    for (var i = 0; i < apps.length; i++) {
+                      var a = apps[i];
+                      if (a && a.category === "apps") out.push(a);
+                    }
+                    return out;
+                  }
+                  delegate: Rectangle {
+                    required property var modelData
+                    width: 320
+                    radius: 14
+                    color: softText(0.045)
+                    border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
+                    border.width: 1
+                    implicitHeight: appCardCol.implicitHeight + 20
+                    Column {
+                      id: appCardCol
+                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                      anchors.margins: 12
+                      spacing: 8
+                      RowLayout {
+                        width: parent.width
+                        spacing: 10
+                        Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
+                        ColumnLayout {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
+                        Rectangle {
+                          radius: 10
+                          color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
+                          border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
+                          border.width: modelData.running ? 1 : 0
+                          implicitWidth: appStatus.implicitWidth + 14
+                          implicitHeight: appStatus.implicitHeight + 8
+                          Row {
+                            id: appStatus
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
+                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
+                          }
+                        }
+                      }
+                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                      Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                      Flow {
+                        width: parent.width
+                        spacing: 8
+                        Button {
+                          iconText: "󰐊"
+                          text: "Launch"
+                          enabled: modelData.installed
+                          onClicked: hub.launchExtraApp(modelData.id)
+                        }
+                        Button {
+                          visible: !modelData.installed
+                          iconText: "󰏔"
+                          text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
+                          enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                          onClicked: hub.installExtraApp(modelData.id)
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            // Storage tab
+            Column {
+              visible: panel.gamesSubTab === "storage"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Rectangle {
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: storageInfoCol.implicitHeight + 24
+                Column {
+                  id: storageInfoCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14
+                  spacing: 12
+                  RowLayout {
+                    width: parent.width; spacing: 10
                     Text { textFormat: Text.PlainText; text: "󰋊"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                     ColumnLayout {
                       Layout.fillWidth: true; spacing: 2
@@ -1784,310 +2133,9 @@ PanelWindow {
                     Rectangle {
                       radius: 10
                       color: hub.gameMountPresent ? accentSoft(0.22) : softText(0.1)
-                      implicitWidth: mountBadge2.implicitWidth + 14
-                      implicitHeight: mountBadge2.implicitHeight + 8
-                      Text { id: mountBadge2; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    }
-                  }
-                }
-
-                Flow {
-                  width: parent.width
-                  spacing: 14
-
-                  Rectangle {
-                    width: 320
-                    radius: 14
-                    color: softText(0.045)
-                    border.color: hub.steamRunning ? accentSoft(0.35) : softText(0.10)
-                    border.width: 1
-                    implicitHeight: steamCard.implicitHeight + 20
-                    Column {
-                      id: steamCard
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12; spacing: 8
-                      RowLayout {
-                        width: parent.width; spacing: 10
-                        Image {
-                          source: "file:///usr/share/icons/hicolor/256x256/apps/steam.png"
-                          sourceSize.width: 36; sourceSize.height: 36
-                          width: 36; height: 36
-                          fillMode: Image.PreserveAspectFit
-                        }
-                        ColumnLayout {
-                          Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Steam"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: hub.steamInstalled ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                        Rectangle {
-                          radius: 10
-                          color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                          border.color: hub.steamRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                          border.width: hub.steamRunning ? 1 : 0
-                          implicitWidth: steamStatusRow.implicitWidth + 14
-                          implicitHeight: steamStatusRow.implicitHeight + 8
-                          Row {
-                            id: steamStatusRow
-                            anchors.centerIn: parent
-                            spacing: 6
-                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.steamRunning ? "#22c55e" : softText(0.45) }
-                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.steamRunning ? "running" : "not running"; color: hub.steamRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.steamRunning }
-                          }
-                        }
-                      }
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                      Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
-                      Text { visible: HubModel.trimText(hub.steamNote).length > 0; textFormat: Text.PlainText; text: hub.steamNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Text { textFormat: Text.PlainText; text: "Count excludes Proton and Steam runtimes/redistributables (best-effort)."; color: softText(0.62); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Text { textFormat: Text.PlainText; text: "Update ready: unknown (best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                      Flow {
-                        width: parent.width; spacing: 8
-                        Button {
-                          iconText: "󰐊"
-                          text: "Launch Steam"
-                          tooltipText: "Launch Steam"
-                          enabled: hub.steamInstalled
-                          onClicked: hub.launchSteam()
-                        }
-                      }
-                    }
-                  }
-
-                  Rectangle {
-                    width: 320
-                    radius: 14
-                    color: softText(0.045)
-                    border.color: hub.bnetRunning ? accentSoft(0.35) : softText(0.10)
-                    border.width: 1
-                    implicitHeight: bnetCard.implicitHeight + 20
-                    Column {
-                      id: bnetCard
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12; spacing: 8
-                      RowLayout {
-                        width: parent.width; spacing: 10
-                        Image {
-                          source: "file:///usr/share/icons/hicolor/256x256/apps/battle-net.png"
-                          sourceSize.width: 36; sourceSize.height: 36
-                          width: 36; height: 36
-                          fillMode: Image.PreserveAspectFit
-                        }
-                        ColumnLayout {
-                          Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Battle.net"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: hub.bnetInstalled ? "Installed / prefix present" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                        Rectangle {
-                          radius: 10
-                          color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                          border.color: hub.bnetRunning ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                          border.width: hub.bnetRunning ? 1 : 0
-                          implicitWidth: bnetStatusRow.implicitWidth + 14
-                          implicitHeight: bnetStatusRow.implicitHeight + 8
-                          Row {
-                            id: bnetStatusRow
-                            anchors.centerIn: parent
-                            spacing: 6
-                            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: hub.bnetRunning ? "#22c55e" : softText(0.45) }
-                            Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: hub.bnetRunning ? "running" : "not running"; color: hub.bnetRunning ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: hub.bnetRunning }
-                          }
-                        }
-                      }
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                      Text { textFormat: Text.PlainText; text: "Locally installed games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "unknown"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; wrapMode: Text.Wrap; width: parent.width }
-                      Text { visible: HubModel.trimText(hub.bnetNote).length > 0; textFormat: Text.PlainText; text: hub.bnetNote; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Text { textFormat: Text.PlainText; text: "Detected from Battle.net install folders (build/product markers, best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                      Text { textFormat: Text.PlainText; text: "Update ready: unknown (best-effort)."; color: softText(0.68); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                      Flow {
-                        width: parent.width; spacing: 8
-                        Button {
-                          iconText: "󰐊"
-                          text: "Launch Battle.net"
-                          tooltipText: "Launch Battle.net"
-                          enabled: hub.bnetInstalled
-                          onClicked: hub.launchBattleNet()
-                        }
-                      }
-                    }
-                  }
-                }
-
-                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                Column {
-                  width: parent.width
-                  spacing: 8
-                  Text { textFormat: Text.PlainText; text: "Launchers & mod tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                  Text { textFormat: Text.PlainText; text: "Detect installed launchers (Epic via Heroic, Lutris, Minecraft, CurseForge) and offer installs. Detection is best-effort."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                  Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                  Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-
-                  Flow {
-                    width: parent.width
-                    spacing: 14
-                    Repeater {
-                      model: {
-                        var out = [];
-                        var apps = hub.extraApps || [];
-                        for (var i = 0; i < apps.length; i++) {
-                          var a = apps[i];
-                          if (a && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push(a);
-                        }
-                        return out;
-                      }
-                      delegate: Rectangle {
-                        required property var modelData
-                        width: 320
-                        radius: 14
-                        color: softText(0.045)
-                        border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
-                        border.width: 1
-                        implicitHeight: extraCardCol.implicitHeight + 20
-                        Column {
-                          id: extraCardCol
-                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                          anchors.margins: 12
-                          spacing: 8
-                          RowLayout {
-                            width: parent.width
-                            spacing: 10
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰀻"))))
-                              color: Color.accent
-                              font.family: Style.font.family
-                              font.pixelSize: 28
-                            }
-                            ColumnLayout {
-                              Layout.fillWidth: true
-                              spacing: 2
-                              Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                              Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                            }
-                            Rectangle {
-                              radius: 10
-                              color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                              border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                              border.width: modelData.running ? 1 : 0
-                              implicitWidth: extraStatus.implicitWidth + 14
-                              implicitHeight: extraStatus.implicitHeight + 8
-                              Row {
-                                id: extraStatus
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
-                                Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
-                              }
-                            }
-                          }
-                          Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                          Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                          Text { visible: HubModel.trimText(modelData.note || "").length > 0; textFormat: Text.PlainText; text: modelData.note; color: softText(0.65); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; width: parent.width }
-                          Flow {
-                            width: parent.width
-                            spacing: 8
-                            Button {
-                              iconText: "󰐊"
-                              text: "Launch"
-                              enabled: modelData.installed
-                              tooltipText: modelData.installed ? ("Launch " + modelData.name) : (modelData.name + " not detected")
-                              onClicked: hub.launchExtraApp(modelData.id)
-                            }
-                            Button {
-                              visible: !modelData.installed
-                              iconText: "󰏔"
-                              text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
-                              tooltipText: "Open terminal to install " + modelData.name
-                              enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
-                              onClicked: hub.installExtraApp(modelData.id)
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-
-                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                Column {
-                  width: parent.width
-                  spacing: 8
-                  Text { textFormat: Text.PlainText; text: "Apps"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                  Text { textFormat: Text.PlainText; text: "Offer installs and quick launch for common apps like Discord."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                  Flow {
-                    width: parent.width
-                    spacing: 14
-                    Repeater {
-                      model: {
-                        var out = [];
-                        var apps = hub.extraApps || [];
-                        for (var i = 0; i < apps.length; i++) {
-                          var a = apps[i];
-                          if (a && a.category === "apps") out.push(a);
-                        }
-                        return out;
-                      }
-                      delegate: Rectangle {
-                        required property var modelData
-                        width: 320
-                        radius: 14
-                        color: softText(0.045)
-                        border.color: modelData.running ? accentSoft(0.35) : softText(0.10)
-                        border.width: 1
-                        implicitHeight: appCardCol.implicitHeight + 20
-                        Column {
-                          id: appCardCol
-                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                          anchors.margins: 12
-                          spacing: 8
-                          RowLayout {
-                            width: parent.width
-                            spacing: 10
-                            Text { textFormat: Text.PlainText; text: modelData.id === "discord" ? "󰙯" : "󰀻"; color: Color.accent; font.family: Style.font.family; font.pixelSize: 28 }
-                            ColumnLayout {
-                              Layout.fillWidth: true
-                              spacing: 2
-                              Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                              Text { textFormat: Text.PlainText; text: modelData.installed ? "Installed" : "Not detected"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                            }
-                            Rectangle {
-                              radius: 10
-                              color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.20) : softText(0.1)
-                              border.color: modelData.running ? Qt.rgba(0.13, 0.77, 0.37, 0.45) : "transparent"
-                              border.width: modelData.running ? 1 : 0
-                              implicitWidth: appStatus.implicitWidth + 14
-                              implicitHeight: appStatus.implicitHeight + 8
-                              Row {
-                                id: appStatus
-                                anchors.centerIn: parent
-                                spacing: 6
-                                Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter; color: modelData.running ? "#22c55e" : softText(0.45) }
-                                Text { anchors.verticalCenter: parent.verticalCenter; textFormat: Text.PlainText; text: modelData.running ? "running" : "not running"; color: modelData.running ? "#22c55e" : Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: modelData.running }
-                              }
-                            }
-                          }
-                          Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-                          Text { textFormat: Text.PlainText; text: modelData.description || ""; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                          Flow {
-                            width: parent.width
-                            spacing: 8
-                            Button {
-                              iconText: "󰐊"
-                              text: "Launch"
-                              enabled: modelData.installed
-                              onClicked: hub.launchExtraApp(modelData.id)
-                            }
-                            Button {
-                              visible: !modelData.installed
-                              iconText: "󰏔"
-                              text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
-                              enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
-                              onClicked: hub.installExtraApp(modelData.id)
-                            }
-                          }
-                        }
-                      }
+                      implicitWidth: mountBadge3.implicitWidth + 14
+                      implicitHeight: mountBadge3.implicitHeight + 8
+                      Text { id: mountBadge3; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
                   }
                 }
@@ -2105,10 +2153,16 @@ PanelWindow {
             Row {
               spacing: 8
               Button {
-                iconText: "󰅨"
+                iconText: "󰊢"
                 text: "Workspace"
                 active: panel.devSubTab === "workspace"
                 onClicked: panel.devSubTab = "workspace"
+              }
+              Button {
+                iconText: "󰅨"
+                text: "Tools"
+                active: panel.devSubTab === "tools"
+                onClicked: panel.devSubTab = "tools"
               }
               Button {
                 iconText: hub.preferredEditor === "vscode" ? "󰨞" : "󰅱"
@@ -2145,7 +2199,7 @@ PanelWindow {
               width: parent.width
             }
 
-            // Workspace
+            // Workspace (repos + details)
             Column {
               visible: panel.devSubTab === "workspace"
               width: parent.width
@@ -2155,17 +2209,17 @@ PanelWindow {
                 width: parent.width
                 spacing: 12
 
-                // Left: tools
+                // Left: repos list
                 Rectangle {
-                  Layout.preferredWidth: Math.max(320, parent.width * 0.46)
+                  Layout.preferredWidth: Math.max(320, parent.width * 0.44)
                   Layout.alignment: Qt.AlignTop
                   radius: Style.cornerRadius
                   color: softText(0.04)
                   border.color: softText(0.08)
                   border.width: 1
-                  implicitHeight: devToolsCol.implicitHeight + 24
+                  implicitHeight: devReposCol.implicitHeight + 24
                   Column {
-                    id: devToolsCol
+                    id: devReposCol
                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                     anchors.margins: 12
                     spacing: 10
@@ -2173,104 +2227,63 @@ PanelWindow {
                     RowLayout {
                       width: parent.width
                       spacing: 10
-                      Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                        Text { textFormat: Text.PlainText; text: "Toolchain and editor installs for this server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "Repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Select a repository to view details (size, git info) and open it in your editor."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                       }
+                      Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
 
                     Rectangle { width: parent.width; height: 1; color: softText(0.08) }
 
+                    Text {
+                      visible: !hub.devRepos || hub.devRepos.length === 0
+                      textFormat: Text.PlainText
+                      text: hub.devBusy ? "Scanning…" : "No repositories found in scanned locations."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                    }
+
                     Repeater {
-                      model: hub.devTools || []
+                      model: hub.devRepos || []
                       delegate: Rectangle {
                         required property var modelData
-                        width: devToolsCol.width - 0
+                        width: devReposCol.width - 0
                         radius: 8
-                        color: softText(0.03)
-                        border.color: softText(0.08)
+                        color: hub.devSelectedRepoPath === modelData.path ? accentSoft(0.14) : softText(0.03)
+                        border.color: hub.devSelectedRepoPath === modelData.path ? accentSoft(0.35) : softText(0.08)
                         border.width: 1
-                        implicitHeight: toolRow.implicitHeight + 12
-                        RowLayout {
-                          id: toolRow
+                        implicitHeight: repoRow.implicitHeight + 10
+                        MouseArea {
+                          anchors.fill: parent
+                          cursorShape: Qt.PointingHandCursor
+                          onClicked: hub.selectDevRepo(modelData.path)
+                        }
+                        Column {
+                          id: repoRow
                           anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                           anchors.margins: 8
-                          spacing: 8
-                          Rectangle {
-                            width: 10; height: 10; radius: 5
-                            color: modelData.installed ? "#22c55e" : softText(0.35)
-                            Layout.alignment: Qt.AlignVCenter
-                          }
-                          Column {
-                            Layout.fillWidth: true
-                            spacing: 2
-                            Text {
-                              textFormat: Text.PlainText
-                              text: HubModel.devToolLabel(modelData.id)
-                              color: Color.menu.text
-                              font.family: Style.font.family
-                              font.bold: true
-                            }
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.installed ? (HubModel.trimText(modelData.version).length > 0 ? modelData.version : (modelData.path || "Installed")) : "Not installed"
-                              color: modelData.installed ? softText(0.78) : softText(0.65)
-                              font.family: Style.font.family
-                              font.pixelSize: Style.font.caption
-                              elide: Text.ElideRight
-                              wrapMode: Text.NoWrap
-                              width: parent.width
-                            }
-                            Text {
-                              visible: modelData.installed && HubModel.trimText(modelData.path).length > 0
-                              textFormat: Text.PlainText
-                              text: modelData.path
-                              color: softText(0.6)
-                              font.family: Style.font.family
-                              font.pixelSize: Style.font.caption
-                              elide: Text.ElideMiddle
-                              width: parent.width
-                            }
-                          }
-                          Column {
-                            visible: !modelData.installed
-                            spacing: 4
-                            Layout.alignment: Qt.AlignVCenter
-                            Row {
-                              spacing: 6
-                              Button {
-                                iconText: "󰏔"
-                                text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
-                                tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
-                                enabled: !hub.devInstallBusy
-                                onClicked: hub.runDevInstallSilent(modelData.id)
-                              }
-                              Button {
-                                iconText: "󰆍"
-                                text: "Terminal"
-                                tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
-                                enabled: !hub.devInstallBusy
-                                onClicked: hub.openDevInstallTerminal(modelData.id)
-                              }
-                            }
-                            Text {
-                              visible: hub.devInstallBusy && hub.devInstallToolId === modelData.id
-                              textFormat: Text.PlainText
-                              text: "Running…"
-                              color: softText(0.7)
-                              font.family: Style.font.family
-                              font.pixelSize: Style.font.caption
-                            }
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.name || modelData.path || "repo"
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.bold: true
+                            elide: Text.ElideRight
+                            width: parent.width
                           }
                           Text {
-                            visible: modelData.installed
                             textFormat: Text.PlainText
-                            text: "Installed"
-                            color: "#22c55e"
+                            text: modelData.path || ""
+                            color: softText(0.68)
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                            width: parent.width
                           }
                         }
                       }
@@ -2278,99 +2291,223 @@ PanelWindow {
                   }
                 }
 
-                // Right: editor + repos
-                Column {
+                // Right: repo details
+                Rectangle {
                   Layout.fillWidth: true
                   Layout.alignment: Qt.AlignTop
-                  spacing: 12
+                  radius: Style.cornerRadius
+                  color: softText(0.04)
+                  border.color: softText(0.08)
+                  border.width: 1
+                  implicitHeight: repoDetailsCol.implicitHeight + 24
+                  Column {
+                    id: repoDetailsCol
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                    anchors.margins: 12
+                    spacing: 10
 
-                  Rectangle {
-                    width: parent.width
-                    radius: Style.cornerRadius
-                    color: softText(0.04)
-                    border.color: softText(0.08)
-                    border.width: 1
-                    implicitHeight: devReposCol.implicitHeight + 24
-                    Column {
-                      id: devReposCol
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 12
+                    RowLayout {
+                      width: parent.width
                       spacing: 10
+                      Text { textFormat: Text.PlainText; text: "󰋼"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                      ColumnLayout {
+                        Layout.fillWidth: true; spacing: 2
+                        Text { textFormat: Text.PlainText; text: "Details"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText(hub.devSelectedRepoPath).length > 0 ? hub.devSelectedRepoPath : "Select a repository to see its details."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
+                      }
+                    }
 
-                      RowLayout {
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Text {
+                      visible: HubModel.trimText(hub.devSelectedRepoPath).length === 0
+                      textFormat: Text.PlainText
+                      text: "No repository selected."
+                      color: softText(0.7)
+                      font.family: Style.font.family
+                    }
+
+                    Text {
+                      visible: HubModel.trimText(hub.devSelectedRepoPath).length > 0 && hub.devRepoDetailBusy
+                      textFormat: Text.PlainText
+                      text: "Loading details…"
+                      color: softText(0.75)
+                      font.family: Style.font.family
+                    }
+
+                    Column {
+                      visible: HubModel.trimText(hub.devSelectedRepoPath).length > 0 && !hub.devRepoDetailBusy
+                      width: parent.width
+                      spacing: 8
+
+                      GridLayout {
                         width: parent.width
-                        spacing: 10
-                        Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
-                        ColumnLayout {
-                          Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                          Text { textFormat: Text.PlainText; text: "Cloned repos scanned from common dev folders under your home directory."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                        columns: 2
+                        columnSpacing: 12
+                        rowSpacing: 8
+
+                        Text { textFormat: Text.PlainText; text: "Folder size"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).size).length > 0 ? hub.devRepoDetail.size : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
+
+                        Text { textFormat: Text.PlainText; text: "Last modified"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).mtime).length > 0 ? hub.devRepoDetail.mtime : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
+
+                        Text { textFormat: Text.PlainText; text: "Git branch"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).branch).length > 0 ? hub.devRepoDetail.branch : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
+
+                        Text { textFormat: Text.PlainText; text: "Working tree"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).dirty).length > 0 ? hub.devRepoDetail.dirty : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
+
+                        Text { textFormat: Text.PlainText; text: "Remote (origin)"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).remote).length > 0 ? hub.devRepoDetail.remote : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+
+                        Text { textFormat: Text.PlainText; text: "Last commit"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: HubModel.trimText((hub.devRepoDetail || {}).last).length > 0 ? hub.devRepoDetail.last : "—"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+                      }
+
+                      Flow {
+                        width: parent.width
+                        spacing: 8
+                        Button {
+                          iconText: "󰏌"
+                          text: "Open in " + (HubModel.trimText(hub.preferredEditor).length > 0 ? HubModel.devToolLabel(hub.preferredEditor) : "editor")
+                          enabled: HubModel.trimText(hub.devSelectedRepoPath).length > 0 && HubModel.trimText(hub.preferredEditor).length > 0
+                          tooltipText: HubModel.trimText(hub.preferredEditor).length > 0 ? ("Open in " + HubModel.devToolLabel(hub.preferredEditor)) : "Select a preferred editor in the bar above"
+                          onClicked: hub.openRepoInEditor(hub.devSelectedRepoPath)
                         }
-                        Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Button {
+                          iconText: "󰑐"
+                          text: "Refresh details"
+                          enabled: HubModel.trimText(hub.devSelectedRepoPath).length > 0 && !hub.devRepoDetailBusy
+                          onClicked: hub.selectDevRepo(hub.devSelectedRepoPath)
+                        }
                       }
+                    }
+                  }
+                }
+              }
+            }
 
-                      Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+            // Tools
+            Column {
+              visible: panel.devSubTab === "tools"
+              width: parent.width
+              spacing: Style.spacing.md
 
-                      Text {
-                        visible: !hub.devRepos || hub.devRepos.length === 0
-                        textFormat: Text.PlainText
-                        text: hub.devBusy ? "Scanning…" : "No repositories found in scanned locations."
-                        color: softText(0.7)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                      }
+              Rectangle {
+                width: Math.min(parent.width, 720)
+                radius: Style.cornerRadius
+                color: softText(0.04)
+                border.color: softText(0.08)
+                border.width: 1
+                implicitHeight: devToolsCol.implicitHeight + 24
+                Column {
+                  id: devToolsCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12
+                  spacing: 10
 
-                      Text {
-                        visible: HubModel.trimText(hub.preferredEditor).length > 0 && hub.devRepos && hub.devRepos.length > 0
-                        textFormat: Text.PlainText
-                        text: "Click a repository to open it in " + HubModel.devToolLabel(hub.preferredEditor) + ". Toggle the editor in the bar above."
-                        color: softText(0.72)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.Wrap
-                        width: parent.width
-                      }
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Toolchain and editor installs for this server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    }
+                  }
 
-                      Repeater {
-                        model: hub.devRepos || []
-                        delegate: Rectangle {
-                          required property var modelData
-                          width: devReposCol.width - 0
-                          radius: 8
-                          color: softText(0.03)
-                          border.color: softText(0.08)
-                          border.width: 1
-                          implicitHeight: repoRow.implicitHeight + 10
-                          MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            enabled: HubModel.trimText(hub.preferredEditor).length > 0
-                            onClicked: hub.openRepoInEditor(modelData.path)
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                  Repeater {
+                    model: hub.devTools || []
+                    delegate: Rectangle {
+                      required property var modelData
+                      width: devToolsCol.width - 0
+                      radius: 8
+                      color: softText(0.03)
+                      border.color: softText(0.08)
+                      border.width: 1
+                      implicitHeight: toolRow.implicitHeight + 12
+                      RowLayout {
+                        id: toolRow
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 8
+                        Rectangle {
+                          width: 10; height: 10; radius: 5
+                          color: modelData.installed ? "#22c55e" : softText(0.35)
+                          Layout.alignment: Qt.AlignVCenter
+                        }
+                        Column {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: HubModel.devToolLabel(modelData.id)
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.bold: true
                           }
-                          Column {
-                            id: repoRow
-                            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                            anchors.margins: 8
-                            spacing: 2
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.name || modelData.path || "repo"
-                              color: Color.menu.text
-                              font.family: Style.font.family
-                              font.bold: true
-                              elide: Text.ElideRight
-                              width: parent.width
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.installed ? (HubModel.trimText(modelData.version).length > 0 ? modelData.version : (modelData.path || "Installed")) : "Not installed"
+                            color: modelData.installed ? softText(0.78) : softText(0.65)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                            wrapMode: Text.NoWrap
+                            width: parent.width
+                          }
+                          Text {
+                            visible: modelData.installed && HubModel.trimText(modelData.path).length > 0
+                            textFormat: Text.PlainText
+                            text: modelData.path
+                            color: softText(0.6)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                            width: parent.width
+                          }
+                        }
+                        Column {
+                          visible: !modelData.installed
+                          spacing: 4
+                          Layout.alignment: Qt.AlignVCenter
+                          Row {
+                            spacing: 6
+                            Button {
+                              iconText: "󰏔"
+                              text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
+                              tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
+                              enabled: !hub.devInstallBusy
+                              onClicked: hub.runDevInstallSilent(modelData.id)
                             }
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.path || ""
-                              color: softText(0.68)
-                              font.family: Style.font.family
-                              font.pixelSize: Style.font.caption
-                              elide: Text.ElideMiddle
-                              width: parent.width
+                            Button {
+                              iconText: "󰆍"
+                              text: "Terminal"
+                              tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
+                              enabled: !hub.devInstallBusy
+                              onClicked: hub.openDevInstallTerminal(modelData.id)
                             }
                           }
+                          Text {
+                            visible: hub.devInstallBusy && hub.devInstallToolId === modelData.id
+                            textFormat: Text.PlainText
+                            text: "Running…"
+                            color: softText(0.7)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                          }
+                        }
+                        Text {
+                          visible: modelData.installed
+                          textFormat: Text.PlainText
+                          text: "Installed"
+                          color: "#22c55e"
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
                         }
                       }
                     }

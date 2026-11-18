@@ -471,6 +471,51 @@ function parseDevRepos(text) {
   return out;
 }
 
+function devRepoDetailCommand(repoPath) {
+  var p = String(repoPath || "");
+  var script = [
+    "p=\"$1\"",
+    "if [ ! -d \"$p\" ]; then echo 'ERR\tNot a directory'; exit 0; fi",
+    "size=$(du -sh \"$p\" 2>/dev/null | awk '{print $1}' || true)",
+    "mtime=$(stat -c '%y' \"$p\" 2>/dev/null | cut -d'.' -f1 || true)",
+    "branch=''; dirty=''; remote=''; last=''",
+    "if [ -d \"$p/.git\" ] || git -C \"$p\" rev-parse --git-dir >/dev/null 2>&1; then",
+    "  branch=$(git -C \"$p\" rev-parse --abbrev-ref HEAD 2>/dev/null || true)",
+    "  dc=$(git -C \"$p\" status --porcelain 2>/dev/null | wc -l | tr -d ' ' || echo 0)",
+    "  if [ \"${dc:-0}\" = \"0\" ]; then dirty='clean'; else dirty=\"$dc change(s)\"; fi",
+    "  remote=$(git -C \"$p\" remote get-url origin 2>/dev/null || true)",
+    "  last=$(git -C \"$p\" log -1 --format='%cs %s' 2>/dev/null || true)",
+    "fi",
+    "printf 'SIZE\\t%s\\n' \"$size\"",
+    "printf 'MTIME\\t%s\\n' \"$mtime\"",
+    "printf 'BRANCH\\t%s\\n' \"$branch\"",
+    "printf 'DIRTY\\t%s\\n' \"$dirty\"",
+    "printf 'REMOTE\\t%s\\n' \"$remote\"",
+    "printf 'LAST\\t%s\\n' \"$last\""
+  ].join("\n");
+  return ["sh", "-c", script, "sh", p];
+}
+
+function parseDevRepoDetail(text) {
+  var out = { size: "", mtime: "", branch: "", dirty: "", remote: "", last: "", error: "" };
+  var rows = nonEmptyLines(text);
+  for (var i = 0; i < rows.length; i++) {
+    var line = rows[i];
+    var idx = line.indexOf("\t");
+    if (idx === -1) continue;
+    var k = trimText(line.slice(0, idx));
+    var v = trimText(line.slice(idx + 1));
+    if (k === "SIZE") out.size = v;
+    else if (k === "MTIME") out.mtime = v;
+    else if (k === "BRANCH") out.branch = v;
+    else if (k === "DIRTY") out.dirty = v;
+    else if (k === "REMOTE") out.remote = v;
+    else if (k === "LAST") out.last = v;
+    else if (k === "ERR") out.error = v;
+  }
+  return out;
+}
+
 function devToolInstallCommand(id) {
   var cmd = "";
   if (id === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";

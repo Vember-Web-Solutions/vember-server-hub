@@ -109,6 +109,9 @@ Item {
   property string devInstallToolId: ""
   property string devInstallStatus: ""
   property bool devToolsOnlyRefresh: false
+  property string devSelectedRepoPath: ""
+  property var devRepoDetail: ({})
+  property bool devRepoDetailBusy: false
 
   property bool codeServerPresent: false
   property bool codeServerRunning: false
@@ -286,6 +289,19 @@ Item {
     devStatus = "Opening " + path + " in " + HubModel.devToolLabel(editor) + "…";
   }
 
+  function selectDevRepo(repoPath) {
+    var path = HubModel.trimText(repoPath);
+    devSelectedRepoPath = path;
+    devRepoDetail = ({});
+    devRepoDetailBusy = false;
+    devRepoDetailProc.running = false;
+    if (path.length === 0) return;
+    devRepoDetailBusy = true;
+    devRepoDetailProc.repoPath = path;
+    devRepoDetailProc.command = HubModel.devRepoDetailCommand(path);
+    devRepoDetailProc.running = true;
+  }
+
   function refreshAll() {
     lastActionMessage = "";
     refreshTailscale();
@@ -303,6 +319,10 @@ Item {
     devToolsOnlyRefresh = false;
     devTools = [];
     devRepos = [];
+    devSelectedRepoPath = "";
+    devRepoDetail = ({});
+    devRepoDetailBusy = false;
+    devRepoDetailProc.running = false;
     codeServerPresent = false;
     codeServerRunning = false;
     codeServerState = "unknown";
@@ -1635,6 +1655,24 @@ Item {
       }
     }
   }
+
+  Process {
+    id: devRepoDetailProc
+    property string repoPath: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (repoPath !== root.devSelectedRepoPath)
+        return;
+      root.devRepoDetailBusy = false;
+      if (code === 0) {
+        root.devRepoDetail = HubModel.parseDevRepoDetail(stdout.text || "");
+      } else {
+        root.devRepoDetail = { error: "Failed to load repo details (code " + code + ")." };
+      }
+    }
+  }
+
   Timer {
     id: codeServerSetupPollTimer
     interval: 3000
