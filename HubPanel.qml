@@ -279,9 +279,9 @@ PanelWindow {
               active: true
               onClicked: {
                 panel.settingsMenuOpen = false;
-                panel.updateStatusText = "Ready to update from GitHub.";
-                panel.updateProgress = 0;
-                panel.updateInProgress = false;
+                panel.updateStatusText = hub.pluginUpdateStatus || "Ready to update from GitHub.";
+                panel.updateProgress = hub.pluginUpdateProgress;
+                panel.updateInProgress = hub.pluginUpdateBusy;
                 panel.updateDialogOpen = true;
               }
             }
@@ -3536,16 +3536,24 @@ PanelWindow {
             width: parent.width
             iconText: "󰚰"
             text: hub.updateAvailable ? "Update ready" : "Check for updates"
-            tooltipText: hub.updateAvailable ? "A new build is available on GitHub" : "Check GitHub for a newer build (coming soon)"
+            tooltipText: hub.updateAvailable ? "A new build is available on GitHub" : "Check GitHub for a newer build"
             onClicked: {
               panel.settingsMenuOpen = false;
               if (hub.updateAvailable) {
-                panel.updateStatusText = "Preparing update…";
-                panel.updateProgress = 0;
-                panel.updateInProgress = false;
+                panel.updateStatusText = hub.pluginUpdateStatus || "Ready to update from GitHub.";
+                panel.updateProgress = hub.pluginUpdateProgress;
+                panel.updateInProgress = hub.pluginUpdateBusy;
                 panel.updateDialogOpen = true;
               } else {
-                hub.lastActionMessage = "Update checks from GitHub are not configured yet.";
+                panel.updateStatusText = "Checking for updates…";
+                panel.updateProgress = 0;
+                panel.updateInProgress = false;
+                hub.pluginUpdateProgress = 0;
+                hub.pluginUpdateError = "";
+                hub.pluginUpdatePun = "";
+                hub.pluginUpdateStatus = "Checking for updates…";
+                panel.updateDialogOpen = true;
+                hub.checkPluginUpdate(true);
               }
             }
           }
@@ -3674,12 +3682,16 @@ PanelWindow {
       color: Qt.rgba(0, 0, 0, 0.45)
       z: 160
 
-      MouseArea { anchors.fill: parent; onClicked: { if (!panel.updateInProgress) panel.updateDialogOpen = false; } }
+      property bool busy: hub.pluginUpdateBusy || hub.updateCheckBusy
+      property real progress: hub.pluginUpdateBusy ? hub.pluginUpdateProgress : (hub.updateCheckBusy ? 0 : hub.pluginUpdateProgress)
+      property bool done: !hub.pluginUpdateBusy && !hub.updateCheckBusy && hub.pluginUpdateProgress >= 1 && HubModel.trimText(hub.pluginUpdateError).length === 0
+
+      MouseArea { anchors.fill: parent; onClicked: { if (!busy) panel.updateDialogOpen = false; } }
 
       Rectangle {
         id: updateDialog
         anchors.centerIn: parent
-        width: Math.min(parent.width - 80, 500)
+        width: Math.min(parent.width - 80, 520)
         radius: 14
         color: Color.menu.background
         border.color: accentSoft(0.25)
@@ -3704,23 +3716,36 @@ PanelWindow {
               Text { textFormat: Text.PlainText; text: hub.updateAvailable ? "Update ready" : "Plugin update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
               Text {
                 textFormat: Text.PlainText
-                text: hub.updateAvailable ? ("New build available" + (HubModel.trimText(hub.updateAvailableBuild).length > 0 ? (": " + hub.updateAvailableBuild) : "") + ".") : "Check GitHub for a newer build."
+                text: hub.updateAvailable ? ("New commits available on GitHub" + (hub.pluginUpdateRemoteCommits > 0 ? (" (" + hub.pluginUpdateRemoteCommits + ")") : "") + ".") : (hub.updateCheckBusy ? "Checking GitHub for updates…" : "Check GitHub for a newer build.")
                 color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true
               }
             }
           }
 
           Text {
-            visible: HubModel.trimText(panel.updateStatusText).length > 0
+            visible: HubModel.trimText(hub.pluginUpdatePun).length > 0 && (hub.pluginUpdateBusy || done)
             textFormat: Text.PlainText
-            text: panel.updateStatusText
-            color: softText(0.85)
+            text: hub.pluginUpdatePun
+            color: Color.accent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+            font.italic: true
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Text {
+            visible: HubModel.trimText(hub.pluginUpdateStatus).length > 0 || HubModel.trimText(panel.updateStatusText).length > 0
+            textFormat: Text.PlainText
+            text: HubModel.trimText(hub.pluginUpdateStatus).length > 0 ? hub.pluginUpdateStatus : panel.updateStatusText
+            color: HubModel.trimText(hub.pluginUpdateError).length > 0 ? "#ef4444" : softText(0.85)
             font.family: Style.font.family
             wrapMode: Text.Wrap
             width: parent.width
           }
 
           Rectangle {
+            visible: busy || hub.pluginUpdateProgress > 0 || done
             width: parent.width
             height: 10
             radius: 5
@@ -3730,12 +3755,12 @@ PanelWindow {
               id: updateProgressFill
               height: parent.height
               radius: 5
-              color: Color.accent
-              width: panel.updateProgress > 0 ? (parent.width * Math.max(0, Math.min(1, panel.updateProgress))) : (panel.updateInProgress ? parent.width * 0.35 : 0)
-              x: (panel.updateInProgress && panel.updateProgress <= 0) ? -width : 0
+              color: HubModel.trimText(hub.pluginUpdateError).length > 0 ? "#ef4444" : Color.accent
+              width: progress > 0 ? (parent.width * Math.max(0, Math.min(1, progress))) : (busy ? parent.width * 0.35 : 0)
+              x: (busy && progress <= 0) ? -width : 0
               Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
               SequentialAnimation on x {
-                running: panel.updateInProgress && panel.updateProgress <= 0 && panel.updateDialogOpen
+                running: busy && progress <= 0 && panel.updateDialogOpen
                 loops: Animation.Infinite
                 NumberAnimation { from: -updateProgressFill.width; to: updateDialog.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
               }
@@ -3746,22 +3771,40 @@ PanelWindow {
             spacing: 8
             anchors.right: parent.right
             Button {
-              text: panel.updateInProgress ? "Updating…" : "Close"
-              enabled: !panel.updateInProgress
+              text: busy ? "Updating…" : "Close"
+              enabled: !busy
               onClicked: panel.updateDialogOpen = false
             }
             Button {
-              visible: hub.updateAvailable
-              iconText: "󰚰"
-              text: panel.updateInProgress ? "Updating…" : "Update now"
+              visible: done
+              iconText: "󰑓"
+              text: "Reload"
               active: true
-              enabled: !panel.updateInProgress
               onClicked: {
-                // Future: download/apply update from GitHub and show real progress.
-                panel.updateInProgress = true;
-                panel.updateProgress = 0;
-                panel.updateStatusText = "Update install from GitHub is not wired yet. Configure repo/release source to enable.";
-                panel.updateInProgress = false;
+                panel.updateDialogOpen = false;
+                hub.hotReloadHub();
+              }
+            }
+            Button {
+              visible: hub.updateAvailable && !done
+              iconText: "󰚰"
+              text: busy ? "Updating…" : "Update now"
+              active: true
+              enabled: !busy
+              onClicked: {
+                hub.startPluginUpdate();
+              }
+            }
+            Button {
+              visible: !hub.updateAvailable && !busy && !done
+              iconText: "󰑐"
+              text: "Check again"
+              onClicked: {
+                hub.pluginUpdateStatus = "Checking for updates…";
+                hub.pluginUpdateProgress = 0;
+                hub.pluginUpdateError = "";
+                hub.pluginUpdatePun = "";
+                hub.checkPluginUpdate(true);
               }
             }
           }

@@ -31,6 +31,14 @@ Item {
   property bool updateAvailable: false
   property string updateAvailableVersion: ""
   property string updateAvailableBuild: ""
+  property bool updateCheckBusy: false
+  property bool pluginUpdateBusy: false
+  property int pluginUpdateRemoteCommits: 0
+  property string pluginUpdateError: ""
+  property string pluginUpdatePun: ""
+  property string pluginUpdateStatus: ""
+  property real pluginUpdateProgress: 0
+  property string pluginRepoDir: ""
 
   property string tailscaleActive: "unknown"
   property string tailscaleEnabled: "unknown"
@@ -856,6 +864,62 @@ Item {
     omarchyUpdateLog = "";
     if (!omarchyUpdateRunning)
       omarchyUpdateStatus = "";
+  }
+
+  // --- Plugin self-update (GitHub) ---
+  property var _pluginUpdatePuns: [
+    "Fetching commits… this won’t take a commit-ment.",
+    "Pulling changes… brace for deploy-lightful results.",
+    "Syncing with GitHub… git ready.",
+    "Merging progress… no need to branch out.",
+    "Applying updates… pushing my luck (safely).",
+    "Fast-forwarding… keeping things up to date-stamp.",
+    "Downloading improvements… serving fresh bits.",
+    "Almost there… hubba hubba, here comes the hub."
+  ]
+  property int _pluginUpdatePunIndex: 0
+
+  function _nextPluginUpdatePun() {
+    var puns = _pluginUpdatePuns || [];
+    if (puns.length === 0) return "";
+    _pluginUpdatePunIndex = (_pluginUpdatePunIndex + 1) % puns.length;
+    return puns[_pluginUpdatePunIndex];
+  }
+
+  function _resolvedPluginRepoDir() {
+    var d = HubModel.trimText(pluginRepoDir);
+    if (d.length > 0) return d;
+    return homeDir + "/Projects/vember-server";
+  }
+
+  function checkPluginUpdate(manual) {
+    if (updateCheckBusy || pluginUpdateBusy)
+      return;
+    pluginUpdateError = "";
+    if (pluginUpdateProgress >= 1) pluginUpdateProgress = 0;
+    if (manual) {
+      pluginUpdateStatus = "Checking for updates…";
+      pluginUpdatePun = "";
+    }
+    updateCheckBusy = true;
+    pluginRepoResolveProc.running = false;
+    pluginRepoResolveProc.command = ["sh", "-c", "d=\"$1\"; git -C \"$d\" rev-parse --show-toplevel 2>/dev/null || echo \"$HOME/Projects/vember-server\"", "sh", homeDir + "/.config/omarchy/plugins/elena.vember-server-hub"];
+    pluginRepoResolveProc.running = true;
+  }
+
+  function startPluginUpdate() {
+    if (pluginUpdateBusy)
+      return;
+    pluginUpdateBusy = true;
+    pluginUpdateError = "";
+    pluginUpdateProgress = 0.05;
+    _pluginUpdatePunIndex = Math.floor(Math.random() * (_pluginUpdatePuns.length || 1));
+    pluginUpdatePun = (_pluginUpdatePuns[_pluginUpdatePunIndex] || "Updating…");
+    pluginUpdateStatus = "Starting update…";
+    pluginUpdatePunTimer.restart();
+    pluginUpdateFetchProc.running = false;
+    pluginUpdateFetchProc.command = ["sh", "-c", "cd \"$1\" && git fetch origin 2>&1", "sh", _resolvedPluginRepoDir()];
+    pluginUpdateFetchProc.running = true;
   }
 
   function runDockerAction(action, name) {
@@ -1961,6 +2025,119 @@ Item {
     printErrors: false
     watchChanges: true
     onFileChanged: root.scheduleHotReload()
+  }
+
+  // --- Plugin self-update processes/timers ---
+  Timer {
+    id: pluginUpdateCheckTimer
+    interval: 30 * 60 * 1000
+    repeat: true
+    running: root.opened
+    onTriggered: if (!root.updateCheckBusy && !root.pluginUpdateBusy) root.checkPluginUpdate(false)
+  }
+
+  Timer {
+    id: pluginUpdateStartupCheckTimer
+    interval: 4000
+    repeat: false
+    running: true
+    onTriggered: root.checkPluginUpdate(false)
+  }
+
+  Timer {
+    id: pluginUpdatePunTimer
+    interval: 2200
+    repeat: true
+    running: false
+    onTriggered: {
+      if (root.pluginUpdateBusy) root.pluginUpdatePun = root._nextPluginUpdatePun();
+      else running = false;
+    }
+  }
+
+  Process {
+    id: pluginRepoResolveProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      var dir = HubModel.trimText(stdout.text || "");
+      if (dir.length === 0) dir = root.homeDir + "/Projects/vember-server";
+      root.pluginRepoDir = dir;
+      pluginUpdateAheadProc.running = false;
+      pluginUpdateAheadProc.command = ["sh", "-c",
+        "cd \"$1\" || exit 1; " +
+        "git fetch origin --quiet >/dev/null 2>&1 || true; " +
+        "git rev-list --count HEAD..@{upstream} 2>/dev/null || git rev-list --count HEAD..origin/master 2>/dev/null || echo 0",
+        "sh", dir];
+      pluginUpdateAheadProc.running = true;
+    }
+  }
+
+  Process {
+    id: pluginUpdateAheadProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.updateCheckBusy = false;
+      var n = Number(HubModel.trimText(stdout.text || "0"));
+      if (isNaN(n) || n < 0) n = 0;
+      root.pluginUpdateRemoteCommits = n;
+      root.updateAvailable = n > 0;
+      root.updateAvailableBuild = n > 0 ? (String(n) + " new commit" + (n === 1 ? "" : "s")) : "";
+      if (n > 0) {
+        root.pluginUpdateStatus = "Update ready on GitHub (" + root.updateAvailableBuild + ").";
+      } else if (HubModel.trimText(root.pluginUpdateStatus) === "Checking for updates…") {
+        root.pluginUpdateStatus = "You’re up to date.";
+      }
+    }
+  }
+
+  Process {
+    id: pluginUpdateFetchProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) {
+        root.pluginUpdateBusy = false;
+        pluginUpdatePunTimer.running = false;
+        root.pluginUpdateProgress = 0;
+        var err = HubModel.trimText(stderr.text || stdout.text || "");
+        root.pluginUpdateError = err.length > 0 ? err : ("git fetch failed (code " + code + ").");
+        root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
+        root.pluginUpdatePun = "Well, that didn’t ship. Check the status above.";
+        return;
+      }
+      root.pluginUpdateProgress = 0.45;
+      root.pluginUpdatePun = "Fetched! Now pulling the good stuff…";
+      pluginUpdatePullProc.running = false;
+      pluginUpdatePullProc.command = ["sh", "-c", "cd \"$1\" && git pull --ff-only 2>&1", "sh", root._resolvedPluginRepoDir()];
+      pluginUpdatePullProc.running = true;
+    }
+  }
+
+  Process {
+    id: pluginUpdatePullProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.pluginUpdateBusy = false;
+      pluginUpdatePunTimer.running = false;
+      if (code === 0) {
+        root.pluginUpdateProgress = 1;
+        root.updateAvailable = false;
+        root.pluginUpdateRemoteCommits = 0;
+        root.updateAvailableBuild = "";
+        var out = HubModel.trimText(stdout.text || "");
+        root.pluginUpdateStatus = "Update complete. Reload the hub to apply changes." + (out.length > 0 ? "" : "");
+        root.pluginUpdatePun = "All patched up! Time for a quick reload dance.";
+      } else {
+        root.pluginUpdateProgress = 0;
+        var err = HubModel.trimText(stderr.text || stdout.text || "");
+        root.pluginUpdateError = err.length > 0 ? err : ("git pull failed (code " + code + ").");
+        root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
+        root.pluginUpdatePun = "Update hit a snag. The repo might have local changes or need attention.";
+      }
+    }
   }
 
   HubPanel {
