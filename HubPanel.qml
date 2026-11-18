@@ -2902,6 +2902,7 @@ PanelWindow {
             spacing: 8
             anchors.right: parent.right
             Button {
+              visible: hub.configReady
               text: "Cancel"
               onClicked: {
                 hub.serverNameDraft = HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName();
