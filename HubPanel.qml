@@ -14,8 +14,9 @@ PanelWindow {
   property bool confirmPrune: false
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
-  property bool tabReorderMode: false
   property bool settingsMenuOpen: false
+  property bool arrangeTabsOpen: false
+  property var arrangeTabOrderDraft: []
   property bool updateDialogOpen: false
   property bool updateInProgress: false
   property real updateProgress: 0
@@ -35,6 +36,29 @@ PanelWindow {
     var out = [];
     for (var i = 0; i < order.length; i++) out.push(tabDef(order[i]));
     return out;
+  }
+
+  function openArrangeTabsDialog() {
+    var order = (hub && hub.tabOrder && hub.tabOrder.length > 0) ? hub.tabOrder : ["overview", "access", "containers", "games", "dev"];
+    panel.arrangeTabOrderDraft = order.slice(0);
+    panel.settingsMenuOpen = false;
+    panel.arrangeTabsOpen = true;
+  }
+
+  function moveArrangeTabDraft(index, delta) {
+    var next = (panel.arrangeTabOrderDraft || []).slice(0);
+    var j = index + delta;
+    if (index < 0 || j < 0 || index >= next.length || j >= next.length) return;
+    var tmp = next[index];
+    next[index] = next[j];
+    next[j] = tmp;
+    panel.arrangeTabOrderDraft = next;
+  }
+
+  function saveArrangeTabs() {
+    hub.tabOrder = (panel.arrangeTabOrderDraft || []).slice(0);
+    if (typeof hub.writeHubConfig === "function") hub.writeHubConfig(false);
+    panel.arrangeTabsOpen = false;
   }
 
   visible: hub.opened
@@ -195,30 +219,12 @@ PanelWindow {
             spacing: Style.spacing.sm
             Repeater {
               model: panel.orderedTabs()
-              delegate: Row {
+              delegate: Button {
                 required property var modelData
-                required property int index
-                spacing: 2
-                Button {
-                  visible: panel.tabReorderMode
-                  iconText: "󰅁"
-                  tooltipText: "Move left"
-                  enabled: index > 0
-                  onClicked: hub.moveTab(modelData.id, -1)
-                }
-                Button {
-                  iconText: modelData.icon
-                  text: modelData.label
-                  active: panel.currentTab === modelData.id
-                  onClicked: panel.currentTab = modelData.id
-                }
-                Button {
-                  visible: panel.tabReorderMode
-                  iconText: "󰅂"
-                  tooltipText: "Move right"
-                  enabled: index < (panel.orderedTabs().length - 1)
-                  onClicked: hub.moveTab(modelData.id, 1)
-                }
+                iconText: modelData.icon
+                text: modelData.label
+                active: panel.currentTab === modelData.id
+                onClicked: panel.currentTab = modelData.id
               }
             }
           }
@@ -2424,14 +2430,10 @@ PanelWindow {
 
           Button {
             width: parent.width
-            iconText: panel.tabReorderMode ? "󰄬" : "󰁁"
-            text: panel.tabReorderMode ? "Done arranging tabs" : "Arrange tabs"
-            tooltipText: "Reorder navigation tabs (saved automatically)"
-            active: panel.tabReorderMode
-            onClicked: {
-              panel.tabReorderMode = !panel.tabReorderMode;
-              panel.settingsMenuOpen = false;
-            }
+            iconText: "󰁁"
+            text: "Arrange tabs"
+            tooltipText: "Reorder navigation tabs"
+            onClicked: panel.openArrangeTabsDialog()
           }
           Button {
             width: parent.width
@@ -2458,6 +2460,119 @@ PanelWindow {
               } else {
                 hub.lastActionMessage = "Update checks from GitHub are not configured yet.";
               }
+            }
+          }
+        }
+      }
+    }
+
+    // Arrange tabs dialog
+    Rectangle {
+      visible: panel.arrangeTabsOpen
+      anchors.fill: parent
+      radius: card.radius
+      color: Qt.rgba(0, 0, 0, 0.45)
+      z: 155
+
+      MouseArea {
+        anchors.fill: parent
+        onClicked: panel.arrangeTabsOpen = false
+      }
+
+      Rectangle {
+        id: arrangeTabsDialog
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 80, 460)
+        radius: 14
+        color: Color.menu.background
+        border.color: accentSoft(0.25)
+        border.width: 1
+        implicitHeight: arrangeTabsCol.implicitHeight + 28
+
+        MouseArea { anchors.fill: parent; onClicked: {} }
+
+        Column {
+          id: arrangeTabsCol
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14
+          spacing: 12
+
+          RowLayout {
+            width: parent.width
+            spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰁁"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            ColumnLayout {
+              Layout.fillWidth: true
+              spacing: 2
+              Text { textFormat: Text.PlainText; text: "Arrange tabs"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Move tabs up or down, then save the order."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            }
+          }
+
+          Column {
+            width: parent.width
+            spacing: 6
+            Repeater {
+              model: panel.arrangeTabOrderDraft || []
+              delegate: Rectangle {
+                required property var modelData
+                required property int index
+                width: parent ? parent.width : 0
+                radius: 8
+                color: softText(0.04)
+                border.color: softText(0.08)
+                border.width: 1
+                implicitHeight: arrangeRow.implicitHeight + 12
+                RowLayout {
+                  id: arrangeRow
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 8
+                  spacing: 8
+                  Text {
+                    textFormat: Text.PlainText
+                    text: panel.tabDef(modelData).icon
+                    color: Color.accent
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                  }
+                  Text {
+                    textFormat: Text.PlainText
+                    text: panel.tabDef(modelData).label
+                    color: Color.menu.text
+                    font.family: Style.font.family
+                    font.bold: true
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                  }
+                  Button {
+                    iconText: "󰅃"
+                    tooltipText: "Move up"
+                    enabled: index > 0
+                    onClicked: panel.moveArrangeTabDraft(index, -1)
+                  }
+                  Button {
+                    iconText: "󰅀"
+                    tooltipText: "Move down"
+                    enabled: index < ((panel.arrangeTabOrderDraft || []).length - 1)
+                    onClicked: panel.moveArrangeTabDraft(index, 1)
+                  }
+                }
+              }
+            }
+          }
+
+          Row {
+            spacing: 8
+            anchors.right: parent.right
+            Button {
+              text: "Cancel"
+              onClicked: panel.arrangeTabsOpen = false
+            }
+            Button {
+              iconText: "󰄬"
+              text: "Save"
+              active: true
+              onClicked: panel.saveArrangeTabs()
             }
           }
         }
