@@ -841,16 +841,15 @@ Item {
   }
 
   function runOmarchyUpdateInPanel() {
+    if (omarchyUpdateRunning)
+      return;
     omarchyUpdateLog = "";
-    omarchyUpdateStatus = "Opening Omarchy update in terminal…";
-    lastActionMessage = "Starting Omarchy update.";
-    omarchyUpdateRunning = false;
+    omarchyUpdateStatus = "Running Omarchy update…";
+    lastActionMessage = "Running Omarchy update.";
+    omarchyUpdateRunning = true;
     omarchyUpdateLogProc.running = false;
-    omarchyUpdateProc.running = false;
-    omarchyUpdateProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation /usr/share/omarchy/bin/omarchy-update </dev/null >/dev/null 2>&1 &"];
-    omarchyUpdateProc.running = true;
-    closeAfterLaunchTimer.restart();
+    omarchyUpdateLogProc.command = ["/usr/share/omarchy/bin/omarchy-update"];
+    omarchyUpdateLogProc.running = true;
   }
 
   function stopOmarchyUpdateLog() {
@@ -1129,8 +1128,10 @@ Item {
     stderr: SplitParser { onRead: function(line) { omarchyUpdateLogProc.appendLog(line) } }
     onExited: function(code) {
       root.omarchyUpdateRunning = false;
-      if (HubModel.trimText(root.omarchyUpdateStatus).length === 0 || root.omarchyUpdateStatus.indexOf("Live log") === 0)
-        root.omarchyUpdateStatus = "Live log stopped.";
+      if (code === 0)
+        root.omarchyUpdateStatus = "Omarchy update finished.";
+      else
+        root.omarchyUpdateStatus = "Omarchy update exited (code " + code + ").";
     }
   }
 
