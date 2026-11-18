@@ -23,21 +23,49 @@ PanelWindow {
   property string updateStatusText: ""
   property bool toastVisible: false
   property string toastText: ""
+  property var toastQueue: []
 
   Timer {
     id: toastTimer
-    interval: 3500
+    interval: 4200
     repeat: false
-    onTriggered: panel.toastVisible = false
+    onTriggered: panel.advanceToast()
+  }
+
+  function advanceToast() {
+    if (panel.toastQueue && panel.toastQueue.length > 0) {
+      var next = panel.toastQueue.slice(1);
+      panel.toastQueue = next;
+      if (next.length > 0) {
+        panel.toastText = next[0];
+        panel.toastVisible = true;
+        toastTimer.restart();
+        return;
+      }
+    }
+    panel.toastVisible = false;
   }
 
   function showToastIfNeeded(msg) {
     var text = HubModel.trimText(msg);
     if (text.length === 0) return;
     if (text.indexOf("Docker ") === 0 || text.indexOf("Prun") === 0) return;
-    panel.toastText = text;
-    panel.toastVisible = true;
-    toastTimer.restart();
+
+    var q = (panel.toastQueue || []).slice(0);
+    // Avoid immediate duplicate spam
+    if (q.length > 0 && q[q.length - 1] === text) return;
+    if (q.length === 0 && panel.toastVisible && panel.toastText === text) return;
+
+    q.push(text);
+    // Keep queue bounded; prefer most recent messages
+    if (q.length > 4) q = q.slice(q.length - 4);
+    panel.toastQueue = q;
+
+    if (!panel.toastVisible) {
+      panel.toastText = q[0];
+      panel.toastVisible = true;
+      toastTimer.restart();
+    }
   }
 
   Connections {
