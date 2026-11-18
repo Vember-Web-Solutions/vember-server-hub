@@ -2614,17 +2614,7 @@ PanelWindow {
 
           Text {
             textFormat: Text.PlainText
-            text: "Choose a free host port (e.g. 14444, 8444, 13337). Changing the port for an existing container requires Uninstall, then Set up again."
-            color: softText(0.75)
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.Wrap
-            width: parent.width
-          }
-
-          Text {
-            textFormat: Text.PlainText
-            text: "Setup runs in a terminal (so you can see Docker pull/start output). If a container named vember-code-server already exists, setup will not recreate it."
+            text: "Pick a free host port. If the container already exists, Uninstall it first to change port or password."
             color: softText(0.72)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
