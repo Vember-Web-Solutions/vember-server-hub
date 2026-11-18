@@ -298,13 +298,17 @@ Item {
     var inner = [
       "set -e",
       "PASS=\"$1\"",
-      "mkdir -p \"$HOME/.config/vember-code-server\" \"$HOME/Projects\"",
+      "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/Projects\"",
+      "umask 077",
+      "{ echo 'bind-addr: 0.0.0.0:8080'; echo 'auth: password'; echo 'cert: false'; printf 'password: %s\\n' \"$PASS\"; } > \"$HOME/.config/vember-code-server/code-server/config.yaml\"",
+      "umask 022",
       "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then",
       "  echo 'Container vember-code-server already exists.'",
       "  echo 'State:' $(docker inspect -f '{{.State.Status}}' vember-code-server 2>/dev/null || echo unknown)",
       "  echo 'Ports:' $(docker port vember-code-server 2>/dev/null || echo unknown)",
       "  echo ''",
-      "  echo 'To change port or password, Uninstall the container in the hub, then run Set up again.'",
+      "  echo 'Config password updated. Restart the container in the hub to apply it.'",
+      "  echo 'To change port, Uninstall the container in the hub, then run Set up again.'",
       "else",
       "  if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 1; fi",
       "  if ! docker info >/dev/null 2>&1; then echo 'Docker is installed but not running or not accessible (try: sudo systemctl start docker, and ensure your user can access docker).'; exit 1; fi",
@@ -314,7 +318,7 @@ Item {
       "  echo 'URL: http://localhost:" + p + "'",
       "  echo 'Password: (the one you set in the hub)'",
       "  echo ''",
-      "  echo 'Config kept in ~/.config/vember-code-server'",
+      "  echo 'Config saved in ~/.config/vember-code-server'",
       "fi"
     ].join("\n") + "\necho\necho 'Press Enter to close...'\nread -r _close || true";
     codeServerActionProc.command = ["sh", "-c",
