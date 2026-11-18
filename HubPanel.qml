@@ -260,7 +260,7 @@ PanelWindow {
 
           Item { Layout.fillWidth: true }
 
-          // Right: update-ready + fullscreen + reload + settings + exit
+          // Right: update-ready + reload + fullscreen + settings + exit
           RowLayout {
             Layout.alignment: Qt.AlignVCenter
             spacing: 6
@@ -279,17 +279,17 @@ PanelWindow {
               }
             }
             Button {
-              iconText: panel.isFullscreen ? "󰊓" : "󰊔"
-              tooltipText: panel.isFullscreen ? "Exit fullscreen" : "Fullscreen"
-              active: panel.isFullscreen
-              onClicked: panel.toggleFullscreen()
-            }
-            Button {
               iconText: "󰑓"
               text: "Reload"
               tooltipText: "Reload hub (restart shell and reopen)"
               active: true
               onClicked: hub.hotReloadHub()
+            }
+            Button {
+              iconText: panel.isFullscreen ? "󰊓" : "󰊔"
+              tooltipText: panel.isFullscreen ? "Exit fullscreen" : "Fullscreen"
+              active: panel.isFullscreen
+              onClicked: panel.toggleFullscreen()
             }
             Button {
               id: settingsMenuButton
