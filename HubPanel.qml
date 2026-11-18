@@ -21,29 +21,16 @@ PanelWindow {
   property bool updateInProgress: false
   property real updateProgress: 0
   property string updateStatusText: ""
-  property bool toastVisible: false
-  property string toastText: ""
-  property var toastQueue: []
+  property var toastItems: []
+  property int toastSeq: 0
 
-  Timer {
-    id: toastTimer
-    interval: 4200
-    repeat: false
-    onTriggered: panel.advanceToast()
-  }
-
-  function advanceToast() {
-    if (panel.toastQueue && panel.toastQueue.length > 0) {
-      var next = panel.toastQueue.slice(1);
-      panel.toastQueue = next;
-      if (next.length > 0) {
-        panel.toastText = next[0];
-        panel.toastVisible = true;
-        toastTimer.restart();
-        return;
-      }
+  function removeToastById(id) {
+    var items = (panel.toastItems || []).slice(0);
+    var out = [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] && items[i].id !== id) out.push(items[i]);
     }
-    panel.toastVisible = false;
+    panel.toastItems = out;
   }
 
   function showToastIfNeeded(msg) {
@@ -51,21 +38,13 @@ PanelWindow {
     if (text.length === 0) return;
     if (text.indexOf("Docker ") === 0 || text.indexOf("Prun") === 0) return;
 
-    var q = (panel.toastQueue || []).slice(0);
-    // Avoid immediate duplicate spam
-    if (q.length > 0 && q[q.length - 1] === text) return;
-    if (q.length === 0 && panel.toastVisible && panel.toastText === text) return;
+    var items = (panel.toastItems || []).slice(0);
+    if (items.length > 0 && items[items.length - 1].text === text) return;
 
-    q.push(text);
-    // Keep queue bounded; prefer most recent messages
-    if (q.length > 4) q = q.slice(q.length - 4);
-    panel.toastQueue = q;
-
-    if (!panel.toastVisible) {
-      panel.toastText = q[0];
-      panel.toastVisible = true;
-      toastTimer.restart();
-    }
+    panel.toastSeq = panel.toastSeq + 1;
+    items.push({ id: panel.toastSeq, text: text });
+    if (items.length > 4) items = items.slice(items.length - 4);
+    panel.toastItems = items;
   }
 
   Connections {
@@ -2759,7 +2738,7 @@ PanelWindow {
       MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        onClicked: panel.toastVisible = false
+        onClicked: panel.advanceToast()
       }
     }
 
