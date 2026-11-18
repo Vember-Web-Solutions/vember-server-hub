@@ -43,7 +43,7 @@ Reload the shell if needed (the plugin UI hot-reloads in many cases, but backend
 Once the repository is hosted publicly, install with Omarchy’s plugin tooling:
 
 ```bash
-omarchy plugin add https://github.com/<owner>/<repo>.git
+omarchy plugin add https://github.com/Vember-Web-Solutions/vember-server-hub.git
 # optionally enable/placement prompts follow; or use --enable / --yes
 ```
 
