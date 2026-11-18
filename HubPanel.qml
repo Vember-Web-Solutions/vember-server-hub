@@ -30,6 +30,7 @@ PanelWindow {
   property string devSubTab: "workspace"
   property string accessSubTab: "tailnet"
   property string gamesSubTab: "launchers"
+  property string containersSubTab: "containers"
 
 
   function toggleFullscreen() {
@@ -1291,399 +1292,472 @@ PanelWindow {
             spacing: Style.spacing.md
             property int selectedContainerIndex: -1
 
-            Text {
-              textFormat: Text.PlainText
-              text: "View and manage Docker containers. Select a container to see details and actions."
-              color: softText(0.8)
-              font.family: Style.font.family
-              wrapMode: Text.Wrap
-              width: parent.width
-            }
-
-            Rectangle {
-              id: dockerBar
-              width: parent.width
-              radius: Style.cornerRadius
-              color: softText(0.05)
-              border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
-              border.width: 1
-              implicitHeight: dkHeader.implicitHeight + 24
-
-              function dockerStatusText() {
-                if (HubModel.trimText(hub.dockerError).length > 0)
-                  return hub.dockerError;
-                if (hub.dockerPruneBusy)
-                  return "Pruning stopped containers…";
-                if (hub.dockerContainers.length === 0)
-                  return "No containers found.";
-                var msg = HubModel.trimText(hub.lastActionMessage);
-                if (msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0)
-                  return msg;
-                return hub.dockerContainers.length + " container(s)";
+            Row {
+              spacing: 8
+              Button {
+                iconText: "󰡨"
+                text: "Containers"
+                active: panel.containersSubTab === "containers"
+                onClicked: panel.containersSubTab = "containers"
               }
-
-              function dockerStatusColor() {
-                if (HubModel.trimText(hub.dockerError).length > 0)
-                  return "#ef4444";
-                var msg = HubModel.trimText(hub.lastActionMessage);
-                if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && msg.indexOf("failed") !== -1)
-                  return "#ef4444";
-                if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && (msg.indexOf("succeeded") !== -1 || msg.indexOf("Pruned") === 0))
-                  return "#22c55e";
-                return softText(0.78);
-              }
-
-              Column {
-                id: dkHeader
-                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                anchors.margins: 14; spacing: 8
-
-                RowLayout {
-                  width: parent.width
-                  spacing: 12
-                  Rectangle {
-                    width: 40; height: 40; radius: 10
-                    color: accentSoft(0.14)
-                    Image {
-                      anchors.centerIn: parent
-                      source: "file:///usr/share/icons/hicolor/256x256/apps/docker.png"
-                      sourceSize.width: 24; sourceSize.height: 24
-                      width: 24; height: 24
-                      fillMode: Image.PreserveAspectFit
-                    }
-                  }
-                  ColumnLayout {
-                    Layout.fillWidth: true; spacing: 2
-                    Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                    Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                  }
-                  Button {
-                    iconText: "󰃢"
-                    text: hub.dockerPruneBusy ? "Pruning…" : "Prune stopped"
-                    tooltipText: "Remove all stopped containers (docker container prune -f)"
-                    enabled: !hub.dockerPruneBusy && !hub.dockerBusy
-                    onClicked: panel.confirmPrune = true
-                  }
-                }
-
-                Rectangle { width: parent.width; height: 1; color: softText(0.08) }
-
-                RowLayout {
-                  width: parent.width
-                  spacing: 8
-                  Rectangle {
-                    visible: HubModel.trimText(hub.dockerError).length > 0 || hub.dockerContainers.length === 0 || hub.dockerPruneBusy || HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") === 0 || HubModel.trimText(hub.lastActionMessage).indexOf("Prun") === 0
-                    width: 8; height: 8; radius: 4
-                    color: dockerBar.dockerStatusColor()
-                    Layout.alignment: Qt.AlignVCenter
-                  }
-                  Text {
-                    Layout.fillWidth: true
-                    textFormat: Text.PlainText
-                    text: dockerBar.dockerStatusText()
-                    color: dockerBar.dockerStatusColor()
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.Wrap
-                  }
-                }
+              Button {
+                iconText: "󰡨"
+                text: "Docker Hub"
+                active: panel.containersSubTab === "hub"
+                onClicked: panel.containersSubTab = "hub"
               }
             }
 
-            RowLayout {
+            Column {
+              visible: panel.containersSubTab === "containers"
               width: parent.width
-              spacing: 12
+              spacing: Style.spacing.md
 
-              // Left: container list
-              Column {
-                id: containersLeft
-                Layout.preferredWidth: Math.max(280, parent.width * 0.42)
-                Layout.alignment: Qt.AlignTop
-                spacing: 6
-
-                Text {
-                  visible: hub.dockerContainers.length === 0
-                  textFormat: Text.PlainText
-                  text: "No containers found."
-                  color: softText(0.7)
-                  font.family: Style.font.family
-                  font.pixelSize: Style.font.caption
-                }
-
-                Repeater {
-                  model: hub.dockerContainers
-                  delegate: Rectangle {
-                    required property var modelData
-                    required property int index
-                    width: containersLeft.width
-                    radius: 8
-                    color: containersTab.selectedContainerIndex === index ? accentSoft(0.14) : softText(0.03)
-                    border.color: containersTab.selectedContainerIndex === index ? accentSoft(0.35) : softText(0.08)
-                    border.width: 1
-                    implicitHeight: ctrItemCol.implicitHeight + 12
-                    MouseArea {
-                      anchors.fill: parent
-                      cursorShape: Qt.PointingHandCursor
-                      onClicked: containersTab.selectedContainerIndex = index
-                    }
-                    RowLayout {
-                      id: ctrItemCol
-                      anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                      anchors.margins: 8
-                      spacing: 8
-                      Rectangle {
-                        width: 10; height: 10; radius: 5
-                        color: panel.dockerStateTone(modelData.state)
-                        Layout.alignment: Qt.AlignVCenter
-                      }
-                      Column {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text {
-                          textFormat: Text.PlainText
-                          text: modelData.name || "unknown"
-                          color: Color.menu.text
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
-                          font.bold: true
-                          elide: Text.ElideRight
-                          width: parent.width
-                        }
-                        Text {
-                          visible: HubModel.trimText(modelData.image).length > 0
-                          textFormat: Text.PlainText
-                          text: modelData.image
-                          color: softText(0.7)
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
-                          elide: Text.ElideRight
-                          width: parent.width
-                        }
-                      }
-                      Text {
-                        textFormat: Text.PlainText
-                        text: modelData.state || ""
-                        color: panel.dockerStateTone(modelData.state)
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                      }
-                    }
-                  }
-                }
+              Text {
+                textFormat: Text.PlainText
+                text: "View and manage Docker containers. Select a container to see details and actions."
+                color: softText(0.8)
+                font.family: Style.font.family
+                wrapMode: Text.Wrap
+                width: parent.width
               }
 
-              // Divider
               Rectangle {
-                Layout.preferredWidth: 1
-                Layout.fillHeight: true
-                Layout.minimumHeight: 160
-                color: softText(0.08)
-              }
+                id: dockerBar
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: HubModel.trimText(hub.dockerError).length > 0 ? Qt.rgba(0.94, 0.27, 0.27, 0.35) : accentSoft(0.18)
+                border.width: 1
+                implicitHeight: dkHeader.implicitHeight + 24
 
-              // Right: details
-              Column {
-                id: containerDetails
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignTop
-                spacing: 10
-
-                property var selected: (containersTab.selectedContainerIndex >= 0 && containersTab.selectedContainerIndex < hub.dockerContainers.length) ? hub.dockerContainers[containersTab.selectedContainerIndex] : null
-                property bool selBusy: selected ? (hub.dockerBusy && hub.dockerBusyName === selected.name) : false
-                property bool selPulling: selected ? (hub.dockerPullActive && hub.dockerPullingName === selected.name) : false
-                property bool selPullResult: selected ? (!hub.dockerPullActive && hub.dockerPullingName === selected.name && HubModel.trimText(hub.dockerPullStatus).length > 0) : false
-
-                onSelectedChanged: {
-                  if (hub && hub.refreshDockerDetailSize)
-                    hub.refreshDockerDetailSize(selected ? selected.name : "");
+                function dockerStatusText() {
+                  if (HubModel.trimText(hub.dockerError).length > 0)
+                    return hub.dockerError;
+                  if (hub.dockerPruneBusy)
+                    return "Pruning stopped containers…";
+                  if (hub.dockerContainers.length === 0)
+                    return "No containers found.";
+                  var msg = HubModel.trimText(hub.lastActionMessage);
+                  if (msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0)
+                    return msg;
+                  return hub.dockerContainers.length + " container(s)";
                 }
 
-                Text {
-                  visible: !containerDetails.selected
-                  textFormat: Text.PlainText
-                  text: "Select a container to view details and actions."
-                  color: softText(0.7)
-                  font.family: Style.font.family
-                  wrapMode: Text.Wrap
-                  width: parent.width
+                function dockerStatusColor() {
+                  if (HubModel.trimText(hub.dockerError).length > 0)
+                    return "#ef4444";
+                  var msg = HubModel.trimText(hub.lastActionMessage);
+                  if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && msg.indexOf("failed") !== -1)
+                    return "#ef4444";
+                  if ((msg.indexOf("Docker ") === 0 || msg.indexOf("Prun") === 0) && (msg.indexOf("succeeded") !== -1 || msg.indexOf("Pruned") === 0))
+                    return "#22c55e";
+                  return softText(0.78);
                 }
 
                 Column {
-                  visible: !!containerDetails.selected
-                  width: parent.width
-                  spacing: 10
+                  id: dkHeader
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14; spacing: 8
 
                   RowLayout {
                     width: parent.width
-                    spacing: 10
+                    spacing: 12
                     Rectangle {
-                      width: 12; height: 12; radius: 6
-                      color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
-                      Layout.alignment: Qt.AlignVCenter
-                    }
-                    Text {
-                      textFormat: Text.PlainText
-                      text: containerDetails.selected ? (containerDetails.selected.name || "unknown") : ""
-                      color: Color.menu.text
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.large
-                      font.bold: true
-                      Layout.fillWidth: true
-                      elide: Text.ElideRight
-                    }
-                    Text {
-                      textFormat: Text.PlainText
-                      text: containerDetails.selected ? (containerDetails.selected.state || "") : ""
-                      color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
-                      font.family: Style.font.family
-                      font.pixelSize: Style.font.caption
-                      font.bold: true
-                    }
-                  }
-
-                  Text {
-                    visible: HubModel.trimText(containerDetails.selected ? (containerDetails.selected.image || "") : "").length > 0
-                    textFormat: Text.PlainText
-                    text: "Image: " + (containerDetails.selected ? (containerDetails.selected.image || "") : "")
-                    color: softText(0.85)
-                    font.family: Style.font.family
-                    wrapMode: Text.WrapAnywhere
-                    width: parent.width
-                  }
-
-                  Text {
-                    textFormat: Text.PlainText
-                    text: "Status: " + (containerDetails.selected ? (containerDetails.selected.status || containerDetails.selected.state || "unknown") : "")
-                    color: Color.menu.text
-                    font.family: Style.font.family
-                    wrapMode: Text.Wrap
-                    width: parent.width
-                  }
-
-                  RowLayout {
-                    width: parent.width
-                    spacing: 8
-                    Text {
-                      textFormat: Text.PlainText
-                      text: "Size:"
-                      color: Color.menu.text
-                      font.family: Style.font.family
-                    }
-                    Text {
-                      Layout.fillWidth: true
-                      textFormat: Text.PlainText
-                      text: {
-                        if (!containerDetails.selected) return "";
-                        if (hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name) return "Querying…";
-                        if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeError).length > 0) return hub.dockerDetailSizeError;
-                        if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0) return hub.dockerDetailSizeText;
-                        return "—";
+                      width: 40; height: 40; radius: 10
+                      color: accentSoft(0.14)
+                      Image {
+                        anchors.centerIn: parent
+                        source: "file:///usr/share/icons/hicolor/256x256/apps/docker.png"
+                        sourceSize.width: 24; sourceSize.height: 24
+                        width: 24; height: 24
+                        fillMode: Image.PreserveAspectFit
                       }
-                      color: (hub.dockerDetailSizeName === (containerDetails.selected ? containerDetails.selected.name : "") && HubModel.trimText(hub.dockerDetailSizeError).length > 0) ? "#ef4444" : softText(0.9)
-                      font.family: Style.font.family
-                      wrapMode: Text.Wrap
+                    }
+                    ColumnLayout {
+                      Layout.fillWidth: true; spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Running: " + panel.runningDockerCount() + " / " + hub.dockerContainers.length; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
                     Button {
-                      visible: !!containerDetails.selected
-                      iconText: "󰑐"
-                      text: "Query"
-                      enabled: !!containerDetails.selected && !(hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name)
-                      tooltipText: "Query container disk size (docker ps -s)"
-                      onClicked: if (containerDetails.selected) hub.refreshDockerDetailSize(containerDetails.selected.name)
-                    }
-                  }
-                  Text {
-                    visible: !!containerDetails.selected && hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0
-                    textFormat: Text.PlainText
-                    text: "Writable layer / virtual size (as reported by Docker)."
-                    color: softText(0.65)
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.Wrap
-                    width: parent.width
-                  }
-
-                  // Pull progress/result
-                  Column {
-                    visible: containerDetails.selPulling || containerDetails.selPullResult
-                    width: parent.width
-                    spacing: 6
-                    Rectangle {
-                      width: parent.width
-                      radius: 8
-                      color: accentSoft(0.10)
-                      border.color: accentSoft(0.20)
-                      border.width: 1
-                      implicitHeight: pullInfoCol.implicitHeight + 12
-                      Column {
-                        id: pullInfoCol
-                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                        anchors.margins: 8
-                        spacing: 6
-                        Text {
-                          textFormat: Text.PlainText
-                          text: containerDetails.selPulling ? hub.dockerPullStatus : (hub.dockerPullResult.length > 0 ? hub.dockerPullResult : hub.dockerPullStatus)
-                          color: Color.menu.text
-                          font.family: Style.font.family
-                          font.pixelSize: Style.font.caption
-                          wrapMode: Text.Wrap
-                          width: parent.width
-                        }
-                        Rectangle {
-                          visible: containerDetails.selPulling
-                          width: parent.width
-                          height: 8
-                          radius: 4
-                          color: softText(0.12)
-                          clip: true
-                          Rectangle {
-                            id: selProgressFill
-                            height: parent.height
-                            radius: 4
-                            color: Color.accent
-                            width: hub.dockerPullPercent >= 0 ? (parent.width * hub.dockerPullPercent) : (parent.width * 0.35)
-                            x: hub.dockerPullPercent >= 0 ? 0 : -width
-                            Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
-                            SequentialAnimation on x {
-                              running: hub.dockerPullPercent < 0 && containerDetails.selPulling
-                              loops: Animation.Infinite
-                              NumberAnimation { from: -selProgressFill.width; to: selProgressTrackW.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
-                            }
-                          }
-                          Item { id: selProgressTrackW; anchors.fill: parent }
-                        }
-                      }
+                      iconText: "󰃢"
+                      text: hub.dockerPruneBusy ? "Pruning…" : "Prune stopped"
+                      tooltipText: "Remove all stopped containers (docker container prune -f)"
+                      enabled: !hub.dockerPruneBusy && !hub.dockerBusy
+                      onClicked: panel.confirmPrune = true
                     }
                   }
 
                   Rectangle { width: parent.width; height: 1; color: softText(0.08) }
 
+                  RowLayout {
+                    width: parent.width
+                    spacing: 8
+                    Rectangle {
+                      visible: HubModel.trimText(hub.dockerError).length > 0 || hub.dockerContainers.length === 0 || hub.dockerPruneBusy || HubModel.trimText(hub.lastActionMessage).indexOf("Docker ") === 0 || HubModel.trimText(hub.lastActionMessage).indexOf("Prun") === 0
+                      width: 8; height: 8; radius: 4
+                      color: dockerBar.dockerStatusColor()
+                      Layout.alignment: Qt.AlignVCenter
+                    }
+                    Text {
+                      Layout.fillWidth: true
+                      textFormat: Text.PlainText
+                      text: dockerBar.dockerStatusText()
+                      color: dockerBar.dockerStatusColor()
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                    }
+                  }
+                }
+              }
+
+              RowLayout {
+                width: parent.width
+                spacing: 12
+
+                // Left: container list
+                Column {
+                  id: containersLeft
+                  Layout.preferredWidth: Math.max(280, parent.width * 0.42)
+                  Layout.alignment: Qt.AlignTop
+                  spacing: 6
+
+                  Text {
+                    visible: hub.dockerContainers.length === 0
+                    textFormat: Text.PlainText
+                    text: "No containers found."
+                    color: softText(0.7)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+
+                  Repeater {
+                    model: hub.dockerContainers
+                    delegate: Rectangle {
+                      required property var modelData
+                      required property int index
+                      width: containersLeft.width
+                      radius: 8
+                      color: containersTab.selectedContainerIndex === index ? accentSoft(0.14) : softText(0.03)
+                      border.color: containersTab.selectedContainerIndex === index ? accentSoft(0.35) : softText(0.08)
+                      border.width: 1
+                      implicitHeight: ctrItemCol.implicitHeight + 12
+                      MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: containersTab.selectedContainerIndex = index
+                      }
+                      RowLayout {
+                        id: ctrItemCol
+                        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                        anchors.margins: 8
+                        spacing: 8
+                        Rectangle {
+                          width: 10; height: 10; radius: 5
+                          color: panel.dockerStateTone(modelData.state)
+                          Layout.alignment: Qt.AlignVCenter
+                        }
+                        Column {
+                          Layout.fillWidth: true
+                          spacing: 2
+                          Text {
+                            textFormat: Text.PlainText
+                            text: modelData.name || "unknown"
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            elide: Text.ElideRight
+                            width: parent.width
+                          }
+                          Text {
+                            visible: HubModel.trimText(modelData.image).length > 0
+                            textFormat: Text.PlainText
+                            text: modelData.image
+                            color: softText(0.7)
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideRight
+                            width: parent.width
+                          }
+                        }
+                        Text {
+                          textFormat: Text.PlainText
+                          text: modelData.state || ""
+                          color: panel.dockerStateTone(modelData.state)
+                          font.family: Style.font.family
+                          font.pixelSize: Style.font.caption
+                        }
+                      }
+                    }
+                  }
+                }
+
+                // Divider
+                Rectangle {
+                  Layout.preferredWidth: 1
+                  Layout.fillHeight: true
+                  Layout.minimumHeight: 160
+                  color: softText(0.08)
+                }
+
+                // Right: details
+                Column {
+                  id: containerDetails
+                  Layout.fillWidth: true
+                  Layout.alignment: Qt.AlignTop
+                  spacing: 10
+
+                  property var selected: (containersTab.selectedContainerIndex >= 0 && containersTab.selectedContainerIndex < hub.dockerContainers.length) ? hub.dockerContainers[containersTab.selectedContainerIndex] : null
+                  property bool selBusy: selected ? (hub.dockerBusy && hub.dockerBusyName === selected.name) : false
+                  property bool selPulling: selected ? (hub.dockerPullActive && hub.dockerPullingName === selected.name) : false
+                  property bool selPullResult: selected ? (!hub.dockerPullActive && hub.dockerPullingName === selected.name && HubModel.trimText(hub.dockerPullStatus).length > 0) : false
+
+                  onSelectedChanged: {
+                    if (hub && hub.refreshDockerDetailSize)
+                      hub.refreshDockerDetailSize(selected ? selected.name : "");
+                  }
+
+                  Text {
+                    visible: !containerDetails.selected
+                    textFormat: Text.PlainText
+                    text: "Select a container to view details and actions."
+                    color: softText(0.7)
+                    font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  Column {
+                    visible: !!containerDetails.selected
+                    width: parent.width
+                    spacing: 10
+
+                    RowLayout {
+                      width: parent.width
+                      spacing: 10
+                      Rectangle {
+                        width: 12; height: 12; radius: 6
+                        color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
+                        Layout.alignment: Qt.AlignVCenter
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: containerDetails.selected ? (containerDetails.selected.name || "unknown") : ""
+                        color: Color.menu.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.large
+                        font.bold: true
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                      }
+                      Text {
+                        textFormat: Text.PlainText
+                        text: containerDetails.selected ? (containerDetails.selected.state || "") : ""
+                        color: panel.dockerStateTone(containerDetails.selected ? containerDetails.selected.state : "")
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                      }
+                    }
+
+                    Text {
+                      visible: HubModel.trimText(containerDetails.selected ? (containerDetails.selected.image || "") : "").length > 0
+                      textFormat: Text.PlainText
+                      text: "Image: " + (containerDetails.selected ? (containerDetails.selected.image || "") : "")
+                      color: softText(0.85)
+                      font.family: Style.font.family
+                      wrapMode: Text.WrapAnywhere
+                      width: parent.width
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      text: "Status: " + (containerDetails.selected ? (containerDetails.selected.status || containerDetails.selected.state || "unknown") : "")
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+
+                    RowLayout {
+                      width: parent.width
+                      spacing: 8
+                      Text {
+                        textFormat: Text.PlainText
+                        text: "Size:"
+                        color: Color.menu.text
+                        font.family: Style.font.family
+                      }
+                      Text {
+                        Layout.fillWidth: true
+                        textFormat: Text.PlainText
+                        text: {
+                          if (!containerDetails.selected) return "";
+                          if (hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name) return "Querying…";
+                          if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeError).length > 0) return hub.dockerDetailSizeError;
+                          if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0) return hub.dockerDetailSizeText;
+                          return "—";
+                        }
+                        color: (hub.dockerDetailSizeName === (containerDetails.selected ? containerDetails.selected.name : "") && HubModel.trimText(hub.dockerDetailSizeError).length > 0) ? "#ef4444" : softText(0.9)
+                        font.family: Style.font.family
+                        wrapMode: Text.Wrap
+                      }
+                      Button {
+                        visible: !!containerDetails.selected
+                        iconText: "󰑐"
+                        text: "Query"
+                        enabled: !!containerDetails.selected && !(hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name)
+                        tooltipText: "Query container disk size (docker ps -s)"
+                        onClicked: if (containerDetails.selected) hub.refreshDockerDetailSize(containerDetails.selected.name)
+                      }
+                    }
+                    Text {
+                      visible: !!containerDetails.selected && hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0
+                      textFormat: Text.PlainText
+                      text: "Writable layer / virtual size (as reported by Docker)."
+                      color: softText(0.65)
+                      font.family: Style.font.family
+                      font.pixelSize: Style.font.caption
+                      wrapMode: Text.Wrap
+                      width: parent.width
+                    }
+
+                    // Pull progress/result
+                    Column {
+                      visible: containerDetails.selPulling || containerDetails.selPullResult
+                      width: parent.width
+                      spacing: 6
+                      Rectangle {
+                        width: parent.width
+                        radius: 8
+                        color: accentSoft(0.10)
+                        border.color: accentSoft(0.20)
+                        border.width: 1
+                        implicitHeight: pullInfoCol.implicitHeight + 12
+                        Column {
+                          id: pullInfoCol
+                          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                          anchors.margins: 8
+                          spacing: 6
+                          Text {
+                            textFormat: Text.PlainText
+                            text: containerDetails.selPulling ? hub.dockerPullStatus : (hub.dockerPullResult.length > 0 ? hub.dockerPullResult : hub.dockerPullStatus)
+                            color: Color.menu.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.Wrap
+                            width: parent.width
+                          }
+                          Rectangle {
+                            visible: containerDetails.selPulling
+                            width: parent.width
+                            height: 8
+                            radius: 4
+                            color: softText(0.12)
+                            clip: true
+                            Rectangle {
+                              id: selProgressFill
+                              height: parent.height
+                              radius: 4
+                              color: Color.accent
+                              width: hub.dockerPullPercent >= 0 ? (parent.width * hub.dockerPullPercent) : (parent.width * 0.35)
+                              x: hub.dockerPullPercent >= 0 ? 0 : -width
+                              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                              SequentialAnimation on x {
+                                running: hub.dockerPullPercent < 0 && containerDetails.selPulling
+                                loops: Animation.Infinite
+                                NumberAnimation { from: -selProgressFill.width; to: selProgressTrackW.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
+                              }
+                            }
+                            Item { id: selProgressTrackW; anchors.fill: parent }
+                          }
+                        }
+                      }
+                    }
+
+                    Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+
+                    Flow {
+                      width: parent.width
+                      spacing: 8
+                      Button {
+                        iconText: "󰐊"
+                        text: "Start"
+                        enabled: !containerDetails.selBusy && !!containerDetails.selected
+                        onClicked: if (containerDetails.selected) hub.runDockerAction("start", containerDetails.selected.name)
+                      }
+                      Button {
+                        iconText: "󰓛"
+                        text: "Stop"
+                        enabled: !containerDetails.selBusy && !!containerDetails.selected
+                        onClicked: if (containerDetails.selected) hub.runDockerAction("stop", containerDetails.selected.name)
+                      }
+                      Button {
+                        iconText: "󰑐"
+                        text: "Restart"
+                        enabled: !containerDetails.selBusy && !!containerDetails.selected
+                        onClicked: if (containerDetails.selected) hub.runDockerAction("restart", containerDetails.selected.name)
+                      }
+                      Button {
+                        iconText: "󰚰"
+                        text: containerDetails.selPulling ? "Pulling…" : "Pull image"
+                        enabled: !containerDetails.selBusy && !!containerDetails.selected && HubModel.trimText(containerDetails.selected.image || "").length > 0
+                        tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
+                        onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
+                      }
+                    }
+                  }
+                }
+              }
+            }
+
+            Column {
+              visible: panel.containersSubTab === "hub"
+              width: parent.width
+              spacing: Style.spacing.md
+
+              Rectangle {
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.05)
+                border.color: accentSoft(0.18)
+                border.width: 1
+                implicitHeight: dockerHubCol.implicitHeight + 24
+                Column {
+                  id: dockerHubCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 14
+                  spacing: 12
+                  RowLayout {
+                    width: parent.width
+                    spacing: 10
+                    Text { textFormat: Text.PlainText; text: "󰡨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+                    ColumnLayout {
+                      Layout.fillWidth: true
+                      spacing: 2
+                      Text { textFormat: Text.PlainText; text: "Docker Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Browse images, tags, and documentation on Docker Hub."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                    }
+                  }
+                  Rectangle { width: parent.width; height: 1; color: softText(0.08) }
+                  Text { textFormat: Text.PlainText; text: "Find official images and community containers, then pull them from the Containers tab."; color: softText(0.85); font.family: Style.font.family; wrapMode: Text.Wrap; width: parent.width }
                   Flow {
                     width: parent.width
                     spacing: 8
                     Button {
-                      iconText: "󰐊"
-                      text: "Start"
-                      enabled: !containerDetails.selBusy && !!containerDetails.selected
-                      onClicked: if (containerDetails.selected) hub.runDockerAction("start", containerDetails.selected.name)
+                      iconText: "󰖟"
+                      text: "Open Docker Hub"
+                      active: true
+                      tooltipText: "Open https://hub.docker.com in your browser"
+                      onClicked: Qt.openUrlExternally("https://hub.docker.com")
                     }
                     Button {
-                      iconText: "󰓛"
-                      text: "Stop"
-                      enabled: !containerDetails.selBusy && !!containerDetails.selected
-                      onClicked: if (containerDetails.selected) hub.runDockerAction("stop", containerDetails.selected.name)
-                    }
-                    Button {
-                      iconText: "󰑐"
-                      text: "Restart"
-                      enabled: !containerDetails.selBusy && !!containerDetails.selected
-                      onClicked: if (containerDetails.selected) hub.runDockerAction("restart", containerDetails.selected.name)
-                    }
-                    Button {
-                      iconText: "󰚰"
-                      text: containerDetails.selPulling ? "Pulling…" : "Pull image"
-                      enabled: !containerDetails.selBusy && !!containerDetails.selected && HubModel.trimText(containerDetails.selected.image || "").length > 0
-                      tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
-                      onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
+                      iconText: "󰍉"
+                      text: "Explore images"
+                      tooltipText: "Browse Docker Hub explore page"
+                      onClicked: Qt.openUrlExternally("https://hub.docker.com/search?q=&type=image")
                     }
                   }
                 }
