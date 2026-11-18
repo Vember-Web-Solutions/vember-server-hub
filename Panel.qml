@@ -846,14 +846,15 @@ Item {
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
     var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]:-$?}; echo \"[vember-update-exit:${code}]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
-    omarchyUpdateStatus = "Running Omarchy update in terminal (interactive)… streaming live log below.";
-    lastActionMessage = "Running Omarchy update in terminal.";
+    omarchyUpdateStatus = "Running Omarchy update in default terminal (interactive)… streaming live log below.";
+    lastActionMessage = "Running Omarchy update in default terminal.";
     omarchyUpdateRunning = true;
     omarchyUpdateLogProc.running = false;
     omarchyUpdateTerminalProc.running = false;
     omarchyUpdateTerminalProc.command = ["sh", "-c",
       "mkdir -p \"$HOME/.cache/vember-server-hub\" && : > \"$1\" && " +
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 &",
+      "xdg-terminal-exec -T \"Vember Omarchy Update\" -e bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 & " +
+      "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true",
       "sh", logPath];
     omarchyUpdateTerminalProc.running = true;
     omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-f", logPath];

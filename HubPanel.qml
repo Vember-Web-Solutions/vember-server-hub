@@ -778,7 +778,7 @@ PanelWindow {
                       Layout.fillWidth: true
                       spacing: 2
                       Text { textFormat: Text.PlainText; text: "Update Omarchy"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-                      Text { textFormat: Text.PlainText; text: "Run Omarchy update in a terminal (so you can answer prompts) while streaming live output below."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+                      Text { textFormat: Text.PlainText; text: "Run Omarchy update in your default terminal (so you can answer prompts) while streaming live output below. The hub will try to focus the terminal."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
                   Rectangle { width: parent.width; height: 1; color: softText(0.08) }
