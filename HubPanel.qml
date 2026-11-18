@@ -233,30 +233,21 @@ PanelWindow {
             }
             Column {
               spacing: 0
-              MouseArea {
-                width: childrenRect.width
-                height: childrenRect.height
-                cursorShape: Qt.PointingHandCursor
-                onClicked: hub.openWizard(hub.serverName || hub.defaultServerName())
-                Column {
-                  spacing: 0
-                  Text {
-                    textFormat: Text.PlainText
-                    text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : "Vember Server Hub"
-                    color: Color.menu.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.large
-                    font.bold: true
-                  }
-                  Text {
-                    visible: HubModel.trimText(hub.serverName).length > 0 && HubModel.trimText(hub.serverRole).length > 0
-                    textFormat: Text.PlainText
-                    text: hub.serverRole
-                    color: softText(0.65)
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                  }
-                }
+              Text {
+                textFormat: Text.PlainText
+                text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : "Vember Server Hub"
+                color: Color.menu.text
+                font.family: Style.font.family
+                font.pixelSize: Style.font.large
+                font.bold: true
+              }
+              Text {
+                visible: HubModel.trimText(hub.serverName).length > 0 && HubModel.trimText(hub.serverRole).length > 0
+                textFormat: Text.PlainText
+                text: hub.serverRole
+                color: softText(0.65)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
               }
             }
           }
