@@ -53,6 +53,10 @@ Item {
   property real dockerPullPercent: -1
   property string dockerPullResult: ""
   property bool dockerPruneBusy: false
+  property string dockerDetailSizeName: ""
+  property string dockerDetailSizeText: ""
+  property bool dockerDetailSizeBusy: false
+  property string dockerDetailSizeError: ""
 
   property bool steamInstalled: false
   property bool steamRunning: false
@@ -116,6 +120,7 @@ Item {
   property double codeServerSetupBytesDone: 0
   property double codeServerSetupBytesTotal: 0
   property var _codeServerPullLayers: ({})
+  property bool codeServerSetupProvisionAfterStart: false
 
   function open(payloadJson) {
     if (Quickshell.screens && Quickshell.screens.length > 0)
@@ -242,15 +247,36 @@ Item {
     var editor = HubModel.trimText(preferredEditor);
     if (editor.length === 0) {
       devStatus = "Select a preferred editor in Dev tab to open repositories.";
+      lastActionMessage = devStatus;
       return;
     }
-    var cmd = "";
-    if (editor === "zed") cmd = "command -v zed >/dev/null 2>&1 && zed \"$1\" >/dev/null 2>&1 & || command -v zeditor >/dev/null 2>&1 && zeditor \"$1\" >/dev/null 2>&1 &";
-    else if (editor === "vscode") cmd = "command -v code >/dev/null 2>&1 && code \"$1\" >/dev/null 2>&1 & || command -v code-oss >/dev/null 2>&1 && code-oss \"$1\" >/dev/null 2>&1 &";
-    else cmd = "echo 'Unsupported editor: " + editor + "'";
+    var cmd = [
+      "set -eu",
+      "path=\"$1\"",
+      "editor=\"$2\"",
+      "bin=\"\"",
+      "if [ \"$editor\" = zed ]; then",
+      "  command -v zeditor >/dev/null 2>&1 && bin=zeditor || true",
+      "  [ -z \"$bin\" ] && command -v zed >/dev/null 2>&1 && bin=zed || true",
+      "elif [ \"$editor\" = vscode ]; then",
+      "  command -v code >/dev/null 2>&1 && bin=code || true",
+      "  [ -z \"$bin\" ] && command -v code-oss >/dev/null 2>&1 && bin=code-oss || true",
+      "else",
+      "  echo \"Unsupported editor: $editor\" >&2",
+      "  exit 2",
+      "fi",
+      "if [ -z \"$bin\" ]; then",
+      "  echo \"Editor not found in PATH for: $editor\" >&2",
+      "  exit 127",
+      "fi",
+      "echo \"BIN=$bin\"",
+      "nohup \"$bin\" \"$path\" >/dev/null 2>&1 &",
+      "exit 0"
+    ].join("\n");
     devOpenRepoProc.repoPath = path;
+    devOpenRepoProc.editorId = editor;
     devOpenRepoProc.running = false;
-    devOpenRepoProc.command = ["sh", "-c", cmd, "sh", path];
+    devOpenRepoProc.command = ["sh", "-c", cmd, "sh", path, editor];
     devOpenRepoProc.running = true;
     devStatus = "Opening " + path + " in " + HubModel.devToolLabel(editor) + "…";
   }
@@ -403,11 +429,42 @@ Item {
       "PORT=\"$2\"",
       "echo \"Password received (length: ${#PASS}).\"",
       "if [ -z \"$PASS\" ]; then echo 'Password is empty; aborting.'; exit 1; fi",
-      "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/Projects\"",
+      "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/.config/vember-code-server/user-data\" \"$HOME/.config/vember-code-server/bin\" \"$HOME/Projects\"",
       "umask 077",
       "printf 'PASSWORD=%s\\n' \"$PASS\" > \"$HOME/.config/vember-code-server/code-server.env\"",
       "{ echo 'bind-addr: 0.0.0.0:8080'; echo 'auth: password'; echo 'cert: false'; } > \"$HOME/.config/vember-code-server/code-server/config.yaml\"",
       "umask 022",
+      "if [ ! -f \"$HOME/Projects/vember-python.code-workspace\" ]; then cat > \"$HOME/Projects/vember-python.code-workspace\" <<'JSON'",
+      "{",
+      "  \"folders\": [",
+      "    { \"path\": \".\" }",
+      "  ],",
+      "  \"settings\": {",
+      "    \"python.defaultInterpreterPath\": \"python3\",",
+      "    \"python.terminal.activateEnvironment\": true,",
+      "    \"ruff.enable\": true,",
+      "    \"editor.formatOnSave\": true,",
+      "    \"[python]\": {",
+      "      \"editor.defaultFormatter\": \"charliermarsh.ruff\",",
+      "      \"editor.codeActionsOnSave\": {",
+      "        \"source.fixAll.ruff\": \"explicit\",",
+      "        \"source.organizeImports.ruff\": \"explicit\"",
+      "      }",
+      "    }",
+      "  },",
+      "  \"extensions\": {",
+      "    \"recommendations\": [",
+      "      \"ms-python.python\",",
+      "      \"ms-python.debugpy\",",
+      "      \"charliermarsh.ruff\"",
+      "    ]",
+      "  }",
+      "}",
+      "JSON",
+      "  echo 'Created default Python workspace: ~/Projects/vember-python.code-workspace'",
+      "else",
+      "  echo 'Default Python workspace already exists: ~/Projects/vember-python.code-workspace'",
+      "fi",
       "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then echo 'EXISTS'; exit 10; fi",
       "if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 11; fi",
       "if ! docker info >/dev/null 2>&1; then echo 'Docker is not running or not accessible (try starting docker and ensuring access).'; exit 12; fi",
@@ -443,7 +500,9 @@ Item {
     codeServerSetupDetail = "";
     codeServerSetupProgress = -1;
     codeServerSetupPollsLeft = 0;
+    codeServerSetupProvisionAfterStart = false;
     codeServerSetupPollTimer.stop();
+    codeServerSetupProvisionProc.running = false;
     codeServerActionProc.actionName = "uninstall";
     codeServerActionProc.command = ["docker", "rm", "-f", "vember-code-server"];
     codeServerActionProc.running = true;
@@ -577,6 +636,22 @@ Item {
   function refreshDocker() {
     dockerError = "";
     if (!dockerPsProc.running) dockerPsProc.running = true;
+  }
+
+  function refreshDockerDetailSize(name) {
+    var target = HubModel.trimText(name);
+    dockerDetailSizeName = target;
+    dockerDetailSizeText = "";
+    dockerDetailSizeError = "";
+    dockerSizeProc.running = false;
+    if (target.length === 0) {
+      dockerDetailSizeBusy = false;
+      return;
+    }
+    dockerDetailSizeBusy = true;
+    dockerSizeProc.containerName = target;
+    dockerSizeProc.command = ["docker", "ps", "-a", "-s", "--no-trunc", "--filter", "name=^/" + target + "$", "--format", "{{.Size}}"];
+    dockerSizeProc.running = true;
   }
 
   function refreshGameMount() {
@@ -1007,6 +1082,33 @@ Item {
     }
   }
 
+  Process {
+    id: dockerSizeProc
+    property string containerName: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (containerName !== root.dockerDetailSizeName)
+        return;
+      root.dockerDetailSizeBusy = false;
+      if (code === 0) {
+        var out = HubModel.trimText(stdout.text || "");
+        var line = "";
+        var parts = out.split(/\r?\n/);
+        for (var i = 0; i < parts.length; i++) {
+          var t = HubModel.trimText(parts[i]);
+          if (t.length > 0) { line = t; break; }
+        }
+        root.dockerDetailSizeText = line.length > 0 ? line : "Unknown";
+        root.dockerDetailSizeError = "";
+      } else {
+        var err = HubModel.trimText(stderr.text || "");
+        root.dockerDetailSizeText = "";
+        root.dockerDetailSizeError = err.length > 0 ? err : ("Failed to query size (code " + code + ").");
+      }
+    }
+  }
+
   function pruneStoppedContainers() {
     if (dockerPruneBusy || dockerBusy)
       return;
@@ -1360,8 +1462,23 @@ Item {
   Process {
     id: devOpenRepoProc
     property string repoPath: ""
+    property string editorId: ""
     stdout: StdioCollector {}
     stderr: StdioCollector {}
+    onExited: function(code) {
+      var label = HubModel.devToolLabel(editorId);
+      if (code === 0) {
+        var out = HubModel.trimText(stdout.text || "");
+        var bin = out.indexOf("BIN=") === 0 ? HubModel.trimText(out.slice(4)) : "";
+        root.devStatus = "Opened " + repoPath + " in " + label + (bin.length > 0 ? (" (" + bin + ")") : "") + ".";
+        root.lastActionMessage = "Opened in " + label + ".";
+      } else {
+        var err = HubModel.trimText(stderr.text || "");
+        var msg = err.length > 0 ? err : ("Failed to open in " + label + " (code " + code + ").");
+        root.devStatus = msg;
+        root.lastActionMessage = msg;
+      }
+    }
   }
   Timer {
     id: codeServerSetupPollTimer
@@ -1371,6 +1488,15 @@ Item {
     onTriggered: {
       if (root.codeServerSetupPollsLeft <= 0) {
         running = false;
+        if (root.codeServerSetupStage === "starting") {
+          root.codeServerBusy = false;
+          root.codeServerSetupStage = "error";
+          root.codeServerSetupProgress = 0;
+          root.codeServerSetupDetail = "Container did not reach running state in time. See debug log/status.";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+          root.devStatus = root.codeServerSetupDetail;
+          root._appendCodeServerSetupLog(root.codeServerSetupDetail);
+        }
         return;
       }
       root.codeServerSetupPollsLeft -= 1;
@@ -1378,13 +1504,40 @@ Item {
       root.refreshDocker();
       if (root.codeServerRunning) {
         running = false;
-        root.codeServerBusy = false;
-        root.codeServerSetupStage = "done";
-        root.codeServerSetupProgress = 1;
-        root.codeServerSetupDetail = "VS Code Server is running on port " + root.codeServerPort + ".";
-        root.codeServerStatusText = root.codeServerSetupDetail;
-        root.devStatus = "VS Code Server ready at http://localhost:" + root.codeServerPort;
-        root._appendCodeServerSetupLog("Ready: running on port " + root.codeServerPort);
+        if (root.codeServerSetupProvisionAfterStart) {
+          root.codeServerSetupProvisionAfterStart = false;
+          root.codeServerSetupStage = "provisioning";
+          root.codeServerSetupProgress = -1;
+          root.codeServerSetupDetail = "Installing uv, Python tools, and extensions inside the container…";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+          root._appendCodeServerSetupLog("Container running. Provisioning tools and extensions…");
+          var prov = [
+            "set -e",
+            "echo 'Provisioning code-server environment…'",
+            "export PATH=/home/coder/.local/bin:$PATH",
+            "if ! command -v uv >/dev/null 2>&1; then echo 'Installing uv…'; curl -LsSf https://astral.sh/uv/install.sh | sh; else echo 'uv already installed.'; fi",
+            "sudo install -m 755 /home/coder/.local/bin/uv /usr/local/bin/uv 2>/dev/null || true",
+            "sudo install -m 755 /home/coder/.local/bin/uvx /usr/local/bin/uvx 2>/dev/null || true",
+            "if command -v uv >/dev/null 2>&1; then uv --version || true; fi",
+            "if ! command -v python3 >/dev/null 2>&1; then echo 'Installing python3 (apt)…'; sudo apt-get update; sudo apt-get install -y python3 python3-pip python3-venv; else echo 'python3 already installed.'; python3 --version || true; fi",
+            "echo 'Installing VS Code extensions (ms-python.python, ms-python.debugpy, charliermarsh.ruff)…'",
+            "code-server --install-extension ms-python.python --force || true",
+            "code-server --install-extension ms-python.debugpy --force || true",
+            "code-server --install-extension charliermarsh.ruff --force || true",
+            "echo 'Provisioning complete.'"
+          ].join("\n");
+          codeServerSetupProvisionProc.running = false;
+          codeServerSetupProvisionProc.command = ["docker", "exec", "vember-code-server", "bash", "-lc", prov];
+          codeServerSetupProvisionProc.running = true;
+        } else {
+          root.codeServerBusy = false;
+          root.codeServerSetupStage = "done";
+          root.codeServerSetupProgress = 1;
+          root.codeServerSetupDetail = "VS Code Server is running on port " + root.codeServerPort + ".";
+          root.codeServerStatusText = root.codeServerSetupDetail;
+          root.devStatus = "VS Code Server ready at http://localhost:" + root.codeServerPort;
+          root._appendCodeServerSetupLog("Ready: running on port " + root.codeServerPort);
+        }
       }
     }
   }
@@ -1461,16 +1614,20 @@ Item {
         root.codeServerStatusText = root.codeServerSetupDetail;
         root._appendCodeServerSetupLog("Image pull complete. Creating container…");
         var p = root.codeServerPort;
-        var workspaceDir = "/home/coder/home/Projects";
+        var workspaceTarget = "/home/coder/home/Projects/vember-python.code-workspace";
         codeServerSetupRunProc.command = ["docker", "run", "-d",
           "--name", "vember-code-server",
           "-p", String(p) + ":8080",
           "-v", root.homeDir + "/.config/vember-code-server:/home/coder/.config",
+          "-v", root.homeDir + "/.config/vember-code-server/user-data:/home/coder/.local/share/code-server",
+          "-v", root.homeDir + "/.config/vember-code-server/bin:/home/coder/.local/bin",
           "-v", root.homeDir + ":/home/coder/home",
+          "-e", "PATH=/home/coder/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
           "--env-file", root.homeDir + "/.config/vember-code-server/code-server.env",
           "--restart", "unless-stopped",
           "codercom/code-server:latest",
-          workspaceDir];
+          workspaceTarget];
+        root.codeServerSetupProvisionAfterStart = true;
         codeServerSetupRunProc.running = true;
       } else {
         root.codeServerBusy = false;
@@ -1499,7 +1656,7 @@ Item {
         root.codeServerSetupDetail = "Container created. Waiting for it to run…";
         root.codeServerStatusText = root.codeServerSetupDetail;
         root._appendCodeServerSetupLog("Container created. Waiting for running state…");
-        root.codeServerSetupPollsLeft = 20;
+        root.codeServerSetupPollsLeft = 40;
         codeServerSetupPollTimer.restart();
         root.refreshCodeServer();
         root.refreshDocker();
@@ -1513,6 +1670,36 @@ Item {
         root.refreshCodeServer();
         root.refreshDocker();
       }
+    }
+  }
+
+  Process {
+    id: codeServerSetupProvisionProc
+    stdout: SplitParser {
+      onRead: function(line) { root._appendCodeServerSetupLog(line); }
+    }
+    stderr: SplitParser {
+      onRead: function(line) { root._appendCodeServerSetupLog(line); }
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.codeServerSetupStage = "done";
+        root.codeServerSetupProgress = 1;
+        root.codeServerSetupDetail = "VS Code Server is running with uv and Python extensions ready (port " + root.codeServerPort + ").";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.devStatus = "VS Code Server ready at http://localhost:" + root.codeServerPort;
+        root._appendCodeServerSetupLog("Provisioning finished successfully.");
+      } else {
+        root.codeServerSetupStage = "done";
+        root.codeServerSetupProgress = 1;
+        root.codeServerSetupDetail = "VS Code Server is running, but provisioning had issues (code " + code + "). Check debug log.";
+        root.codeServerStatusText = root.codeServerSetupDetail;
+        root.devStatus = "VS Code Server running (provisioning warnings).";
+        root._appendCodeServerSetupLog("Provisioning finished with code " + code + " (some steps may have failed).");
+      }
+      root.codeServerBusy = false;
+      root.refreshCodeServer();
+      root.refreshDocker();
     }
   }
 

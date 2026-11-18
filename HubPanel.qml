@@ -1472,6 +1472,11 @@ PanelWindow {
                 property bool selPulling: selected ? (hub.dockerPullActive && hub.dockerPullingName === selected.name) : false
                 property bool selPullResult: selected ? (!hub.dockerPullActive && hub.dockerPullingName === selected.name && HubModel.trimText(hub.dockerPullStatus).length > 0) : false
 
+                onSelectedChanged: {
+                  if (hub && hub.refreshDockerDetailSize)
+                    hub.refreshDockerDetailSize(selected ? selected.name : "");
+                }
+
                 Text {
                   visible: !containerDetails.selected
                   textFormat: Text.PlainText
@@ -1530,6 +1535,49 @@ PanelWindow {
                     text: "Status: " + (containerDetails.selected ? (containerDetails.selected.status || containerDetails.selected.state || "unknown") : "")
                     color: Color.menu.text
                     font.family: Style.font.family
+                    wrapMode: Text.Wrap
+                    width: parent.width
+                  }
+
+                  RowLayout {
+                    width: parent.width
+                    spacing: 8
+                    Text {
+                      textFormat: Text.PlainText
+                      text: "Size:"
+                      color: Color.menu.text
+                      font.family: Style.font.family
+                    }
+                    Text {
+                      Layout.fillWidth: true
+                      textFormat: Text.PlainText
+                      text: {
+                        if (!containerDetails.selected) return "";
+                        if (hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name) return "Querying…";
+                        if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeError).length > 0) return hub.dockerDetailSizeError;
+                        if (hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0) return hub.dockerDetailSizeText;
+                        return "—";
+                      }
+                      color: (hub.dockerDetailSizeName === (containerDetails.selected ? containerDetails.selected.name : "") && HubModel.trimText(hub.dockerDetailSizeError).length > 0) ? "#ef4444" : softText(0.9)
+                      font.family: Style.font.family
+                      wrapMode: Text.Wrap
+                    }
+                    Button {
+                      visible: !!containerDetails.selected
+                      iconText: "󰑐"
+                      text: "Query"
+                      enabled: !!containerDetails.selected && !(hub.dockerDetailSizeBusy && hub.dockerDetailSizeName === containerDetails.selected.name)
+                      tooltipText: "Query container disk size (docker ps -s)"
+                      onClicked: if (containerDetails.selected) hub.refreshDockerDetailSize(containerDetails.selected.name)
+                    }
+                  }
+                  Text {
+                    visible: !!containerDetails.selected && hub.dockerDetailSizeName === containerDetails.selected.name && HubModel.trimText(hub.dockerDetailSizeText).length > 0
+                    textFormat: Text.PlainText
+                    text: "Writable layer / virtual size (as reported by Docker)."
+                    color: softText(0.65)
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
                     wrapMode: Text.Wrap
                     width: parent.width
                   }
@@ -2282,7 +2330,7 @@ PanelWindow {
                     }
 
                     Column {
-                      visible: hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking" || hub.codeServerSetupStage === "error" || hub.codeServerSetupStage === "exists" || hub.codeServerSetupStage === "done"
+                      visible: hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "provisioning" || hub.codeServerSetupStage === "running" || hub.codeServerSetupStage === "launching" || hub.codeServerSetupStage === "checking" || hub.codeServerSetupStage === "error" || hub.codeServerSetupStage === "exists" || hub.codeServerSetupStage === "done"
                       width: parent.width
                       spacing: 6
 
@@ -2306,7 +2354,7 @@ PanelWindow {
                       }
 
                       Rectangle {
-                        visible: hub.codeServerBusy || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "preparing"
+                        visible: hub.codeServerBusy || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "provisioning"
                         width: parent.width
                         height: 8
                         radius: 4
@@ -2321,7 +2369,7 @@ PanelWindow {
                           x: hub.codeServerSetupProgress > 0 ? 0 : -width
                           Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
                           SequentialAnimation on x {
-                            running: (hub.codeServerSetupProgress <= 0) && (hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting")
+                            running: (hub.codeServerSetupProgress <= 0) && (hub.codeServerBusy || hub.codeServerSetupStage === "preparing" || hub.codeServerSetupStage === "pulling" || hub.codeServerSetupStage === "creating" || hub.codeServerSetupStage === "starting" || hub.codeServerSetupStage === "provisioning")
                             loops: Animation.Infinite
                             NumberAnimation { from: -codeServerSetupProgressFill.width; to: codeServerSetupProgressFill.parent ? codeServerSetupProgressFill.parent.width : 300; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
                           }
@@ -2427,7 +2475,7 @@ PanelWindow {
                     Text {
                       visible: !hub.codeServerPresent
                       textFormat: Text.PlainText
-                      text: "Set a password and port in the hub. Setup runs in a terminal to create/start the container. The password is saved to a restricted env file (not in config.yaml)."
+                      text: "Set a password and port in the hub. Setup creates the container, installs uv and Python extensions (ms-python.python, ms-python.debugpy, charliermarsh.ruff), and prepares a default Python workspace in ~/Projects. Progress and debug logs are shown in the panel. Password is stored in a restricted env file (not in config.yaml)."
                       color: softText(0.72)
                       font.family: Style.font.family
                       font.pixelSize: Style.font.caption
@@ -2490,6 +2538,15 @@ PanelWindow {
                         Text { textFormat: Text.PlainText; text: "Config"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         Text { textFormat: Text.PlainText; text: "~/.config/vember-code-server → /home/coder/.config"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
 
+                        Text { textFormat: Text.PlainText; text: "User data"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "~/.config/vember-code-server/user-data → /home/coder/.local/share/code-server (extensions/settings)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Tools bin"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "~/.config/vember-code-server/bin → /home/coder/.local/bin (uv/uvx)"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
+                        Text { textFormat: Text.PlainText; text: "Default open"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        Text { textFormat: Text.PlainText; text: "~/Projects/vember-python.code-workspace"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true; wrapMode: Text.Wrap }
+
                         Text { textFormat: Text.PlainText; text: "Restart"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                         Text { textFormat: Text.PlainText; text: "unless-stopped"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption; Layout.fillWidth: true }
                       }
@@ -2527,7 +2584,7 @@ PanelWindow {
                         spacing: 6
                         Text { textFormat: Text.PlainText; text: "Local URL: http://localhost:" + hub.codeServerPort; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
                         Text { textFormat: Text.PlainText; text: "Tailnet: reachable via this device’s Tailnet IP/hostname on port " + hub.codeServerPort + " if the port is accessible on your network."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-                        Text { textFormat: Text.PlainText; text: "Password: set in the hub during setup and stored in ~/.config/vember-code-server/code-server.env (mode 600). Config/state is kept in ~/.config/vember-code-server (preserved on uninstall)."; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+                        Text { textFormat: Text.PlainText; text: "Password: set in the hub during setup and stored in ~/.config/vember-code-server/code-server.env (mode 600). Config/state, persistent extensions, and uv tools are kept in ~/.config/vember-code-server (preserved on uninstall)."; color: softText(0.72); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
                       }
                     }
                   }
@@ -2630,7 +2687,7 @@ PanelWindow {
               Layout.fillWidth: true
               spacing: 2
               Text { textFormat: Text.PlainText; text: "Set up VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
-              Text { textFormat: Text.PlainText; text: "Create the code-server Docker container and choose the password you’ll use to sign in."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: "Create the code-server Docker container, set your sign-in password/port, provision uv and Python extensions, and prepare a default Python workspace in ~/Projects."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
             }
           }
 
@@ -2696,7 +2753,7 @@ PanelWindow {
 
           Text {
             textFormat: Text.PlainText
-            text: "Pick a free host port. If the container already exists, Uninstall it first to change port or password."
+            text: "Pick a free host port. If the container already exists, Uninstall it first to apply new mounts, port, password, or provisioning changes."
             color: softText(0.72)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
