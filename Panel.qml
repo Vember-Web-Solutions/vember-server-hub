@@ -87,6 +87,7 @@ Item {
   property string installRunningId: ""
   property string installTitle: ""
   property string installLog: ""
+  readonly property bool installIsDev: installRunningId.indexOf("dev:") === 0
 
   property bool gameMountPresent: false
   property string gameMountSummary: ""
@@ -832,7 +833,7 @@ Item {
     extraAppInstallBusyId = installRunningId;
     extraAppInstallStatus = "Installing " + (label || installTitle) + " in the default terminal — answer any prompts there. Live output below.";
     lastActionMessage = extraAppInstallStatus;
-    if (installRunningId.indexOf("dev:") === 0) {
+    if (installIsDev) {
       devInstallBusy = true;
       devInstallToolId = installRunningId.slice(4);
       devInstallStatus = extraAppInstallStatus;
@@ -846,11 +847,13 @@ Item {
     installLogProc.command = ["tail", "-n", "+1", "-F", logPath];
     installLogProc.running = true;
     installNoOutputTimer.restart();
+    installStallTimer.restart();
   }
 
   function finishInstall(code) {
     installLogProc.running = false;
     installNoOutputTimer.stop();
+    installStallTimer.stop();
     installRunning = false;
     extraAppInstallBusyId = "";
     var label = HubModel.trimText(installTitle).length > 0 ? installTitle.replace(/^Vember Install:\s*/, "") : "Install";
@@ -860,7 +863,7 @@ Item {
       extraAppInstallStatus = label + " finished (exit code unknown).";
     else
       extraAppInstallStatus = label + " failed (exit code " + code + ").";
-    if (installRunningId.indexOf("dev:") === 0) {
+    if (installIsDev) {
       devInstallBusy = false;
       devInstallToolId = "";
       devInstallStatus = extraAppInstallStatus;
@@ -874,9 +877,10 @@ Item {
   function stopInstall() {
     installLogProc.running = false;
     installNoOutputTimer.stop();
+    installStallTimer.stop();
     installRunning = false;
     extraAppInstallBusyId = "";
-    if (installRunningId.indexOf("dev:") === 0) {
+    if (installIsDev) {
       devInstallBusy = false;
       devInstallToolId = "";
       devInstallStatus = "Install tracking stopped (the terminal may still be running).";
@@ -901,7 +905,7 @@ Item {
 
   function refreshAfterInstall() {
     refreshGames();
-    if (installRunningId.indexOf("dev:") === 0)
+    if (installIsDev)
       refreshDevTools();
   }
 
@@ -1669,6 +1673,20 @@ Item {
       if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
         return;
       root.extraAppInstallStatus = "No output yet — check the terminal window for a password or y/n prompt.";
+      root.lastActionMessage = root.extraAppInstallStatus;
+    }
+  }
+
+  // Escalation: a terminal that never opened leaves the runner stuck otherwise
+  Timer {
+    id: installStallTimer
+    interval: 60000
+    repeat: false
+    onTriggered: {
+      if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
+        return;
+      root.stopInstall();
+      root.extraAppInstallStatus = "No install output after 60s — the terminal may not have opened. Use the Install button to try again.";
       root.lastActionMessage = root.extraAppInstallStatus;
     }
   }

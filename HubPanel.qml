@@ -1995,7 +1995,7 @@ PanelWindow {
 
               // Live install log (shared runner)
               Rectangle {
-                visible: hub.installRunning || HubModel.trimText(hub.installLog).length > 0
+                visible: !hub.installIsDev && (hub.installRunning || HubModel.trimText(hub.installLog).length > 0)
                 width: parent.width
                 radius: Style.cornerRadius
                 color: softText(0.04)
@@ -2270,7 +2270,7 @@ PanelWindow {
 
               // Live install log (shared runner)
               Rectangle {
-                visible: hub.installRunning || HubModel.trimText(hub.installLog).length > 0
+                visible: !hub.installIsDev && (hub.installRunning || HubModel.trimText(hub.installLog).length > 0)
                 width: parent.width
                 radius: Style.cornerRadius
                 color: softText(0.04)
@@ -3065,14 +3065,14 @@ PanelWindow {
                               iconText: "󰏔"
                               text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
                               tooltipText: "Try silent install for " + HubModel.devToolLabel(modelData.id)
-                              enabled: !hub.devInstallBusy
+                              enabled: !hub.devInstallBusy && !hub.installRunning
                               onClicked: hub.runDevInstallSilent(modelData.id)
                             }
                             Button {
                               iconText: "󰆍"
                               text: (hub.installRunning && hub.installRunningId === ("dev:" + modelData.id)) ? "Installing…" : "Terminal"
                               tooltipText: "Open the default terminal to install " + HubModel.devToolLabel(modelData.id)
-                              enabled: !hub.devInstallBusy
+                              enabled: !hub.devInstallBusy && !hub.installRunning
                               onClicked: hub.openDevInstallTerminal(modelData.id)
                             }
                           }

@@ -793,6 +793,9 @@ function installTerminalScript(title, cmd, logPath, titlePath) {
   return "mkdir -p " + shellQuote(dir) +
     " && printf '%s' " + shellQuote(title) + " > " + shellQuote(titlePath) +
     " && : > " + shellQuote(logPath) +
+    " && { command -v xdg-terminal-exec >/dev/null 2>&1 || " +
+    "{ echo 'xdg-terminal-exec not found; cannot open a terminal.' | tee -a " + shellQuote(logPath) +
+    "; echo '[vember-install-exit:127]' | tee -a " + shellQuote(logPath) + "; exit 127; }; }" +
     " && xdg-terminal-exec --app-id=vember-install --title=" + shellQuote(title) +
     " bash -lc " + shellQuote(inner) +
     " </dev/null >/dev/null 2>&1 & " +
