@@ -1430,7 +1430,6 @@ Item {
       root.dockerBusy = false;
       root.dockerBusyName = "";
       root.dockerPullActive = false;
-      var target = containerName;
       var image = imageName;
       if (code === 0) {
         root.dockerPullStatus = "Pull complete";
