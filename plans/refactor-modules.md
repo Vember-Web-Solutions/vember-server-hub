@@ -110,6 +110,26 @@ Work that fell out of the split, done in the same arc:
 - **Docker pull failures:** the last output line is kept and folded into the
   result, so a failed pull says why (bad tag, no space, network) instead of only
   "(code 1)".
+- **Poll safety:** `refreshAll()` runs on the 15-second poll while the panel is
+  open, and it used to do destructive work every tick. `refreshDev()` cleared
+  the selected repository and its detail panel, so a repo being inspected was
+  deselected every 15 seconds; `refreshGames()` blanked the game counts and the
+  dedicated-server list, and killed and restarted the extra-apps scan, which
+  never finishes if it runs longer than the interval. The poll now passes
+  `preserveSelection` and the scan starts only when none is in flight. Opening
+  the panel and post-install refreshes still do the full reset.
+  `TestPollSafety` pins all three, mutation-verified.
+- **One-shot messages:** `tsActionProc.onExited` wrote the Tailscale action
+  result and then called `refreshTailscale()`, which cleared the note in the
+  same tick — a failed action looked identical to a successful one.
+  `refreshTailscale` now takes a preserve flag the action handler sets.
+- **Code Server double start:** the setup dialog disabled its button while
+  busy, but the function itself started a second flow if called again; it now
+  guards on `codeServerBusy` so the flag is authoritative.
+- **Docker pull progress:** the panel pull parsed an `NN%` string that Docker's
+  non-TTY output does not emit, so the bar sat at zero. It now accumulates
+  layer bytes through the same `Docker.parsePullLine` / `accumulateLayers` path
+  the code-server pull uses.
 
 ## Done when
 
@@ -118,16 +138,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 364 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,492 lines. The growth is comments, per-file
+- 370 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,532 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,368) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,927 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,520. `Panel.qml` grew by the
-  two install/update watchdogs and the failure-message improvements, then lost
-  the duplicated config-parsing branch once the reader was wired to the tested
-  parser; the largest file is now `Panel.qml` at 2,520, then
-  `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,417 lines across 11 files and drives the real modules
+- The three monoliths went 7,694 → 2,967 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,560. `Panel.qml` grew by the
+  two install/update watchdogs, the failure-message improvements and the poll
+  guards, then lost the duplicated config-parsing branch once the reader was
+  wired to the tested parser; the largest file is now `Panel.qml` at 2,560,
+  then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 2,544 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.1, build 72 → 77.
+- Version 0.1.0 → 0.6.2, build 72 → 78.
