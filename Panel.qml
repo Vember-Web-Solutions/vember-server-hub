@@ -1318,9 +1318,9 @@ Item {
           root.omarchyUpdateRunning = true;
           root.omarchyUpdateStatus = "Reattached to the running Omarchy update. Live log below.";
           root.lastActionMessage = root.omarchyUpdateStatus;
-          root.omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F",
+          omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F",
             root.homeDir + "/.cache/vember-server-hub/omarchy-update.log"];
-          root.omarchyUpdateLogProc.running = true;
+          omarchyUpdateLogProc.running = true;
           return;
         }
         if (HubModel.trimText(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
@@ -1673,12 +1673,12 @@ Item {
           }
           root.extraAppInstallStatus = "Reattached to the running install. Live output below.";
           root.lastActionMessage = root.extraAppInstallStatus;
-          root.installLogProc.running = false;
-          root.installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
-          root.installLogProc.running = true;
+          installLogProc.running = false;
+          installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
+          installLogProc.running = true;
           // The lock proves the terminal opened, so only nudge for prompts;
-          // the 60s stall timer must not stop a genuinely live install.
-          root.installNoOutputTimer.restart();
+          // the stall timer must not stop a genuinely live install.
+          installNoOutputTimer.restart();
           return;
         }
         if (HubModel.trimText(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
