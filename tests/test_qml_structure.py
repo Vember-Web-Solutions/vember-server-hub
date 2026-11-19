@@ -192,3 +192,47 @@ class TestHotReloadCoverage:
         watched = re.findall(r'"([^"]+)"', block.group(1))
         missing = [w for w in watched if not (REPO / w).exists()]
         assert not missing, "watchedFiles names missing files: " + ", ".join(missing)
+
+
+class TestBackendReferences:
+    """Cross-file references must resolve to something that exists.
+
+    After the split, a tab calls `hub.someState` on the Panel root and
+    `panel.someHelper()` on the HubPanel root. A renamed or removed member
+    shows up as an undefined value at runtime, in whichever tab happens to be
+    open, so both directions are checked statically here.
+    """
+
+    @staticmethod
+    def _exposed(path):
+        text = read(path)
+        props = set(
+            re.findall(r"^  (?:(?:required|readonly) +)*property [\w.]+ (\w+)", text, re.M)
+        )
+        funcs = set(re.findall(r"^  function (\w+)\(", text, re.M))
+        sigs = set(re.findall(r"^  signal (\w+)", text, re.M))
+        ids = set(re.findall(r"^\s*id: (\w+)", text, re.M))
+        return props | funcs | sigs | ids
+
+    def test_hub_members_resolve_on_panel(self):
+        exposed = self._exposed(REPO / "Panel.qml")
+        problems = []
+        for path in QML_FILES:
+            text = read(path)
+            for match in re.finditer(r"\bhub\.(\w+)", text):
+                name = match.group(1)
+                # hub.docker.com is a URL in a tooltip, not a property.
+                if text[match.end():match.end() + 4] == ".com":
+                    continue
+                if name not in exposed:
+                    problems.append("%s: hub.%s" % (relative(path), name))
+        assert not problems, "undefined backend members:\n  " + "\n  ".join(problems)
+
+    def test_panel_members_resolve_on_hubpanel(self):
+        exposed = self._exposed(REPO / "HubPanel.qml")
+        problems = []
+        for path in sorted((REPO / "ui").rglob("*.qml")):
+            for name in re.findall(r"(?<![\w.])panel\.(\w+)", read(path)):
+                if name not in exposed:
+                    problems.append("%s: panel.%s" % (relative(path), name))
+        assert not problems, "undefined panel members:\n  " + "\n  ".join(problems)
