@@ -557,17 +557,6 @@ function parseDevRepoDetail(text) {
   return out;
 }
 
-function devToolInstallCommand(id) {
-  var cmd = "";
-  if (id === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";
-  else if (id === "python") cmd = "sudo pacman -S --needed python python-pip";
-  else if (id === "gh") cmd = "sudo pacman -S --needed github-cli";
-  else if (id === "zed") cmd = "yay -S --needed zed-preview-bin || yay -S --needed zed || sudo pacman -S --needed zed";
-  else if (id === "vscode") cmd = "yay -S --needed visual-studio-code-bin || sudo pacman -S --needed code";
-  else cmd = "echo 'No install command configured for: " + String(id) + "'";
-  return ["sh", "-c", "echo 'Install command:'; echo ''; echo " + JSON.stringify(cmd) + "; echo ''; eval " + JSON.stringify(cmd)];
-}
-
 function devToolLabel(id) {
   if (id === "uv") return "uv";
   if (id === "python") return "Python";
