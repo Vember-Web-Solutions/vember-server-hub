@@ -1876,46 +1876,12 @@ Item {
     command: ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/manifest.json"]
     stdout: StdioCollector {
       onStreamFinished: {
-        // Parsing lives in Config.mjs so every branch below is covered by
-        // tests; this handler only maps the result onto panel state.
-        var cfg = Config.parseHubConfig(text);
-
-        if (cfg.state === "empty") {
-          // No file yet: keep the editor, tab order and port we already have.
-          root.configReady = false;
-          root.serverName = "";
-          root.serverRole = "";
-          root.openWizard(root.defaultServerName());
-          return;
-        }
-
-        if (cfg.state === "invalid") {
-          // Unreadable JSON: start from defaults rather than half-applied state.
-          root.configReady = false;
-          root.serverName = "";
-          root.serverRole = "";
-          root.preferredEditor = "";
-          root.tabOrder = cfg.tabOrder;
-          root.codeServerPort = cfg.codeServerPort;
-          root.openWizard(root.defaultServerName());
-          return;
-        }
-
-        root.preferredEditor = cfg.preferredEditor;
-        root.tabOrder = cfg.tabOrder;
-        root.codeServerPort = cfg.codeServerPort;
-        root.serverName = cfg.serverName;
-        root.serverNameDraft = cfg.serverName;
-        root.serverRole = cfg.serverRole;
-        root.serverRoleDraft = cfg.serverRole;
-
-        if (cfg.state === "ready") {
-          root.configReady = true;
-          root.wizardOpen = false;
-        } else {
-          root.configReady = false;
-          root.openWizard(root.defaultServerName());
-        }
+        // This reads manifest.json, not config.json. Parsing it as a hub
+        // config (the old behaviour) returned state "wizard" and raced the
+        // real config loader, blanking the server name and reopening the
+        // first-run wizard. It only sets the manifest the version binds to.
+        var m = Config.parseManifest(text);
+        if (m) root.manifest = m;
       }
     }
     stderr: StdioCollector {}

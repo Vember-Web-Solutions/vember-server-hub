@@ -163,6 +163,24 @@ class TestVersionConsistency:
             "\n  ".join(offenders),
         )
 
+    def test_manifest_reader_parses_the_manifest_not_the_config(self):
+        # manifest.json and config.json are different shapes. Feeding the
+        # manifest to parseHubConfig returned state "wizard" and raced the real
+        # config load, reopening the first-run wizard. The reader must use
+        # parseManifest and only set root.manifest.
+        text = read(REPO / "Panel.qml")
+        start = text.index("id: manifestReadProc")
+        window = text[start:start + 700]
+        assert "Config.parseManifest(" in window, (
+            "manifestReadProc must parse manifest.json with Config.parseManifest"
+        )
+        assert "parseHubConfig" not in window, (
+            "manifestReadProc must not parse the manifest as a hub config"
+        )
+        assert "root.manifest =" in window, (
+            "manifestReadProc must set root.manifest so the version binds to it"
+        )
+
 
 class TestHotReloadCoverage:
     """Every plugin file should be watched, or edits silently do nothing."""

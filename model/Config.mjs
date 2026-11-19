@@ -126,6 +126,22 @@ export class Config {
     codeServerPort: port
   };
   }
+  // The plugin manifest is JSON with a version string and an integer build.
+  // Parsing it here keeps the QML handler a one-liner and makes the version
+  // guard testable without a shell. Returns the parsed object, or null when
+  // the file is missing, empty, unreadable, or not a JSON object.
+  parseManifest(raw) {
+  var text = shell.trim(raw);
+  if (text.length === 0) return null;
+  var obj;
+  try {
+    obj = JSON.parse(text);
+  } catch (e) {
+    return null;
+  }
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return null;
+  return obj;
+  }
   // Swap one entry with its neighbour. Returns a new array; when the move would
   // fall off either end the contents are unchanged, so callers can assign the
   // result unconditionally.
@@ -158,6 +174,7 @@ export const config = impl;
 export function defaultTabOrder(...args) { return impl.defaultTabOrder(...args); }
 export function normalizedTabOrder(...args) { return impl.normalizedTabOrder(...args); }
 export function parseHubConfig(...args) { return impl.parseHubConfig(...args); }
+export function parseManifest(...args) { return impl.parseManifest(...args); }
 export function tabDef(...args) { return impl.tabDef(...args); }
 export function orderedTabs(...args) { return impl.orderedTabs(...args); }
 export function moveTab(...args) { return impl.moveTab(...args); }

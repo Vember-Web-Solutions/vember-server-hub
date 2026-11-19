@@ -348,3 +348,46 @@ class TestWriteCommand:
         out = self.cmd(js, str(target), '{"new":1}')
         subprocess.run(out, check=True)
         assert json.loads(target.read_text()) == {"new": 1}
+
+
+class TestParseManifest:
+    """The manifest parser must not be the hub-config parser.
+
+    The refactor once fed manifest.json to parseHubConfig, which read it as a
+    config with no serverName (state "wizard"), opened the first-run wizard and
+    blanked the server name in a race with the real config load. This parser
+    only ever returns the manifest object or null.
+    """
+
+    def parse(self, js, raw):
+        return js(
+            "console.log(JSON.stringify(Config.parseManifest(%s)))"
+            % json.dumps(raw)
+        )
+
+    def test_missing_manifest_is_null(self, js):
+        assert self.parse(js, "") is None
+
+    def test_unreadable_json_is_null(self, js):
+        assert self.parse(js, "{not json") is None
+
+    def test_array_is_not_a_manifest(self, js):
+        assert self.parse(js, "[]") is None
+
+    def test_null_is_not_a_manifest(self, js):
+        assert self.parse(js, "null") is None
+
+    def test_manifest_object_round_trips(self, js):
+        out = self.parse(js, json.dumps({"version": "0.6.1", "build": 77}))
+        assert out == {"version": "0.6.1", "build": 77}
+
+    def test_real_manifest_parses(self, js):
+        # Read the repo's own manifest so a broken file fails here, not in the
+        # shell. Build must be an int for the version guard to hold.
+        import pathlib
+
+        raw = (pathlib.Path(__file__).resolve().parents[1] / "manifest.json").read_text()
+        out = self.parse(js, raw)
+        assert isinstance(out, dict)
+        assert isinstance(out.get("version"), str) and out["version"]
+        assert isinstance(out.get("build"), int)
