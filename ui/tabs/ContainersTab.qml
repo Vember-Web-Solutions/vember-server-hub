@@ -483,13 +483,13 @@ Column {
             text: "Open Docker Hub"
             active: true
             tooltipText: "Open https://hub.docker.com in your browser"
-            onClicked: Qt.openUrlExternally("https://hub.docker.com")
+            onClicked: panel.hub.openExternalUrl("https://hub.docker.com", "Docker Hub")
           }
           Button {
             iconText: "󰍉"
             text: "Explore images"
             tooltipText: "Browse Docker Hub explore page"
-            onClicked: Qt.openUrlExternally("https://hub.docker.com/search?q=&type=image")
+            onClicked: panel.hub.openExternalUrl("https://hub.docker.com/search?q=&type=image", "the Docker Hub image search")
           }
         }
       }

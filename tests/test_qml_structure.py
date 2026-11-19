@@ -1277,12 +1277,35 @@ class TestExternalHandOffReachability:
         # Closing the hub regardless would leave the user with nothing open
         # and no message: the dead-button problem again.
         body = self._fn(name)
-        check = body.find("if (!Qt.openUrlExternally(")
+        check = body.find("if (!openExternalUrl(")
         assert check >= 0, name + " must check whether a browser opened"
         hand_off = body.find("handOffToExternalSurface()")
         assert hand_off > check, (
             name + " must only close the hub once the browser opened"
         )
+
+    def test_open_external_url_checks_the_result(self):
+        # One helper owns the check so no call site can drift back to an
+        # unchecked Qt.openUrlExternally.
+        body = self._fn("openExternalUrl")
+        assert "Qt.openUrlExternally(" in body
+        assert "if (Qt.openUrlExternally(" in body, (
+            "openExternalUrl must branch on the return value"
+        )
+        assert "notify(" in body, "a browser failure must notify"
+        assert "return false" in body, "openExternalUrl must report failure"
+
+    def test_tabs_do_not_call_open_url_externally_directly(self):
+        # Every browser launch goes through the helper, so the return value is
+        # always checked and a failure is always surfaced.
+        for rel in sorted(REPO.glob("ui/**/*.qml")):
+            text = read(rel)
+            for i, line in enumerate(text.splitlines(), 1):
+                if "Qt.openUrlExternally(" in line:
+                    raise AssertionError(
+                        str(rel.relative_to(REPO)) + ":" + str(i) +
+                        " calls Qt.openUrlExternally directly; use the hub helper"
+                    )
 
     def test_install_and_update_never_run_together(self):
         # Both terminals use the `vember-install` window class, which is what

@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.18"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 94
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.19"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 95
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -589,14 +589,20 @@ Item {
     codeServerActionProc.running = true;
   }
 
+  // Opens a URL in the user's browser. Qt.openUrlExternally returns false when
+  // no handler is configured; ignoring that and closing the hub anyway leaves a
+  // button that looks dead. Returns true only when a browser took the URL.
+  function openExternalUrl(url, what) {
+    if (Qt.openUrlExternally(url))
+      return true;
+    lastActionMessage = "Could not open a browser for " + what + ".";
+    notify(lastActionMessage);
+    return false;
+  }
+
   function openCodeServer() {
-    // openUrlExternally returns false when no handler is configured. Ignoring
-    // that and closing the hub anyway would look like a dead button.
-    if (!Qt.openUrlExternally("http://localhost:" + codeServerPort)) {
-      lastActionMessage = "Could not open a browser for the VS Code Server URL.";
-      notify(lastActionMessage);
+    if (!openExternalUrl("http://localhost:" + codeServerPort, "the VS Code Server URL"))
       return;
-    }
     handOffToExternalSurface();
   }
 
@@ -836,10 +842,8 @@ Item {
   function openBattlenetSetup() {
     extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
-    if (!Qt.openUrlExternally(Gaming.battlenetSetupUrl())) {
-      extraAppInstallStatus = "Could not open a browser for the Battle.net setup page.";
-      lastActionMessage = extraAppInstallStatus;
-      notify(extraAppInstallStatus);
+    if (!openExternalUrl(Gaming.battlenetSetupUrl(), "the Battle.net setup page")) {
+      extraAppInstallStatus = lastActionMessage;
       return;
     }
     handOffToExternalSurface();
