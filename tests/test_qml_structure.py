@@ -1342,3 +1342,50 @@ class TestLaunchFailureIsVisible:
         body = text[text.index("function notify(text)") :]
         body = body[: body.index("\n  }")]
         assert "length === 0" in body, "an empty message must not raise a notification"
+
+
+class TestWatchdogFailuresAreVisible:
+    """Watchdog verdicts are reported into a panel the hub has closed.
+
+    The hub closes itself when an install or update starts, so "the terminal
+    never opened", "the terminal closed early" and "no output yet, it may be
+    asking for a password" all land in a panel nobody is looking at. Those are
+    the moments the user most needs to know, so each one notifies.
+    """
+
+    # (kind, id, how many failure branches must notify). Counting matters:
+    # an earlier version of this guard only asked whether the block contained
+    # a notify call, so removing one of two still passed.
+    BLOCKS = [
+        ("Process", "installLockCheckProc", 2),
+        ("Process", "omarchyUpdateLockCheckProc", 2),
+        ("Timer", "installNoOutputTimer", 1),
+    ]
+
+    def _panel(self):
+        return read(REPO / "Panel.qml")
+
+    def _block(self, kind, name):
+        text = self._panel()
+        match = re.search(r"^\s*id:\s*" + name + r"\s*$", text, re.M)
+        assert match, name + " not found in Panel.qml"
+        start = text.rfind(kind + " {", 0, match.start())
+        assert start >= 0, "no " + kind + " block for " + name
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    @pytest.mark.parametrize("kind,name,expected", BLOCKS)
+    def test_every_failure_branch_notifies(self, kind, name, expected):
+        body = self._block(kind, name)
+        found = body.count("root.notify(")
+        assert found == expected, (
+            name + " has " + str(found) + " notify call(s), expected " + str(expected) +
+            "; each message that lands in the closed panel must notify"
+        )

@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.13"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 89
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.14"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 90
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1413,10 +1413,12 @@ Item {
         root.stopOmarchyUpdateLog();
         root.omarchyUpdateStatus = "Could not open the update terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.omarchyUpdateStatus;
+        root.notify(root.omarchyUpdateStatus);
       } else if (verdict === "dead") {
         root.stopOmarchyUpdateLog();
         root.omarchyUpdateStatus = "The update terminal closed before finishing. Tracking stopped.";
         root.lastActionMessage = root.omarchyUpdateStatus;
+        root.notify(root.omarchyUpdateStatus);
       }
       // alive / wait / teardown: keep tracking; `tail` or the next tick resolves it.
     }
@@ -1472,6 +1474,7 @@ Item {
   function notify(text) {
     var msg = Shell.trim(text);
     if (msg.length === 0) return;
+    notifyProc.running = false;
     notifyProc.command = Shell.notifyCommand("Vember Server Hub", msg);
     notifyProc.running = true;
   }
@@ -1887,6 +1890,10 @@ Item {
         return;
       root.extraAppInstallStatus = "No output yet — check the terminal window for a password or y/n prompt.";
       root.lastActionMessage = root.extraAppInstallStatus;
+      // The hub is closed by now, so the status line above is invisible. This
+      // is exactly the case the message exists for: the terminal is probably
+      // waiting for input.
+      root.notify(root.extraAppInstallStatus);
     }
   }
 
@@ -1934,12 +1941,14 @@ Item {
         root.finishInstall(null);
         root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.extraAppInstallStatus;
+        root.notify(root.extraAppInstallStatus);
       } else if (verdict === "dead") {
         // Lock present, pid gone: the terminal was closed before the exit
         // marker was written, so tracking would never end on its own.
         root.stopInstall();
         root.extraAppInstallStatus = "The install terminal closed before finishing. Tracking stopped.";
         root.lastActionMessage = root.extraAppInstallStatus;
+        root.notify(root.extraAppInstallStatus);
       }
       // "wait" (lock pid not written yet) and "teardown" (lock gone, output
       // present) both do nothing: the next tick or `tail` resolves them.
