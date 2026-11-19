@@ -181,6 +181,21 @@ class TestVersionConsistency:
             "manifestReadProc must set root.manifest so the version binds to it"
         )
 
+    def test_config_reader_uses_the_tested_parser(self):
+        # The four-state parser is tested in test_config.py. If configReadProc
+        # parses config.json inline instead, the tested code is dead and the
+        # live path is untested duplicate logic (which is how the manifest
+        # regression slipped through).
+        text = read(REPO / "Panel.qml")
+        start = text.index("id: configReadProc")
+        window = text[start:start + 1200]
+        assert "Config.parseHubConfig(" in window, (
+            "configReadProc must map Config.parseHubConfig's result"
+        )
+        assert "JSON.parse(" not in window, (
+            "configReadProc must not parse config.json inline"
+        )
+
 
 class TestHotReloadCoverage:
     """Every plugin file should be watched, or edits silently do nothing."""

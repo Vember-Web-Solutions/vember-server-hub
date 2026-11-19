@@ -1892,48 +1892,36 @@ Item {
     command: ["sh", "-c", "if [ -f \"$1\" ]; then cat \"$1\"; fi", "sh", root.configPath]
     stdout: StdioCollector {
       onStreamFinished: {
-        var raw = Shell.trim(text);
-        if (raw.length === 0) {
+        // The four-state parse lives in Config.mjs and is covered by tests;
+        // this handler only maps each state onto panel state. Keeping the
+        // branching here duplicated it and left the tested parser unused.
+        var cfg = Config.parseHubConfig(text);
+
+        if (cfg.state === "empty") {
+          // No file yet: keep the editor, tab order and port we already have.
           root.configReady = false;
           root.serverName = "";
           root.serverRole = "";
           root.openWizard(root.defaultServerName());
           return;
         }
-        try {
-          var obj = JSON.parse(raw);
-          var name = Shell.trim(obj && obj.serverName ? obj.serverName : "");
-          var role = Shell.trim(obj && obj.serverRole ? obj.serverRole : "");
-          var editor = Shell.trim(obj && obj.preferredEditor ? obj.preferredEditor : "");
-          var order = root.normalizedTabOrder(obj && obj.tabOrder ? obj.tabOrder : root.tabOrder);
-          var cfgPort = Number(obj && obj.codeServerPort ? obj.codeServerPort : 8443);
-          if (!isFinite(cfgPort)) cfgPort = 8443;
-          cfgPort = Math.round(cfgPort);
-          if (cfgPort < 1 || cfgPort > 65535) cfgPort = 8443;
-          root.codeServerPort = cfgPort;
-          root.tabOrder = order;
-          if (name.length > 0) {
-            root.serverName = name;
-            root.serverNameDraft = name;
-            root.serverRole = role;
-            root.serverRoleDraft = role;
-            root.preferredEditor = editor;
-            root.configReady = true;
-            root.wizardOpen = false;
-          } else {
-            root.configReady = false;
-            root.serverName = "";
-            root.serverRole = "";
-            root.preferredEditor = editor;
-            root.openWizard(root.defaultServerName());
-          }
-        } catch (e) {
+
+        // "ready", "wizard" and "invalid" all carry editor/order/port; invalid
+        // carries the defaults, so assigning unconditionally is correct.
+        root.preferredEditor = cfg.preferredEditor;
+        root.tabOrder = cfg.tabOrder;
+        root.codeServerPort = cfg.codeServerPort;
+        root.serverName = cfg.serverName;
+        root.serverNameDraft = cfg.serverName;
+        root.serverRole = cfg.serverRole;
+        root.serverRoleDraft = cfg.serverRole;
+
+        if (cfg.state === "ready") {
+          root.configReady = true;
+          root.wizardOpen = false;
+        } else {
+          // "wizard" (no name) or "invalid" (unreadable) both ask for a name.
           root.configReady = false;
-          root.serverName = "";
-          root.serverRole = "";
-          root.preferredEditor = "";
-          root.tabOrder = root.normalizedTabOrder([]);
-          root.codeServerPort = 8443;
           root.openWizard(root.defaultServerName());
         }
       }
