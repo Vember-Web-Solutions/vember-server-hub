@@ -74,7 +74,10 @@ Work that fell out of the split, done in the same arc:
   stub terminal and types an answer, which is the failure that started this.
 - **Failure reporting:** `Shell.failureMessage` folds the first meaningful
   stderr line into an action's failure message. Docker and Code Server actions
-  were discarding the daemon's own reason, leaving only "(code 1)".
+  were discarding the daemon's own reason, leaving only "(code 1)". The same
+  gap was closed for Docker pulls (keeps the last output line), repo-detail
+  loads (git's stderr) and Tailscale actions (polkit/tool stderr), so each
+  failure says what actually went wrong.
 - **Manifest guard:** tests check the manifest's required fields, that its
   entry points exist and are of known kinds, that its id matches the plugin
   paths hardcoded in QML, and that the version is semver with an integer build.
@@ -111,13 +114,14 @@ plugin warnings in the journal.
 ## Result
 
 - 356 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,508 lines. The growth is comments, per-file
+- Plugin source went 7,718 → 8,521 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,351) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,960 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,553. `Panel.qml` grew by the
-  two install/update watchdogs and their comments; the largest file is now
-  `Panel.qml` at 2,553, then `ui/tabs/GamesTab.qml` at 803.
+- The three monoliths went 7,694 → 2,973 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,566. `Panel.qml` grew by the
+  two install/update watchdogs, the failure-message improvements and their
+  comments; the largest file is now `Panel.qml` at 2,566, then
+  `ui/tabs/GamesTab.qml` at 803.
 - The test suite is 2,341 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.0, build 72 → 76.
+- Version 0.1.0 → 0.6.1, build 72 → 77.
