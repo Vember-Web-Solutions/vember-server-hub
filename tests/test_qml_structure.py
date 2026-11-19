@@ -197,34 +197,57 @@ class TestVersionConsistency:
         )
 
 
-class TestHotReloadCoverage:
-    """Every plugin file should be watched, or edits silently do nothing."""
+class TestNoSelfRestartingFileWatcher:
+    """The plugin must never restart the shell because its own files changed.
 
-    def test_all_plugin_files_are_watched(self):
-        import re
+    It used to watch all of its source files and, on any change, run
+    `omarchy restart shell` and reopen the hub. That restarted the whole desktop
+    shell on every save, popped a full-screen overlay that took exclusive
+    keyboard focus, and left a fresh quickshell runtime directory behind — 542 of
+    them filled the 1.3 GB /run/user/1000 tmpfs, after which shell restarts
+    failed and shells multiplied (24 at one point, 7.6 GB of RAM).
 
-        text = read(REPO / "Panel.qml")
-        block = re.search(r"readonly property var watchedFiles: \[(.*?)\]", text, re.S)
-        assert block, "no watchedFiles list in Panel.qml"
-        watched = set(re.findall(r'"([^"]+)"', block.group(1)))
+    Omarchy already reloads a plugin in place when a file is saved (an
+    inotifywait watcher on close_write), so the restart added nothing.
 
-        present = set()
+    The Reload button and the post-update reload stay — those are the user
+    asking. This pins that no automatic path reaches them.
+    """
+
+    def test_the_plugin_does_not_watch_its_own_files(self):
+        offenders = []
         for path in QML_FILES:
-            present.add(relative(path))
-        for path in (REPO / "model").glob("*.mjs"):
-            present.add(relative(path))
+            text = read(path)
+            for token in ("watchChanges", "scheduleHotReload", "watchedFiles"):
+                if token in text:
+                    offenders.append(relative(path) + ": " + token)
+        assert not offenders, (
+            "the plugin must not watch its own files; a save would restart the "
+            "shell:\n  " + "\n  ".join(offenders)
+        )
 
-        missing = sorted(present - watched)
-        assert not missing, "not watched for hot reload:\n  " + "\n  ".join(missing)
-
-    def test_watched_files_exist(self):
-        import re
-
+    def test_hot_reload_is_only_started_by_the_user(self):
         text = read(REPO / "Panel.qml")
-        block = re.search(r"readonly property var watchedFiles: \[(.*?)\]", text, re.S)
-        watched = re.findall(r'"([^"]+)"', block.group(1))
-        missing = [w for w in watched if not (REPO / w).exists()]
-        assert not missing, "watchedFiles names missing files: " + ", ".join(missing)
+        assert text.count("hotReloadProc.running = true") == 1, (
+            "hotReloadProc must be started in exactly one place"
+        )
+        # No timer may reach it: that would make the restart automatic.
+        assert "onTriggered: root.hotReloadHub()" not in text, (
+            "a timer must not trigger hotReloadHub()"
+        )
+
+    def test_the_manual_reload_is_still_reachable(self):
+        callers = set()
+        for path in QML_FILES:
+            body = read(path)
+            # Skip the definition itself.
+            body = body.replace("function hotReloadHub()", "")
+            if "hotReloadHub()" in body:
+                callers.add(relative(path))
+        assert callers == {"HubPanel.qml", "ui/UpdateDialog.qml"}, (
+            "hotReloadHub() should be called only by the Reload button and the "
+            "post-update path; found: %s" % sorted(callers)
+        )
 
 
 class TestBackendReferences:

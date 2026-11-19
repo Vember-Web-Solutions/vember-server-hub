@@ -1,5 +1,4 @@
 import QtQuick
-import QtQml.Models
 import Quickshell
 import Quickshell.Io
 import "model/DevTools.mjs" as DevTools
@@ -27,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.32"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 108
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.33"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 109
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2138,17 +2137,6 @@ Item {
     onTriggered: root.refreshAll(true)
   }
 
-  Timer {
-    id: hotReloadDebounce
-    interval: 900
-    repeat: false
-    onTriggered: root.hotReloadHub()
-  }
-
-  function scheduleHotReload() {
-    hotReloadDebounce.restart();
-  }
-
   Component.onCompleted: {
     loadManifestInfo();
     loadHubConfig();
@@ -2680,33 +2668,6 @@ Item {
       }
       root.refreshCodeServer();
       root.refreshDocker();
-    }
-  }
-
-  // --- Hot reload watchers ---
-  // Every file that makes up the plugin. Saving any of them restarts the shell
-  // and reopens the hub, so a change is one save away from being live.
-  readonly property var watchedFiles: [
-    "manifest.json", "Panel.qml", "HubPanel.qml", "BarWidget.qml",
-    "model/Config.mjs", "model/DevTools.mjs", "model/Docker.mjs",
-    "model/Gaming.mjs", "model/Hypr.mjs", "model/InstallLog.mjs",
-    "model/Shell.mjs", "model/Ssh.mjs", "model/Systemd.mjs",
-    "model/SystemInfo.mjs", "model/Tailscale.mjs",
-    "ui/ArrangeTabsDialog.qml", "ui/CodeServerRemoveDialog.qml",
-    "ui/CodeServerSetupDialog.qml", "ui/PruneConfirmDialog.qml",
-    "ui/ServerNameWizard.qml", "ui/SettingsMenu.qml",
-    "ui/SshKeyConfirmDialog.qml", "ui/ToastStack.qml", "ui/UpdateDialog.qml",
-    "ui/tabs/AccessTab.qml", "ui/tabs/ContainersTab.qml", "ui/tabs/DevTab.qml",
-    "ui/tabs/GamesTab.qml", "ui/tabs/OverviewTab.qml"
-  ]
-
-  Instantiator {
-    model: root.watchedFiles
-    delegate: FileView {
-      path: root.homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/" + modelData
-      printErrors: false
-      watchChanges: true
-      onFileChanged: root.scheduleHotReload()
     }
   }
 

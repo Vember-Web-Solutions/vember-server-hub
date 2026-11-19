@@ -53,22 +53,30 @@ it is the next candidate, not part of this node.
   guards against. `cancelCodeServerSetup()` is the user's own decision instead —
   it stops every process in the chain and the poll timer, clears the busy flag,
   and says the container may be half-configured so a retry recreates it.
-- **Live verification needs exactly one shell.** Two independent mechanisms
-  multiply shells. First, `omarchy-launch-shell` is a supervisor: it relaunches
-  `quickshell` after a non-zero exit and only stops when the wrapper itself gets
-  TERM, so killing the child alone lets the wrapper respawn it. Second, every
-  Hyprland config load re-runs the `hyprland.start` handler in
-  `default/hypr/autostart.lua`, which execs `omarchy-launch-shell` again — so
-  each `omarchy restart shell` can add a wrapper, and a burst of them grows the
-  count (1 → 2 → 4 → 8 was observed). Each orphan keeps whatever it was drawing,
-  including the hub overlay, so a layer count taken with more than one shell
-  reads high and looks like a regression. A stale 3/4/3 count during this work
-  was sixteen orphaned shells; the same measurement with one shell was a clean
-  0/1/0. Before trusting `hyprctl layers`, check `pgrep -x quickshell | wc -l`
-  is 1. To recover, kill the wrappers (not just the children) with the anchored
-  pattern `^/bin/bash /usr/share/omarchy/bin/omarchy-launch-shell$`, launch one
-  shell, and confirm the count is still 1 after a minute. It is an Omarchy
-  restart race, not this plugin.
+- **The plugin used to restart the shell whenever its own files changed.** It
+  watched all 29 source files with `FileView { watchChanges: true }` and, on any
+  change, ran `omarchy restart shell` and reopened the hub. Three consequences,
+  in order of how they were noticed:
+  1. Every save restarted the whole desktop shell, popping a full-screen overlay
+     that takes exclusive keyboard focus.
+  2. Each restart left a quickshell runtime directory behind (2–14 MB). 542 of
+     them filled the 1.3 GB `/run/user/1000` tmpfs; `df -h /run/user/1000` showed
+     100% and quickshell logged `No space left on device`.
+  3. Once the tmpfs was full, shell restarts failed and shells multiplied — 24
+     at one point, 7.6 GB of RAM, each drawing the hub overlay. Layer counts read
+     3/4/3 instead of 0/1/0 and looked like a plugin regression.
+  Omarchy already reloads a plugin in place on save (an inotifywait watcher on
+  `close_write`), so the restart added nothing. It is removed; the Reload button
+  and the post-update reload remain as the user's own decision.
+  `TestNoSelfRestartingFileWatcher` pins that nothing automatic reaches
+  `hotReloadHub()`.
+- **Live verification still needs exactly one shell**, and now also a `/run` that
+  is not full. `omarchy-launch-shell` supervises `quickshell` and only stops when
+  the wrapper gets TERM, so kill wrappers (pattern
+  `^/bin/bash /usr/share/omarchy/bin/omarchy-launch-shell$`), not children. If the
+  count is high, check `df -h /run/user/1000` and `du -sh
+  /run/user/1000/quickshell` first: stale `by-id` dirs can be removed except the
+  ones a live shell holds open (read them from `/proc/<pid>/fd`).
 
 ## Follow-on hardening
 
@@ -434,6 +442,11 @@ Work that fell out of the split, done in the same arc:
   message the user caused. The `cancelled` flag is set before the stop and
   checked before the failure message, and `TestDockerPullHasAnEscapeHatch` pins
   that order as well as the UI path.
+- **A plugin that restarts the shell on its own file changes is a foot-gun.**
+  The self-watcher above turned a routine save into a full desktop restart and,
+  through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
+  to file changes by reloading itself, never by restarting the host.
+  `TestNoSelfRestartingFileWatcher` enforces it.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -453,16 +466,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 490 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,917 lines. The growth is comments, per-file
+- 491 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,878 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,266 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,842. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,227 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,803. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,842, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,348 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,803, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 4,371 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.32, build 72 → 108.
+- Version 0.1.0 → 0.6.33, build 72 → 109.
