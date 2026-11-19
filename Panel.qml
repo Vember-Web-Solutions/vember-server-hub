@@ -1087,10 +1087,15 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.tailscaleBusy = false;
-      if (code === 0)
+      if (code === 0) {
         root.tailscaleNote = "tailscaled " + actionName + " succeeded.";
-      else
-        root.tailscaleNote = "pkexec/systemctl " + actionName + " failed (code " + code + "). Try 'Run in terminal (sudo)'.";
+      } else {
+        // pkexec refusals and polkit denials read the same as "code 1"
+        // otherwise, so fold in what the tool actually said.
+        root.tailscaleNote = Shell.failureMessage(
+          "pkexec/systemctl " + actionName + " failed", code, tsActionProc.stderr.text) +
+          " Try 'Run in terminal (sudo)'.";
+      }
       root.refreshTailscale();
     }
   }
