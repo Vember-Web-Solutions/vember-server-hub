@@ -6,6 +6,7 @@ import qs.Commons
 import qs.Ui
 import "model/DevTools.mjs" as DevTools
 import "model/Shell.mjs" as Shell
+import "model/Config.mjs" as Config
 import "ui/tabs"
 import "ui"
 
@@ -71,20 +72,14 @@ PanelWindow {
     }
   }
 
+  // The tab table lives in Config.mjs so it can be tested; these wrappers keep
+  // the existing tabDef()/orderedTabs() call sites working.
   function tabDef(id) {
-    if (id === "overview") return { id: "overview", label: "Overview", icon: "󰕮" };
-    if (id === "access") return { id: "access", label: "Access", icon: "󰖂" };
-    if (id === "containers") return { id: "containers", label: "Containers", icon: "󰡨" };
-    if (id === "games") return { id: "games", label: "Gaming", icon: "󰊴" };
-    if (id === "dev") return { id: "dev", label: "Dev", icon: "󰅨" };
-    return { id: id, label: id, icon: "󰘔" };
+    return Config.tabDef(id);
   }
 
   function orderedTabs() {
-    var order = (hub && hub.tabOrder && hub.tabOrder.length > 0) ? hub.tabOrder : ["overview", "access", "containers", "games", "dev"];
-    var out = [];
-    for (var i = 0; i < order.length; i++) out.push(tabDef(order[i]));
-    return out;
+    return Config.orderedTabs(hub && hub.tabOrder ? hub.tabOrder : []);
   }
 
   function openArrangeTabsDialog() {

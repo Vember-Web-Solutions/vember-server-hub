@@ -181,3 +181,73 @@ class TestParseHubConfig:
         assert out["serverName"] == "box"
         assert out["serverRole"] == "NAS"
         assert out["preferredEditor"] == "code"
+
+
+class TestTabDefs:
+    """The tab strip's labels and icons, moved out of QML so they can be read."""
+
+    def test_known_tabs_have_labels(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            'Config.tabDef("overview"), Config.tabDef("access"),'
+            'Config.tabDef("containers"), Config.tabDef("games"),'
+            'Config.tabDef("dev")]))'
+        )
+        assert [t["label"] for t in out] == [
+            "Overview",
+            "Access",
+            "Containers",
+            "Gaming",
+            "Dev",
+        ]
+
+    def test_every_known_tab_has_an_icon(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            'Config.tabDef("overview"), Config.tabDef("access"),'
+            'Config.tabDef("containers"), Config.tabDef("games"),'
+            'Config.tabDef("dev")]))'
+        )
+        assert all(t["icon"].strip() for t in out)
+
+    def test_unknown_tab_falls_back_to_its_id(self, js):
+        out = js('console.log(JSON.stringify(Config.tabDef("bogus")))')
+        assert out["id"] == "bogus"
+        assert out["label"] == "bogus"
+        assert out["icon"].strip()
+
+    def test_default_order_matches_the_tab_table(self, js):
+        # A tab added to DEFAULT_TAB_ORDER without a label would render blank.
+        out = js(
+            "console.log(JSON.stringify(Config.defaultTabOrder().map("
+            "function (id) { return Config.tabDef(id).label; })))"
+        )
+        assert all(label and label != "bogus" for label in out)
+
+
+class TestOrderedTabs:
+    def test_saved_order_is_honoured(self, js):
+        out = js(
+            "console.log(JSON.stringify(Config.orderedTabs("
+            '["dev","overview"]).map(function (t) { return t.id; })))'
+        )
+        assert out[:2] == ["dev", "overview"]
+
+    def test_all_tabs_are_returned(self, js):
+        out = js("console.log(JSON.stringify(Config.orderedTabs([])))")
+        assert len(out) == 5
+        assert sorted(t["id"] for t in out) == sorted(
+            ["overview", "access", "containers", "games", "dev"]
+        )
+
+    def test_unknown_ids_never_reach_the_strip(self, js):
+        out = js(
+            "console.log(JSON.stringify(Config.orderedTabs("
+            '["nope","games"]).map(function (t) { return t.id; })))'
+        )
+        assert "nope" not in out
+        assert len(out) == 5
+
+    def test_every_entry_is_renderable(self, js):
+        out = js("console.log(JSON.stringify(Config.orderedTabs(null)))")
+        assert all(t["label"] and t["icon"] for t in out)

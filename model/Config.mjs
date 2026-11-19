@@ -8,6 +8,16 @@ import { shell } from './Shell.mjs';
 
 export const DEFAULT_TAB_ORDER = ["overview", "access", "containers", "games", "dev"];
 
+// Label and icon for each tab. Kept here rather than in QML so the tab strip
+// and anything that lists tabs read from one table.
+export const TAB_DEFS = {
+  overview: { id: "overview", label: "Overview", icon: "󰕮" },
+  access: { id: "access", label: "Access", icon: "󰖂" },
+  containers: { id: "containers", label: "Containers", icon: "󰡨" },
+  games: { id: "games", label: "Gaming", icon: "󰊴" },
+  dev: { id: "dev", label: "Dev", icon: "󰅨" }
+};
+
 export class Config {
   defaultTabOrder() {
   return DEFAULT_TAB_ORDER.slice();
@@ -31,6 +41,22 @@ export class Config {
   for (var j = 0; j < defaults.length; j++) {
     if (!seen[defaults[j]]) out.push(defaults[j]);
   }
+  return out;
+  }
+
+  // The label and icon for one tab. An unknown id gets a neutral fallback so a
+  // stale config can never produce an empty tab.
+  tabDef(id) {
+  var def = TAB_DEFS[id];
+  if (def) return { id: def.id, label: def.label, icon: def.icon };
+  return { id: id, label: id, icon: "󰘔" };
+  }
+
+  // The tab strip, in the saved order, as ready-to-render definitions.
+  orderedTabs(order) {
+  var list = this.normalizedTabOrder(order);
+  var out = [];
+  for (var i = 0; i < list.length; i++) out.push(this.tabDef(list[i]));
   return out;
   }
 
@@ -109,3 +135,5 @@ export const config = impl;
 export function defaultTabOrder(...args) { return impl.defaultTabOrder(...args); }
 export function normalizedTabOrder(...args) { return impl.normalizedTabOrder(...args); }
 export function parseHubConfig(...args) { return impl.parseHubConfig(...args); }
+export function tabDef(...args) { return impl.tabDef(...args); }
+export function orderedTabs(...args) { return impl.orderedTabs(...args); }
