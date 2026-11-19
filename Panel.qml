@@ -946,9 +946,12 @@ Item {
     if (omarchyUpdateRunning)
       return;
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
-    var termCmd = "( /usr/share/omarchy/bin/omarchy-update ) 2>&1 | tee " + HubModel.shellQuote(logPath) +
+    var lockPath = HubModel.omarchyUpdateLockPath(homeDir);
+    var termCmd = "printf '%s\\n' \"$$\" > " + HubModel.shellQuote(lockPath) +
+      "; ( /usr/share/omarchy/bin/omarchy-update ) 2>&1 | tee " + HubModel.shellQuote(logPath) +
       "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi" +
       "; echo \"[vember-update-exit:${code}]\" | tee -a " + HubModel.shellQuote(logPath) +
+      "; rm -f " + HubModel.shellQuote(lockPath) +
       "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
     omarchyUpdateStatus = "Running Omarchy update in default terminal (interactive)… streaming live log below.";
@@ -984,8 +987,14 @@ Item {
       return;
     omarchyUpdateLogReadProc.running = false;
     omarchyUpdateLogReadProc.command = ["sh", "-c",
-      "f=\"$1\"; [ -f \"$f\" ] || exit 0; tail -c 14000 \"$f\" 2>/dev/null || true",
-      "sh", homeDir + "/.cache/vember-server-hub/omarchy-update.log"];
+      "f=\"$1\"; k=\"$2\"; " +
+      "if [ -f \"$k\" ]; then pid=$(sed -n 1p \"$k\"); " +
+      "if [ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null; then printf 'ALIVE\\n'; else printf 'DEAD\\n'; fi; " +
+      "else printf 'NONE\\n'; fi; " +
+      "printf -- '---VEMBER-UPDATE-LOG---\\n'; " +
+      "[ -f \"$f\" ] && tail -c 14000 \"$f\" 2>/dev/null || true",
+      "sh", homeDir + "/.cache/vember-server-hub/omarchy-update.log",
+      HubModel.omarchyUpdateLockPath(homeDir)];
     omarchyUpdateLogReadProc.running = true;
   }
 
@@ -1278,8 +1287,12 @@ Item {
         if (root.omarchyUpdateRunning)
           return;
         var raw = String(text || "").replace(/\r/g, "");
+        var logMark = "---VEMBER-UPDATE-LOG---";
+        var markIdx = raw.indexOf(logMark);
+        var lockState = HubModel.trimText(markIdx >= 0 ? raw.slice(0, markIdx) : "");
+        var body = markIdx >= 0 ? raw.slice(markIdx + logMark.length) : raw;
         // strip ANSI codes
-        var t = raw.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
+        var t = body.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
         t = t.replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, "");
         t = t.replace(/\x1B\[\?[0-9;]*[a-zA-Z]/g, "");
         // remove internal exit marker lines
@@ -1300,6 +1313,16 @@ Item {
         var joined = out.join("\n");
         if (joined.length > 14000) joined = joined.slice(joined.length - 14000);
         root.omarchyUpdateLog = joined;
+        if (lockState === "ALIVE") {
+          // The update terminal outlived the panel: resume live streaming
+          root.omarchyUpdateRunning = true;
+          root.omarchyUpdateStatus = "Reattached to the running Omarchy update. Live log below.";
+          root.lastActionMessage = root.omarchyUpdateStatus;
+          root.omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F",
+            root.homeDir + "/.cache/vember-server-hub/omarchy-update.log"];
+          root.omarchyUpdateLogProc.running = true;
+          return;
+        }
         if (HubModel.trimText(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
           if (lastMarkerCode !== null) {
             if (lastMarkerCode === "" ) root.omarchyUpdateStatus = "Omarchy update finished (exit code unknown).";

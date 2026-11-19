@@ -744,6 +744,11 @@ function installLockPath(homeDir) {
   return installCacheDir(homeDir) + "/install.lock";
 }
 
+// Same idea for the Omarchy update: line 1 is the pid of the update terminal.
+function omarchyUpdateLockPath(homeDir) {
+  return installCacheDir(homeDir) + "/omarchy-update.lock";
+}
+
 // Parses a captured install log. Returns the visible text plus the exit marker
 // state written by the terminal wrapper: [vember-install-exit:<code>]
 function parseInstallLog(text, limit) {
