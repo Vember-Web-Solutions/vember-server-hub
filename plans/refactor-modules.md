@@ -60,7 +60,12 @@ Work that fell out of the split, done in the same arc:
 - **Config parsing:** `Config.parseHubConfig` returns `empty` / `ready` /
   `wizard` / `invalid`, replacing ~45 lines of branching in a stream handler.
   Testing it found that `JSON.parse("[]")` produced a "valid" config with every
-  field blank; arrays and `null` now count as corrupt.
+  field blank; arrays and `null` now count as corrupt. `Config.parseManifest`
+  parses `manifest.json` into the manifest the version binds to. Both readers
+  are wired to these parsers; static guards keep `configReadProc` on
+  `parseHubConfig` and `manifestReadProc` on `parseManifest`, because the
+  refactor had crossed them — the manifest was being parsed as a config, which
+  reopened the first-run wizard and blanked the server name in a startup race.
 - **Tab table:** `Config.tabDef` / `orderedTabs`, so labels and icons are one
   table rather than a chain of `if`s in QML.
 - **Colours and counts:** `Docker.stateTone` / `stateBackground` /
@@ -113,15 +118,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 356 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,521 lines. The growth is comments, per-file
+- 364 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,492 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,351) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,973 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,566. `Panel.qml` grew by the
-  two install/update watchdogs, the failure-message improvements and their
-  comments; the largest file is now `Panel.qml` at 2,566, then
+  moved into `model/*.mjs` (1,368) and `ui/` (4,173) was already there.
+- The three monoliths went 7,694 → 2,927 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,520. `Panel.qml` grew by the
+  two install/update watchdogs and the failure-message improvements, then lost
+  the duplicated config-parsing branch once the reader was wired to the tested
+  parser; the largest file is now `Panel.qml` at 2,520, then
   `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,341 lines across 11 files and drives the real modules
+- The test suite is 2,417 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
 - Version 0.1.0 → 0.6.1, build 72 → 77.
