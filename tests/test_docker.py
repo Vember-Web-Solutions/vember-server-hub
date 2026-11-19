@@ -85,3 +85,107 @@ class TestParsePs:
         out = js('console.log(JSON.stringify(Docker.parsePs("web\\tnginx")))')
         assert out[0]["state"] == "unknown"
         assert out[0]["running"] is False
+
+
+class TestParseSize:
+    """Sizes appear in `docker pull` output as 12.3MB / 1.5GiB / 900B."""
+
+    def test_byte_suffixes_scale(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Docker.parseSize('1B'), Docker.parseSize('1kB'),"
+            "Docker.parseSize('1MB'), Docker.parseSize('1GB')]))"
+        )
+        assert out == [1, 1024, 1024**2, 1024**3]
+
+    def test_decimal_values_are_kept(self, js):
+        out = js("console.log(JSON.stringify(Docker.parseSize('1.5GiB')))")
+        assert out == 1.5 * 1024**3
+
+    def test_whitespace_between_number_and_unit_is_allowed(self, js):
+        out = js("console.log(JSON.stringify(Docker.parseSize('  2 MB ')))")
+        assert out == 2 * 1024**2
+
+    def test_unparseable_input_is_nan(self, js):
+        # NaN cannot cross JSON, so ask JS whether it is NaN.
+        out = js(
+            "console.log(JSON.stringify(["
+            "isNaN(Docker.parseSize('')), isNaN(Docker.parseSize('nope')),"
+            "isNaN(Docker.parseSize(null))]))"
+        )
+        assert out == [True, True, True]
+
+
+class TestParsePullLine:
+    def test_downloading_line_yields_bytes(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parsePullLine('
+            '"abc123: Downloading [==>   ]  12.5MB/50MB")))'
+        )
+        assert out["id"] == "abc123"
+        assert out["phase"] == "downloading"
+        assert out["current"] == 12.5 * 1024**2
+        assert out["total"] == 50 * 1024**2
+
+    def test_extracting_line_is_recognised(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parsePullLine('
+            '"deadbeef: Extracting  1GB/2GB")))'
+        )
+        assert out["phase"] == "extracting"
+
+    def test_complete_line_has_no_byte_count(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parsePullLine("abc123: Pull complete")))'
+        )
+        assert out == {"id": "abc123", "phase": "complete", "current": None, "total": None}
+
+    def test_already_exists_counts_as_complete(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parsePullLine("abc123: Already exists")))'
+        )
+        assert out["phase"] == "complete"
+
+    def test_unrelated_lines_are_ignored(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Docker.parsePullLine('Pulling from library/nginx'),"
+            "Docker.parsePullLine('Status: Downloaded newer image'),"
+            "Docker.parsePullLine('')]))"
+        )
+        assert out == [None, None, None]
+
+
+class TestAccumulateLayers:
+    def test_empty_state_is_zero(self, js):
+        out = js("console.log(JSON.stringify(Docker.accumulateLayers({})))")
+        assert out == {"done": 0, "total": 0, "progress": 0}
+
+    def test_layers_are_summed(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.accumulateLayers({"
+            "a:{current:50,total:100}, b:{current:100,total:100}})))"
+        )
+        assert out["done"] == 150
+        assert out["total"] == 200
+        assert out["progress"] == 0.75
+
+    def test_current_is_clamped_to_total(self, js):
+        # A layer reporting more bytes than its total must not push progress
+        # above 1.
+        out = js(
+            "console.log(JSON.stringify(Docker.accumulateLayers({"
+            "a:{current:500,total:100}})))"
+        )
+        assert out["progress"] == 1
+
+    def test_layers_without_totals_are_skipped(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.accumulateLayers({"
+            "a:{current:10,total:0}, b:{current:10}})))"
+        )
+        assert out == {"done": 0, "total": 0, "progress": 0}
+
+    def test_null_is_tolerated(self, js):
+        out = js("console.log(JSON.stringify(Docker.accumulateLayers(null)))")
+        assert out == {"done": 0, "total": 0, "progress": 0}

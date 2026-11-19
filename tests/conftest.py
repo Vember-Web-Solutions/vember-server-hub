@@ -17,6 +17,7 @@ NODE = shutil.which("node")
 
 MODULES = [
     "Shell",
+    "Config",
     "InstallLog",
     "Docker",
     "Systemd",

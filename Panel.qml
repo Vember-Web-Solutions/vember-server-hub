@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "model/DevTools.mjs" as DevTools
+import "model/Config.mjs" as Config
 import "model/Docker.mjs" as Docker
 import "model/Gaming.mjs" as Gaming
 import "model/InstallLog.mjs" as InstallLog
@@ -205,21 +206,7 @@ Item {
   }
 
   function normalizedTabOrder(order) {
-    var defaults = ["overview", "access", "containers", "games", "dev"];
-    var out = [];
-    var seen = {};
-    var src = order || [];
-    for (var i = 0; i < src.length; i++) {
-      var id = Shell.trim(src[i]);
-      if (defaults.indexOf(id) !== -1 && !seen[id]) {
-        seen[id] = true;
-        out.push(id);
-      }
-    }
-    for (var j = 0; j < defaults.length; j++) {
-      if (!seen[defaults[j]]) out.push(defaults[j]);
-    }
-    return out;
+    return Config.normalizedTabOrder(order);
   }
 
   function writeHubConfig(restartAfter) {
@@ -370,73 +357,31 @@ Item {
   }
 
   function _parseDockerSize(s) {
-    var m = String(s || "").trim().match(/^([0-9.]+)\s*([kKmMgGtT]?)(i?B)?$/);
-    if (!m) return NaN;
-    var n = parseFloat(m[1]);
-    if (!isFinite(n)) return NaN;
-    var u = (m[2] || "").toUpperCase();
-    var mul = 1;
-    if (u === "K") mul = 1024;
-    else if (u === "M") mul = 1024 * 1024;
-    else if (u === "G") mul = 1024 * 1024 * 1024;
-    else if (u === "T") mul = 1024 * 1024 * 1024 * 1024;
-    return n * mul;
+    return Docker.parseSize(s);
   }
 
   function _updateCodeServerPullProgressFromLine(line) {
-    var t = String(line || "");
-    var m = t.match(/^([a-f0-9]+):\s+(Downloading|Extracting)\s+(?:\[[^\]]*\]\s*)?([0-9.]+\s*[kKmMgGtT]?i?B)\s*\/\s*([0-9.]+\s*[kKmMgGtT]?i?B)/);
-    if (m) {
-      var id = m[1];
-      var cur = _parseDockerSize(m[3]);
-      var tot = _parseDockerSize(m[4]);
-      if (isFinite(cur) && isFinite(tot) && tot > 0) {
-        var layers = _codeServerPullLayers || {};
-        layers[id] = { current: cur, total: tot };
-        _codeServerPullLayers = layers;
-        var done = 0, total = 0;
-        for (var k in layers) {
-          if (!layers.hasOwnProperty(k)) continue;
-          var L = layers[k];
-          if (L && isFinite(L.total) && L.total > 0) {
-            total += L.total;
-            done += Math.min(L.current || 0, L.total);
-          }
-        }
-        if (total > 0) {
-          root.codeServerSetupBytesDone = done;
-          root.codeServerSetupBytesTotal = total;
-          root.codeServerSetupProgress = Math.max(0, Math.min(1, done / total));
-          root.codeServerSetupDetail = "Downloading image… " + Shell.humanBytes(done) + " / " + Shell.humanBytes(total);
-        }
-      }
+    var ev = Docker.parsePullLine(line);
+    if (!ev) return;
+    var layers = _codeServerPullLayers || {};
+    if (ev.phase === "complete") {
+      if (layers[ev.id] && isFinite(layers[ev.id].total))
+        layers[ev.id].current = layers[ev.id].total;
+      else
+        return;
+    } else if (isFinite(ev.current) && isFinite(ev.total) && ev.total > 0) {
+      layers[ev.id] = { current: ev.current, total: ev.total };
+    } else {
       return;
     }
-    if (/:\s+(Download complete|Pull complete|Already exists)/.test(t)) {
-      var m2 = t.match(/^([a-f0-9]+):/);
-      if (m2) {
-        var id2 = m2[1];
-        var layers2 = _codeServerPullLayers || {};
-        if (layers2[id2] && isFinite(layers2[id2].total)) {
-          layers2[id2].current = layers2[id2].total;
-          _codeServerPullLayers = layers2;
-          var done2 = 0, total2 = 0;
-          for (var k2 in layers2) {
-            if (!layers2.hasOwnProperty(k2)) continue;
-            var L2 = layers2[k2];
-            if (L2 && isFinite(L2.total) && L2.total > 0) {
-              total2 += L2.total;
-              done2 += Math.min(L2.current || 0, L2.total);
-            }
-          }
-          if (total2 > 0) {
-            root.codeServerSetupBytesDone = done2;
-            root.codeServerSetupBytesTotal = total2;
-            root.codeServerSetupProgress = Math.max(0, Math.min(1, done2 / total2));
-          }
-        }
-      }
-    }
+    _codeServerPullLayers = layers;
+    var agg = Docker.accumulateLayers(layers);
+    if (agg.total <= 0) return;
+    root.codeServerSetupBytesDone = agg.done;
+    root.codeServerSetupBytesTotal = agg.total;
+    root.codeServerSetupProgress = agg.progress;
+    if (ev.phase !== "complete")
+      root.codeServerSetupDetail = "Downloading image… " + Shell.humanBytes(agg.done) + " / " + Shell.humanBytes(agg.total);
   }
 
   function setupCodeServerTerminal(password, port) {
@@ -2375,6 +2320,14 @@ Item {
     watchChanges: true
     onFileChanged: root.scheduleHotReload()
   }
+  // Hot reload when model/Config.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Config.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+
   // Hot reload when model/Docker.mjs changes.
   FileView {
     path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Docker.mjs"
