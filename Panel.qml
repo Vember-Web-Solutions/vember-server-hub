@@ -669,8 +669,13 @@ Item {
   }
 
   // --- Tailscale and Docker status ---
-  function refreshTailscale() {
-    tailscaleNote = "";
+  //
+  // `preserveNote` keeps the note an action just wrote. The action handler sets
+  // a success/failure message and then refreshes status; without this the
+  // refresh cleared the note in the same tick and the message never showed.
+  function refreshTailscale(preserveNote) {
+    if (preserveNote !== true)
+      tailscaleNote = "";
     if (!tsActiveProc.running) tsActiveProc.running = true;
     if (!tsEnabledProc.running) tsEnabledProc.running = true;
     if (!tsIpProc.running) tsIpProc.running = true;
@@ -1116,7 +1121,7 @@ Item {
           "pkexec/systemctl " + actionName + " failed", code, tsActionProc.stderr.text) +
           " Try 'Run in terminal (sudo)'.";
       }
-      root.refreshTailscale();
+      root.refreshTailscale(true);
     }
   }
   Process {

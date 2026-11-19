@@ -569,3 +569,35 @@ class TestPollSafety:
             assert idx > guard, (
                 "%s must only be reset when not preserving state" % prop
             )
+
+    def test_tailscale_action_keeps_its_result_note(self):
+        # tsActionProc.onExited writes a success/failure note and then refreshes
+        # status. refreshTailscale() used to clear tailscaleNote unconditionally,
+        # so the message was wiped in the same tick and the user never saw
+        # whether the action worked. The handler must preserve it.
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshTailscale\((\w+)\)", text)
+        assert fn, "refreshTailscale must take a preserve flag"
+        body_start = text.index("{", fn.end())
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshTailscale")
+        # The clear must sit behind the preserve guard.
+        assert "preserveNote" in fn.group(1)
+        guard = body.index("if (preserveNote !== true)")
+        clear = body.index("tailscaleNote = \"\"")
+        assert clear > guard, "tailscaleNote must only clear when not preserving"
+        # And the action handler must pass the flag.
+        action = text.index("id: tsActionProc")
+        window = text[action:action + 900]
+        assert "refreshTailscale(true)" in window, (
+            "tsActionProc.onExited must preserve its result note"
+        )
