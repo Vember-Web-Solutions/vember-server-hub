@@ -206,6 +206,13 @@ Work that fell out of the split, done in the same arc:
   non-zero branch now surfaces through `Shell.failureMessage`, without
   overwriting the more specific message the stderr handler may already have set.
   `TestConfigWriteFailureSurfacing` pins it.
+- **Unvalidated SSH key paste:** `addAuthorizedKey` appended whatever was
+  pasted and reported "Key added." A private key, a multi-line blob or a typo
+  would be written to `authorized_keys` and never authenticate — and a pasted
+  private key would reach disk. `Ssh.validatePublicKeyLine` now rejects private
+  keys, multi-line input, non-key text and bad base64, and the normalised key is
+  what gets written. `TestValidatePublicKeyLine` covers the model;
+  `TestSshAddKeyValidation` pins the wiring.
 
 ## Done when
 
@@ -214,16 +221,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 390 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,604 lines. The growth is comments, per-file
+- 400 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,631 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,368) and `ui/` (4,190) was already there.
+  moved into `model/*.mjs` (1,395) and `ui/` (4,190) was already there.
 - The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
   `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,615. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,615, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,016 lines across 11 files and drives the real modules
+- The test suite is 3,137 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.8, build 72 → 84.
+- Version 0.1.0 → 0.6.9, build 72 → 85.
