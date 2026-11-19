@@ -322,6 +322,19 @@ Work that fell out of the split, done in the same arc:
   install replaced that id, so the tools never rescanned and the Dev tab kept
   showing a stale tool. The finish and stop paths now set `devRefreshPending`,
   and the refresh consumes it.
+- **The panel was destroyed when the hub closed, so its watchdogs and
+  notifications never ran.** The shell's Loader activates a panel while
+  `keepLoaded` is set or the panel id is in `openPanelIds`; the manifest set
+  neither, so `shell.hide()` unloaded the panel and took every Process and
+  Timer with it. Every failure notification added for a post-hand-off failure
+  (a failed launch, an install or update watchdog verdict) was therefore dead
+  code — it could only fire while the panel was still open, which is never when
+  those failures happen. Verified directly: `omarchy-shell shell call <id>
+  status` returned the panel's JSON while open and `unknown` after `hide`. The
+  manifest now sets `"keepLoaded": true`; `HubPanel.qml` already binds
+  `visible: hub.opened` and drops keyboard focus when closed, so the panel
+  stays loaded but hidden. `TestManifest::test_panel_is_keep_loaded` pins both
+  halves.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -341,7 +354,7 @@ plugin warnings in the journal.
 
 ## Result
 
-- 446 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- 447 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
 - Plugin source went 7,718 → 8,751 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
@@ -351,6 +364,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,739, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,729 lines across 12 files and drives the real modules
+- The test suite is 3,749 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.22, build 72 → 98.
+- Version 0.1.0 → 0.6.23, build 72 → 99.

@@ -392,6 +392,26 @@ class TestManifest:
             "version must be MAJOR.MINOR.PATCH, got %s" % manifest["version"]
         )
 
+    def test_panel_is_keep_loaded(self):
+        # Without keepLoaded the shell's Loader deactivates the panel when
+        # shell.hide() removes it from openPanelIds, destroying every Process
+        # and Timer in it. The install/update watchdogs and the notification
+        # queue live there, so a failure that lands after handOffToExternalSurface
+        # closes the hub (a failed launch, a watchdog verdict) would never
+        # notify. The panel is invisible while closed because HubPanel.qml binds
+        # `visible: hub.opened` and drops keyboard focus, so keeping it loaded
+        # does not leave it on screen.
+        manifest = self._manifest()
+        assert manifest.get("keepLoaded") is True, (
+            "manifest.json must set \"keepLoaded\": true or the panel unloads "
+            "when the hub closes and its watchdogs and notifications die with it"
+        )
+        hub_panel = read(REPO / "HubPanel.qml")
+        assert re.search(r"visible:\s*hub\.opened", hub_panel), (
+            "HubPanel must gate visibility on hub.opened so a keepLoaded panel "
+            "stays hidden while closed"
+        )
+
 
 class TestInstallWatchdog:
     """The install watchdog must end tracking even when the log has output.

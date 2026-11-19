@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "elena.vember-server-hub",
   "name": "Vember Server Hub",
-  "version": "0.6.22",
-  "build": 98,
+  "version": "0.6.23",
+  "build": 99,
   "author": "elenanight",
   "description": "Local server and system hub for Tailscale, Docker, games, and storage status",
   "license": "MIT",
@@ -11,6 +11,7 @@
     "panel",
     "bar-widget"
   ],
+  "keepLoaded": true,
   "entryPoints": {
     "panel": "Panel.qml",
     "barWidget": "BarWidget.qml"
