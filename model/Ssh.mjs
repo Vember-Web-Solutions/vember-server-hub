@@ -7,29 +7,6 @@
 import { shell } from './Shell.mjs';
 
 export class Ssh {
-  hostKeyFingerprintsCommand() {
-  return ["sh", "-c", "for f in /etc/ssh/ssh_host_*key.pub; do [ -f \"$f\" ] || continue; ssh-keygen -lf \"$f\" 2>/dev/null || true; done"];
-  }
-
-  parseHostKeyFingerprints(text) {
-  var out = [];
-  var rows = shell.nonEmptyLines(text);
-  for (var i = 0; i < rows.length; i++) {
-    var line = rows[i];
-    // e.g. 256 SHA256:... comment (ED25519)
-    var m = /^(\d+)\s+(\S+)\s+(.*)\s+\(([^)]+)\)\s*$/.exec(line);
-    if (m) {
-      out.push({
-        bits: shell.trim(m[1]),
-        fingerprint: shell.trim(m[2]),
-        comment: shell.trim(m[3]),
-        type: shell.trim(m[4])
-      });
-    }
-  }
-  return out;
-  }
-
   authorizedKeysPath(homeDir) {
   return String(homeDir || "") + "/.ssh/authorized_keys";
   }
@@ -119,8 +96,6 @@ const impl = new Ssh();
 
 // Singleton shared with the other modules.
 export const ssh = impl;
-export function hostKeyFingerprintsCommand(...args) { return impl.hostKeyFingerprintsCommand(...args); }
-export function parseHostKeyFingerprints(...args) { return impl.parseHostKeyFingerprints(...args); }
 export function authorizedKeysPath(...args) { return impl.authorizedKeysPath(...args); }
 export function validatePublicKeyLine(...args) { return impl.validatePublicKeyLine(...args); }
 export function authorizedKeysReadCommand(...args) { return impl.authorizedKeysReadCommand(...args); }

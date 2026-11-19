@@ -54,10 +54,6 @@ export class SystemInfo {
   pgrepExactCommand(name) {
   return ["pgrep", "-x", String(name)];
   }
-
-  parsePgrepCount(text) {
-  return shell.nonEmptyLines(text).length;
-  }
   // Storage pressure colour: green below 75%, amber from 75%, red from 90%.
   // A missing or unparseable ratio reads as 0% rather than as an error.
   storageUseColor(ratio) {
@@ -78,5 +74,4 @@ export function dfBytesCommand(...args) { return impl.dfBytesCommand(...args); }
 export function parseFindmnt(...args) { return impl.parseFindmnt(...args); }
 export function parseDfBytes(...args) { return impl.parseDfBytes(...args); }
 export function pgrepExactCommand(...args) { return impl.pgrepExactCommand(...args); }
-export function parsePgrepCount(...args) { return impl.parsePgrepCount(...args); }
 export function storageUseColor(...args) { return impl.storageUseColor(...args); }

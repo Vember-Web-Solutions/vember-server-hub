@@ -232,15 +232,6 @@ export class Gaming {
   return out;
   }
 
-  parseManifestCount(text) {
-  var scan = parseSteamManifestScan(text);
-  return scan.count;
-  }
-
-  steamManifestCountCommand(steamappsDir) {
-  return ["find", String(steamappsDir), "-maxdepth", "1", "-name", "appmanifest_*.acf"];
-  }
-
   steamManifestCountCommandForDirs(steamappsDirs) {
   var dirs = Array.isArray(steamappsDirs) ? steamappsDirs : [];
   var filtered = [];
@@ -300,6 +291,4 @@ export function battlenetPrefixPath(...args) { return impl.battlenetPrefixPath(.
 export function steamRootPath(...args) { return impl.steamRootPath(...args); }
 export function parseLibraryPaths(...args) { return impl.parseLibraryPaths(...args); }
 export function parseSteamManifestScan(...args) { return impl.parseSteamManifestScan(...args); }
-export function parseManifestCount(...args) { return impl.parseManifestCount(...args); }
-export function steamManifestCountCommand(...args) { return impl.steamManifestCountCommand(...args); }
 export function steamManifestCountCommandForDirs(...args) { return impl.steamManifestCountCommandForDirs(...args); }

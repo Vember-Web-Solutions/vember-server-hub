@@ -96,8 +96,6 @@ class TestSteam:
         out = js('console.log(JSON.stringify(Gaming.parseSteamManifestScan("   ")))')
         assert out == {"count": 0, "servers": []}
 
-    def test_parse_manifest_count_is_the_count_only(self, js):
-        assert js('console.log(JSON.stringify(Gaming.parseManifestCount("5")))') == 5
 
     def test_library_paths_are_extracted_from_vdf(self, js):
         out = js(
@@ -115,13 +113,6 @@ class TestSteam:
     def test_empty_vdf_yields_no_paths(self, js):
         assert js('console.log(JSON.stringify(Gaming.parseLibraryPaths("")))') == []
 
-    def test_manifest_command_targets_steamapps(self, js):
-        out = js(
-            'console.log(JSON.stringify(Gaming.steamManifestCountCommand("/mnt/a/steamapps")))'
-        )
-        assert out[0] == "find"
-        assert "/mnt/a/steamapps" in out
-        assert "appmanifest_*.acf" in out
 
     def test_multi_dir_command_without_dirs_is_a_zero_json_stub(self, js):
         out = js(

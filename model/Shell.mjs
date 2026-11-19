@@ -29,14 +29,6 @@ export class Shell {
   return "'" + String(value === undefined || value === null ? "" : value).replace(/'/g, "'\\''") + "'";
   }
 
-  safeName(value) {
-  return trim(value);
-  }
-
-  statusLabel(ok, yesText, noText) {
-  return ok ? yesText : noText;
-  }
-
   humanBytes(bytes) {
   var n = Number(bytes || 0);
   if (!isFinite(n) || n <= 0)
@@ -51,21 +43,6 @@ export class Shell {
   return n.toFixed(digits) + " " + units[i];
   }
 
-  parseKeyValueLines(text) {
-  var out = {};
-  nonEmptyLines(text).forEach(function (line) {
-    var idx = line.indexOf("=");
-    if (idx === -1)
-      idx = line.indexOf(":");
-    if (idx === -1)
-      return;
-    var key = trim(line.slice(0, idx));
-    var value = trim(line.slice(idx + 1));
-    if (key.length > 0)
-      out[key] = value;
-  });
-  return out;
-  }
   // A one-line failure description. `what` is the whole phrase, so callers
   // keep their own wording. Commands collect stderr but a bare "(code 1)"
   // tells the user nothing, so the first meaningful stderr line is folded in
@@ -88,8 +65,5 @@ export function lines(...args) { return impl.lines(...args); }
 export function nonEmptyLines(...args) { return impl.nonEmptyLines(...args); }
 export function stripAnsi(...args) { return impl.stripAnsi(...args); }
 export function quote(...args) { return impl.quote(...args); }
-export function safeName(...args) { return impl.safeName(...args); }
-export function statusLabel(...args) { return impl.statusLabel(...args); }
 export function humanBytes(...args) { return impl.humanBytes(...args); }
-export function parseKeyValueLines(...args) { return impl.parseKeyValueLines(...args); }
 export function failureMessage(...args) { return impl.failureMessage(...args); }

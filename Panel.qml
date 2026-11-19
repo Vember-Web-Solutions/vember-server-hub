@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.9"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 85
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.10"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 86
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2475,7 +2475,7 @@ Item {
   readonly property var watchedFiles: [
     "manifest.json", "Panel.qml", "HubPanel.qml", "BarWidget.qml",
     "model/Config.mjs", "model/DevTools.mjs", "model/Docker.mjs",
-    "model/Gaming.mjs", "model/InstallLog.mjs", "model/Omarchy.mjs",
+    "model/Gaming.mjs", "model/InstallLog.mjs",
     "model/Shell.mjs", "model/Ssh.mjs", "model/Systemd.mjs",
     "model/SystemInfo.mjs", "model/Tailscale.mjs",
     "ui/ArrangeTabsDialog.qml", "ui/CodeServerRemoveDialog.qml",

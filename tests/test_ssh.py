@@ -1,43 +1,4 @@
-"""Tests for model/Ssh.mjs: host key fingerprints and authorized_keys parsing."""
-
-import subprocess
-
-
-class TestHostKeys:
-    def test_fingerprint_line_is_parsed(self, js):
-        out = js(
-            'console.log(JSON.stringify(Ssh.parseHostKeyFingerprints('
-            '"256 SHA256:abc123 root@vemberos (ED25519)\\n")))'
-        )
-        assert out == [
-            {
-                "bits": "256",
-                "fingerprint": "SHA256:abc123",
-                "comment": "root@vemberos",
-                "type": "ED25519",
-            }
-        ]
-
-    def test_multiple_keys_are_all_returned(self, js):
-        out = js(
-            'console.log(JSON.stringify(Ssh.parseHostKeyFingerprints('
-            '"3072 SHA256:a a@h (RSA)\\n256 SHA256:b b@h (ED25519)\\n")))'
-        )
-        assert [k["type"] for k in out] == ["RSA", "ED25519"]
-
-    def test_unparseable_lines_are_skipped(self, js):
-        out = js('console.log(JSON.stringify(Ssh.parseHostKeyFingerprints("garbage\\n")))')
-        assert out == []
-
-    def test_command_scans_host_public_keys(self, js):
-        cmd = js("console.log(JSON.stringify(Ssh.hostKeyFingerprintsCommand()))")
-        assert cmd[0] == "sh"
-        assert "/etc/ssh/ssh_host_*key.pub" in cmd[2]
-        assert "ssh-keygen -lf" in cmd[2]
-        result = subprocess.run(
-            ["sh", "-n"], input=cmd[2], capture_output=True, text=True
-        )
-        assert result.returncode == 0, result.stderr
+"""Tests for model/Ssh.mjs: authorized_keys parsing and key validation."""
 
 
 class TestAuthorizedKeys:

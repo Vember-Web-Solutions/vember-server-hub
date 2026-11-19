@@ -1,4 +1,4 @@
-"""Tests for model/Systemd.mjs, SystemInfo.mjs and Omarchy.mjs."""
+"""Tests for model/Systemd.mjs and SystemInfo.mjs."""
 
 
 
@@ -86,31 +86,6 @@ class TestSystemInfo:
             '"Filesystem 1B-blocks Used Available Use% Mounted")))'
         )
         assert out is None
-
-    def test_pgrep_count_counts_lines(self, js):
-        assert js('console.log(JSON.stringify(SystemInfo.parsePgrepCount("1\\n2\\n3\\n")))') == 3
-
-    def test_pgrep_count_of_nothing_is_zero(self, js):
-        assert js('console.log(JSON.stringify(SystemInfo.parsePgrepCount("")))') == 0
-
-
-class TestOmarchy:
-    def test_update_runs_in_a_presentation_terminal(self, js):
-        out = js("console.log(JSON.stringify(Omarchy.updateTerminalCommand()))")
-        assert out[0] == "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation"
-        assert out[1] == "/usr/share/omarchy/bin/omarchy-update"
-
-    def test_both_paths_exist_on_this_machine(self, js):
-        # Only meaningful on an Omarchy install; CI runners have neither path.
-        import os
-
-        out = js("console.log(JSON.stringify(Omarchy.updateTerminalCommand()))")
-        missing = [p for p in out if not os.access(p, os.X_OK)]
-        if missing:
-            import pytest
-
-            pytest.skip("not an Omarchy install: " + ", ".join(missing))
-        assert not missing
 
 
 class TestStorageUseColor:

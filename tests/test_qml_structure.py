@@ -1117,3 +1117,67 @@ class TestSshAddKeyValidation:
         assert "v.ok" in body and "return" in body, (
             "addAuthorizedKey must return early when validation fails"
         )
+
+
+class TestNoDeadModelExports:
+    """Every exported model function must have a production caller.
+
+    The model layer exports each class method twice: as a method on the
+    instance and as a hoisted `export function` so QML can call
+    `Module.name(...)`. That convenience makes it easy to leave a helper
+    behind after its only caller is rewritten — and a test that exercises the
+    helper then passes while nothing in the plugin calls it. Ten such exports
+    had accumulated before this guard existed.
+
+    A function is live if its name appears anywhere in production code
+    (any .qml file or any .mjs file) outside its own definition and export
+    wrapper. Tests do not count: a test is evidence about a function, not a
+    caller of it.
+    """
+
+    def _production_text(self):
+        files = [p for p in QML_FILES] + sorted((REPO / "model").glob("*.mjs"))
+        return {p: read(p) for p in files}
+
+    def test_every_export_has_a_caller(self):
+        texts = self._production_text()
+        dead = []
+        for path in sorted((REPO / "model").glob("*.mjs")):
+            source = texts[path]
+            for match in re.finditer(r"^export function (\w+)\(", source, re.M):
+                name = match.group(1)
+                # Strip the wrapper itself and the class method definition, then
+                # look for any remaining reference anywhere in production code.
+                stripped = re.sub(
+                    r"^export function " + name + r"\(\.\.\.args\).*$", "", source, flags=re.M
+                )
+                stripped = re.sub(
+                    r"^\s*" + name + r"\([^)]*\)\s*\{", "", stripped, count=1, flags=re.M
+                )
+                referenced = bool(re.search(r"\b" + name + r"\b", stripped))
+                if not referenced:
+                    for other, text in texts.items():
+                        if other == path:
+                            continue
+                        if re.search(r"\b" + name + r"\b", text):
+                            referenced = True
+                            break
+                if not referenced:
+                    dead.append(relative(path) + ":" + name)
+        assert not dead, (
+            "exported but never called in production code (delete it, or wire it "
+            "up):\n  " + "\n  ".join(dead)
+        )
+
+    def test_the_guard_would_catch_a_dead_export(self):
+        # Mutation check: plant a dead export in the model layer and confirm the
+        # detection logic flags it. Done in memory so the tree is untouched.
+        sample = "export class X {\n  orphan() {\n  return 1;\n  }\n}\n\nexport function orphan(...args) { return impl.orphan(...args); }\n"
+        name = "orphan"
+        stripped = re.sub(
+            r"^export function " + name + r"\(\.\.\.args\).*$", "", sample, flags=re.M
+        )
+        stripped = re.sub(
+            r"^\s*" + name + r"\([^)]*\)\s*\{", "", stripped, count=1, flags=re.M
+        )
+        assert not re.search(r"\b" + name + r"\b", stripped)

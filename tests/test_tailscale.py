@@ -7,11 +7,10 @@ class TestCommands:
     def test_status_commands_are_argv_arrays(self, js):
         out = js(
             "console.log(JSON.stringify(["
-            "Tailscale.statusCommand(), Tailscale.statusJsonCommand(), Tailscale.ipCommand()]))"
+            "Tailscale.statusJsonCommand(), Tailscale.ipCommand()]))"
         )
-        assert out[0] == ["tailscale", "status", "--self=false"]
-        assert out[1] == ["tailscale", "status", "--json"]
-        assert out[2] == ["tailscale", "ip", "-4"]
+        assert out[0] == ["tailscale", "status", "--json"]
+        assert out[1] == ["tailscale", "ip", "-4"]
 
 
 class TestParseStatus:

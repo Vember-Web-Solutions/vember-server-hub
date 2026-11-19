@@ -7,10 +7,6 @@
 import { shell } from './Shell.mjs';
 
 export class Tailscale {
-  statusCommand() {
-  return ["tailscale", "status", "--self=false"];
-  }
-
   statusJsonCommand() {
   return ["tailscale", "status", "--json"];
   }
@@ -89,7 +85,6 @@ const impl = new Tailscale();
 
 // Singleton shared with the other modules.
 export const tailscale = impl;
-export function statusCommand(...args) { return impl.statusCommand(...args); }
 export function statusJsonCommand(...args) { return impl.statusJsonCommand(...args); }
 export function ipCommand(...args) { return impl.ipCommand(...args); }
 export function parseStatusJson(...args) { return impl.parseStatusJson(...args); }

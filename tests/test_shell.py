@@ -64,15 +64,7 @@ class TestQuote:
 
 
 class TestFormatting:
-    def test_safe_name_keeps_simple_names(self, js):
-        assert js('console.log(JSON.stringify(Shell.safeName(" My Server ")))') == "My Server"
 
-    def test_status_label_picks_branch(self, js):
-        out = js(
-            'console.log(JSON.stringify([Shell.statusLabel(true,"Up","Down"),'
-            'Shell.statusLabel(false,"Up","Down")]))'
-        )
-        assert out == ["Up", "Down"]
 
     def test_human_bytes_scales_units(self, js):
         out = js(
@@ -84,19 +76,6 @@ class TestFormatting:
     def test_human_bytes_rejects_junk(self, js):
         assert js("console.log(JSON.stringify(Shell.humanBytes('nope')))") == "0 B"
 
-
-class TestKeyValueLines:
-    def test_parses_equals_and_colon(self, js):
-        out = js(
-            'console.log(JSON.stringify(Shell.parseKeyValueLines("A=1\\nB: 2\\nbad\\n")))'
-        )
-        assert out == {"A": "1", "B": "2"}
-
-    def test_ignores_blank_lines(self, js):
-        out = js(
-            'console.log(JSON.stringify(Shell.parseKeyValueLines("\\nA=1\\n\\n")))'
-        )
-        assert out == {"A": "1"}
 
 
 class TestFailureMessage:
