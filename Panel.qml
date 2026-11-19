@@ -810,7 +810,6 @@ Item {
   }
 
   function openBattlenetSetup() {
-    installTitle = "Battle.net";
     extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
     Qt.openUrlExternally(HubModel.battlenetSetupUrl());
@@ -893,6 +892,11 @@ Item {
     installLog = "";
     installTitle = "";
     extraAppInstallStatus = "";
+    installClearProc.running = false;
+    installClearProc.command = ["sh", "-c",
+      "rm -f \"$1\" \"$2\"", "sh",
+      HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir)];
+    installClearProc.running = true;
   }
 
   function refreshAfterInstall() {
@@ -925,17 +929,6 @@ Item {
     tsTerminalProc.command = HubModel.terminalSystemctlCommand(action, "tailscaled");
     tsTerminalProc.running = true;
     tailscaleNote = "Opened terminal for: sudo systemctl " + action + " tailscaled";
-  }
-
-  function openOmarchyUpdateTerminal() {
-    omarchyUpdateRunning = false;
-    omarchyUpdateStatus = "Opening Omarchy update in terminal…";
-    lastActionMessage = "Opened terminal: omarchy update.";
-    omarchyUpdateProc.running = false;
-    omarchyUpdateProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation /usr/share/omarchy/bin/omarchy-update </dev/null >/dev/null 2>&1 &"];
-    omarchyUpdateProc.running = true;
-    closeAfterLaunchTimer.restart();
   }
 
   function runOmarchyUpdateInPanel() {
@@ -1219,17 +1212,6 @@ Item {
   }
 
   // --- Processes: Omarchy update ---
-  Timer {
-    id: closeAfterLaunchTimer
-    interval: 250
-    repeat: false
-    onTriggered: root.requestClose()
-  }
-  Process {
-    id: omarchyUpdateProc
-    stdout: StdioCollector {}
-    stderr: StdioCollector {}
-  }
   Process {
     id: omarchyUpdateTerminalProc
     stdout: StdioCollector {}
@@ -1655,6 +1637,13 @@ Item {
         }
       }
     }
+    stderr: StdioCollector {}
+  }
+
+  // Clears the persisted install title/log files
+  Process {
+    id: installClearProc
+    stdout: StdioCollector {}
     stderr: StdioCollector {}
   }
 
