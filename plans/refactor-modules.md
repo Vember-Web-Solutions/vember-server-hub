@@ -286,6 +286,11 @@ Work that fell out of the split, done in the same arc:
   fail the launcher, and the terminal-launch handler no longer stops tracking
   on a non-zero exit at all. Only the lock file and the log can tell a missing
   terminal from a slow one, so the watchdog owns that verdict.
+- **`Qt.openUrlExternally` returns a bool and both call sites ignored it.**
+  With no browser handler configured, the call returns false, the hub closed
+  anyway, and nothing opened — the dead-button problem again. Both the
+  code-server URL and the Battle.net setup page now check the return value,
+  keep the hub open on failure and notify.
 
 ## Done when
 
@@ -294,16 +299,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 432 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,684 lines. The growth is comments, per-file
+- 434 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,695 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,190) was already there.
 - The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,674. `Panel.qml` grew by the
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,685. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,674, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,472 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,685, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,485 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.15, build 72 → 91.
+- Version 0.1.0 → 0.6.16, build 72 → 92.

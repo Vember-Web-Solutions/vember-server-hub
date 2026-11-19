@@ -1271,6 +1271,19 @@ class TestExternalHandOffReachability:
                 name + " should close the hub via handOffToExternalSurface()"
             )
 
+    @pytest.mark.parametrize("name", ["openCodeServer", "openBattlenetSetup"])
+    def test_browser_hand_off_checks_for_a_handler(self, name):
+        # Qt.openUrlExternally returns false when no handler is configured.
+        # Closing the hub regardless would leave the user with nothing open
+        # and no message: the dead-button problem again.
+        body = self._fn(name)
+        check = body.find("if (!Qt.openUrlExternally(")
+        assert check >= 0, name + " must check whether a browser opened"
+        hand_off = body.find("handOffToExternalSurface()")
+        assert hand_off > check, (
+            name + " must only close the hub once the browser opened"
+        )
+
     def test_reopening_mid_install_keeps_the_status_line(self):
         # The hub closes itself when an install starts, so reopening it while
         # the install runs is the normal path. refreshAll() clears the status

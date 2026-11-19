@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.15"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 91
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.16"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 92
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -590,7 +590,13 @@ Item {
   }
 
   function openCodeServer() {
-    Qt.openUrlExternally("http://localhost:" + codeServerPort);
+    // openUrlExternally returns false when no handler is configured. Ignoring
+    // that and closing the hub anyway would look like a dead button.
+    if (!Qt.openUrlExternally("http://localhost:" + codeServerPort)) {
+      lastActionMessage = "Could not open a browser for the VS Code Server URL.";
+      notify(lastActionMessage);
+      return;
+    }
     handOffToExternalSurface();
   }
 
@@ -830,7 +836,12 @@ Item {
   function openBattlenetSetup() {
     extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
-    Qt.openUrlExternally(Gaming.battlenetSetupUrl());
+    if (!Qt.openUrlExternally(Gaming.battlenetSetupUrl())) {
+      extraAppInstallStatus = "Could not open a browser for the Battle.net setup page.";
+      lastActionMessage = extraAppInstallStatus;
+      notify(extraAppInstallStatus);
+      return;
+    }
     handOffToExternalSurface();
   }
 
