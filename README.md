@@ -67,7 +67,7 @@ omarchy plugin validate /path/to/vember-server
 - **Entry points:** `Panel.qml` (backend/controller), `BarWidget.qml` (bar icon)
 - **UI:** `HubPanel.qml` is the panel shell; each tab lives in `ui/tabs/` and each dialog/overlay in `ui/`
 - **Model:** `model/*.mjs` holds the pure helpers as ES classes (`Shell`, `Docker`, `Gaming`, `DevTools`, `InstallLog`, `Config`, ...). QML imports the namespace and calls `Shell.trim(...)`; tests instantiate the class directly.
-- **Tests:** `.venv/bin/python -m pytest tests/ -q` — the suite drives the real ES modules through node, so it exercises the same code QML loads.
+- **Tests:** `./tests/run.sh` — creates a venv outside the plugin folder (Omarchy rejects symlinks inside plugins) and drives the real ES modules through node, so the suite exercises the same code QML loads.
 - **Manifest:** tracks `version` and `build` in `manifest.json`
 - QML/JS edits often hot-reload; backend/process logic changes may require reloading the Omarchy shell/hub.
 - After cloning/customizing, you can rescan plugins with `omarchy-shell shell rescanPlugins` if changes don’t appear.
