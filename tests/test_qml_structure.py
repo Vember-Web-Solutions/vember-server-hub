@@ -1583,6 +1583,88 @@ class TestModelReferencesResolve:
         assert not self._bad_references(good, exports)
 
 
+class TestHubReferencesResolve:
+    """Every `hub.<name>` in the UI must exist on the panel backend.
+
+    Tabs reach the backend through the `hub` property, so `hub.dockerBusy` is a
+    plain property lookup. QML does not fail a build over an unknown member: it
+    binds to undefined, and qmllint only warns ("Unqualified access"), which is
+    already noise here. A typo or a rename that missed one binding therefore
+    renders a control that silently never updates — no error, no clue.
+
+    This is the same shape as TestModelReferencesResolve, one layer up: that
+    checks `Alias.member` against module exports, this checks `hub.member`
+    against the panel's own properties and functions.
+    """
+
+    # Only root-level members count. Panel.qml's own properties and functions
+    # sit at exactly two spaces of indentation; anything deeper belongs to a
+    # child component and is not part of the hub surface.
+    _MEMBER = re.compile(
+        r"^  (?:readonly\s+)?(?:property\s+\S+\s+|function\s+)(\w+)", re.M
+    )
+
+    @staticmethod
+    def _surface():
+        text = read(REPO / "Panel.qml")
+        return set(TestHubReferencesResolve._MEMBER.findall(text))
+
+    @staticmethod
+    def _scannable(text):
+        """Drop comments and string literals.
+
+        A URL such as "https://hub.docker.com" contains `hub.docker` and would
+        otherwise read as a property reference. This was a real false positive
+        when the guard was first written, so it is pinned by a test below.
+        """
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        text = re.sub(r'"(?:\\.|[^"\\])*"', '""', text)
+        text = re.sub(r"'(?:\\.|[^'\\])*'", "''", text)
+        return "\n".join(
+            re.sub(r"//.*$", "", line) for line in text.splitlines()
+        )
+
+    def _bad_references(self, text, surface):
+        body = self._scannable(text)
+        problems = [
+            match.group(1)
+            for match in re.finditer(r"\bhub\.(\w+)", body)
+            if match.group(1) not in surface
+        ]
+        return sorted(set(problems))
+
+    def test_every_hub_reference_exists(self):
+        surface = self._surface()
+        assert "dockerContainers" in surface and "refreshAll" in surface, (
+            "the hub surface was parsed as empty or partial"
+        )
+        problems = []
+        for path in QML_FILES:
+            for name in self._bad_references(read(path), surface):
+                problems.append(relative(path) + ": hub." + name)
+        assert not problems, (
+            "the UI reads a hub member that Panel.qml does not define. The "
+            "binding will be undefined with no error:\n  " + "\n  ".join(problems)
+        )
+
+    def test_the_guard_would_catch_a_typo(self):
+        surface = self._surface()
+        typo = "Item { Text { text: hub.dockerContianers.length } }"
+        assert self._bad_references(typo, surface) == ["dockerContianers"], (
+            "the detector did not flag a misspelled hub member"
+        )
+        good = "Item { Text { text: hub.dockerContainers.length } }"
+        assert not self._bad_references(good, surface)
+
+    def test_a_url_is_not_read_as_a_reference(self):
+        surface = self._surface()
+        # "https://hub.docker.com" is a string, not a property lookup.
+        url = 'Item { function f() { return "https://hub.docker.com" } }'
+        assert not self._bad_references(url, surface), (
+            "a URL inside a string was misread as hub.docker"
+        )
+
+
 class TestExternalHandOffReachability:
     """The hub must get out of the way of anything it launches.
 

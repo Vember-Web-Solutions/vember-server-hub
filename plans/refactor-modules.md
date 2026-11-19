@@ -414,6 +414,16 @@ Work that fell out of the split, done in the same arc:
   may be half-configured and a retry recreates it. The Dev tab shows a "Stop
   waiting" button while busy. `TestCodeServerSetupHasAnEscapeHatch` pins each
   process and the UI path.
+- **A `hub.<name>` typo binds to undefined with no error.** Tabs reach the
+  backend through `hub`, so `hub.dockerBusy` is a plain property lookup. QML
+  does not fail a build over an unknown member and `qmllint` only warns
+  ("Unqualified access", already noise here), so a rename that missed one
+  binding leaves a control that silently never updates.
+  `TestHubReferencesResolve` checks every `hub.member` against the panel's
+  root-level properties and functions — the same shape as
+  `TestModelReferencesResolve`, one layer up. It strips comments and string
+  literals first: `"https://hub.docker.com"` was a real false positive when the
+  guard was written, and both that and the comment case are pinned by tests.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -433,7 +443,7 @@ plugin warnings in the journal.
 
 ## Result
 
-- 483 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- 486 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
 - Plugin source went 7,718 → 8,871 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
@@ -443,6 +453,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,806, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,180 lines across 12 files and drives the real modules
+- The test suite is 4,262 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.30, build 72 → 106.
+- Version 0.1.0 → 0.6.31, build 72 → 107.
