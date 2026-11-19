@@ -126,6 +126,18 @@ export class Config {
     codeServerPort: port
   };
   }
+  // Swap one entry with its neighbour. Returns a new array; when the move would
+  // fall off either end the contents are unchanged, so callers can assign the
+  // result unconditionally.
+  moveTab(order, index, delta) {
+  var next = (order || []).slice(0);
+  var j = index + delta;
+  if (index < 0 || j < 0 || index >= next.length || j >= next.length) return next;
+  var tmp = next[index];
+  next[index] = next[j];
+  next[j] = tmp;
+  return next;
+  }
 }
 
 const impl = new Config();
@@ -137,3 +149,4 @@ export function normalizedTabOrder(...args) { return impl.normalizedTabOrder(...
 export function parseHubConfig(...args) { return impl.parseHubConfig(...args); }
 export function tabDef(...args) { return impl.tabDef(...args); }
 export function orderedTabs(...args) { return impl.orderedTabs(...args); }
+export function moveTab(...args) { return impl.moveTab(...args); }

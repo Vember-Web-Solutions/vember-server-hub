@@ -251,3 +251,52 @@ class TestOrderedTabs:
     def test_every_entry_is_renderable(self, js):
         out = js("console.log(JSON.stringify(Config.orderedTabs(null)))")
         assert all(t["label"] and t["icon"] for t in out)
+
+
+class TestMoveTab:
+    """Reordering the tab strip. Moves off either end are no-ops, not errors."""
+
+    def move(self, js, order, index, delta):
+        return js(
+            "console.log(JSON.stringify(Config.moveTab(%s, %d, %d)))"
+            % (json.dumps(order), index, delta)
+        )
+
+    def test_moving_right_swaps_with_the_next(self, js):
+        assert self.move(js, ["a", "b", "c"], 0, 1) == ["b", "a", "c"]
+
+    def test_moving_left_swaps_with_the_previous(self, js):
+        assert self.move(js, ["a", "b", "c"], 2, -1) == ["a", "c", "b"]
+
+    def test_moving_the_first_entry_up_does_nothing(self, js):
+        assert self.move(js, ["a", "b", "c"], 0, -1) == ["a", "b", "c"]
+
+    def test_moving_the_last_entry_down_does_nothing(self, js):
+        assert self.move(js, ["a", "b", "c"], 2, 1) == ["a", "b", "c"]
+
+    def test_index_out_of_range_is_ignored(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Config.moveTab(['a','b'], 5, 1), Config.moveTab(['a','b'], -1, 1)]))"
+        )
+        assert out == [["a", "b"], ["a", "b"]]
+
+    def test_null_order_is_empty(self, js):
+        assert self.move(js, None, 0, 1) == []
+
+    def test_input_array_is_not_mutated(self, js):
+        # The draft list is re-read on every move, so the source must survive.
+        out = js(
+            "var src = ['a','b','c'];"
+            "var next = Config.moveTab(src, 0, 1);"
+            "console.log(JSON.stringify([src, next]))"
+        )
+        assert out == [["a", "b", "c"], ["b", "a", "c"]]
+
+    def test_result_is_always_the_same_length(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Config.moveTab(['a','b','c'], 0, 1).length,"
+            "Config.moveTab(['a','b','c'], 0, -1).length]))"
+        )
+        assert out == [3, 3]

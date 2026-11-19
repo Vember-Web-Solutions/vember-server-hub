@@ -33,7 +33,7 @@ Item {
   property string serverRole: ""
   property string serverRoleDraft: ""
   property string preferredEditor: ""
-  property var tabOrder: ["overview", "access", "containers", "games", "dev"]
+  property var tabOrder: Config.defaultTabOrder()
   property bool configReady: false
   property bool wizardOpen: false
   property bool restartingForServerName: false

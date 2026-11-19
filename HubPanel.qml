@@ -86,20 +86,14 @@ PanelWindow {
   }
 
   function openArrangeTabsDialog() {
-    var order = (hub && hub.tabOrder && hub.tabOrder.length > 0) ? hub.tabOrder : ["overview", "access", "containers", "games", "dev"];
+    var order = (hub && hub.tabOrder && hub.tabOrder.length > 0) ? hub.tabOrder : Config.defaultTabOrder();
     panel.arrangeTabOrderDraft = order.slice(0);
     panel.settingsMenuOpen = false;
     panel.arrangeTabsOpen = true;
   }
 
   function moveArrangeTabDraft(index, delta) {
-    var next = (panel.arrangeTabOrderDraft || []).slice(0);
-    var j = index + delta;
-    if (index < 0 || j < 0 || index >= next.length || j >= next.length) return;
-    var tmp = next[index];
-    next[index] = next[j];
-    next[j] = tmp;
-    panel.arrangeTabOrderDraft = next;
+    panel.arrangeTabOrderDraft = Config.moveTab(panel.arrangeTabOrderDraft, index, delta);
   }
 
   function saveArrangeTabs() {
