@@ -736,12 +736,21 @@ Item {
     bnetDirProc.command = ["test", "-d", Gaming.battlenetPrefixPath(homeDir)];
     if (!bnetDirProc.running) bnetDirProc.running = true;
     // Baseline count: default + common external library; vdf load will refine to all libraries.
+    // Only restart the scan when none is in flight: a slow library scan on a
+    // large disk would otherwise be killed by the 15s poll before it finishes.
     var baselineDirs = [steamRoot + "/steamapps", "/mnt/games/SteamLibrary/steamapps"];
-    steamManifestProc.running = false;
-    steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(baselineDirs);
-    steamManifestProc.running = true;
-    steamVdfView.path = "";
-    steamVdfView.path = Gaming.steamLibraryVdfPath(homeDir);
+    if (!steamManifestProc.running) {
+      steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(baselineDirs);
+      steamManifestProc.running = true;
+    }
+    // Reload the library VDF only on a full refresh. Forcing it every poll
+    // re-read the file and restarted the manifest scan every 15 seconds, and
+    // the counts only change when a game is installed (which does a full
+    // refresh via refreshAfterInstall).
+    if (!keep) {
+      steamVdfView.path = "";
+      steamVdfView.path = Gaming.steamLibraryVdfPath(homeDir);
+    }
     bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
     if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
 

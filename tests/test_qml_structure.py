@@ -671,3 +671,64 @@ class TestDevToolsTargetedRefresh:
             "the install handler must not restart codeServerProc by hand; "
             "refreshDevTools chains into it"
         )
+
+
+class TestSteamScanPollSafety:
+    """The Steam library scan must not be killed by the 15s poll.
+
+    refreshGames() used to restart steamManifestProc unconditionally and force a
+    steamVdfView reload on every tick. The VDF reload in turn restarted the
+    manifest scan again, so a library scan on a large disk could be killed
+    before it finished and the counts would never settle. The scan is now only
+    started when none is in flight, and the VDF is only reloaded on a full
+    refresh (the counts change on install, which does a full refresh).
+    """
+
+    def test_manifest_scan_guarded_against_restart(self):
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshGames\((\w+)\)", text)
+        assert fn, "no refreshGames() in Panel.qml"
+        body_start = text.index("{", fn.end())
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshGames")
+        # The manifest start must sit behind a running guard.
+        idx = body.index("steamManifestProc.command = Gaming.steamManifestCountCommandForDirs")
+        window = body[max(0, idx - 200):idx]
+        assert "if (!steamManifestProc.running)" in window, (
+            "the Steam manifest scan must not be restarted while one is in "
+            "flight, or a slow scan never finishes"
+        )
+
+    def test_vdf_reload_only_on_full_refresh(self):
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshGames\((\w+)\)", text)
+        body_start = text.index("{", fn.end())
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshGames")
+        # The VDF path reset must sit inside its own `if (!keep)` guard, not
+        # merely somewhere after the top reset block. Look in a tight window
+        # before the reset for the guard.
+        vdf = body.index("steamVdfView.path = \"\"")
+        window = body[max(0, vdf - 250):vdf]
+        assert "if (!keep) {" in window, (
+            "steamVdfView must only be reloaded inside an `if (!keep)` guard, "
+            "not on every poll (the reload restarts the manifest scan)"
+        )
