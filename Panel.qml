@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.19"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 95
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.20"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 96
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1459,6 +1459,10 @@ Item {
     id: notifyProc
     stdout: StdioCollector {}
     stderr: StdioCollector {}
+    onExited: function(code) {
+      // Drain the queue one notification at a time so none is dropped.
+      root._drainNotify();
+    }
   }
   Process {
     id: steamLaunchProc
@@ -1501,11 +1505,25 @@ Item {
   // A launch failure happens after the hub has closed itself, so the message
   // it writes into the panel is invisible. Notify, so a failed launch does not
   // look like a dead button.
+  // Notifications are queued rather than fired on one reused Process. A burst
+  // (a watchdog verdict and the no-output nudge, or two launch failures close
+  // together) used to restart the process and drop the earlier message, and
+  // when the hub is closed the notification is the only feedback there is.
+  property var _notifyQueue: []
+
   function notify(text) {
     var msg = Shell.trim(text);
     if (msg.length === 0) return;
-    notifyProc.running = false;
-    notifyProc.command = Shell.notifyCommand("Vember Server Hub", msg);
+    _notifyQueue = _notifyQueue.concat([msg]);
+    _drainNotify();
+  }
+
+  function _drainNotify() {
+    if (notifyProc.running) return;
+    if (_notifyQueue.length === 0) return;
+    var next = _notifyQueue[0];
+    _notifyQueue = _notifyQueue.slice(1);
+    notifyProc.command = Shell.notifyCommand("Vember Server Hub", next);
     notifyProc.running = true;
   }
 

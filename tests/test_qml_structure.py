@@ -1381,8 +1381,10 @@ class TestLaunchFailureIsVisible:
         )
 
     def test_notify_uses_the_model_helper(self):
+        # notify() enqueues; _drainNotify() is what actually builds and runs
+        # the command, so the helper check belongs there.
         text = self._panel()
-        body = text[text.index("function notify(text)") :]
+        body = text[text.index("function _drainNotify()") :]
         body = body[: body.index("\n  }")]
         assert "Shell.notifyCommand" in body
 
@@ -1518,4 +1520,67 @@ class TestMutualExclusionIsVisible:
         window = text[max(0, match.start() - 600) : match.start()]
         assert "enabled: !hub.omarchyUpdateRunning && !hub.installRunning" in window, (
             "the Update Omarchy button must be disabled while an install runs"
+        )
+
+
+class TestNotificationsAreQueued:
+    """A burst of notifications must not drop any.
+
+    `notify()` used to reuse one Process: it set `running = false`, changed the
+    command and started it again. A second notification arriving while the
+    first was still sending killed the first. When the hub is closed the
+    notification is the only feedback, so a dropped one is invisible.
+    """
+
+    def _panel(self):
+        return read(REPO / "Panel.qml")
+
+    def _fn(self, name):
+        text = self._panel()
+        match = re.search(r"function\s+" + name + r"\s*\([^)]*\)\s*\{", text)
+        assert match, name + " not found in Panel.qml"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    def test_notify_enqueues_instead_of_restarting(self):
+        body = self._fn("notify")
+        assert "notifyProc.running = false" not in body, (
+            "notify must not kill an in-flight notification"
+        )
+        assert "_drainNotify()" in body, "notify must drain the queue"
+        assert "_notifyQueue" in body, "notify must enqueue the message"
+
+    def test_drain_guards_the_running_process(self):
+        body = self._fn("_drainNotify")
+        assert "if (notifyProc.running) return;" in body, (
+            "_drainNotify must not start a second process"
+        )
+        assert "notifyProc.running = true" in body
+
+    def test_drain_runs_on_exit(self):
+        text = self._panel()
+        match = re.search(r"^\s*id:\s*notifyProc\s*$", text, re.M)
+        assert match, "notifyProc not found"
+        start = text.rfind("Process {", 0, match.start())
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    block = text[start : i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced notifyProc block")
+        assert "_drainNotify()" in block, (
+            "notifyProc.onExited must drain the queue"
         )
