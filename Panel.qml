@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.21"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 97
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.22"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 98
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -94,6 +94,11 @@ Item {
   property string installTitle: ""
   property string installLog: ""
   readonly property bool installIsDev: installRunningId.indexOf("dev:") === 0
+  // Set when a dev-tool install finishes, consumed by the post-install refresh.
+  // It cannot be derived from installRunningId at refresh time: a second
+  // install started inside the 2.5s/9s window replaces that id, so a dev
+  // install followed quickly by an app install would never rescan the tools.
+  property bool devRefreshPending: false
 
   property bool gameMountPresent: false
   property string gameMountError: ""
@@ -913,6 +918,7 @@ Item {
       devInstallToolId = "";
       devInstallStatus = extraAppInstallStatus;
       devStatus = devInstallStatus;
+      devRefreshPending = true;
     }
     lastActionMessage = extraAppInstallStatus;
     installRefreshTimer.restart();
@@ -929,6 +935,7 @@ Item {
       devInstallToolId = "";
       devInstallStatus = "Install tracking stopped (the terminal may still be running).";
       devStatus = devInstallStatus;
+      devRefreshPending = true;
     }
     extraAppInstallStatus = "Install tracking stopped (the terminal may still be running).";
     lastActionMessage = extraAppInstallStatus;
@@ -961,8 +968,12 @@ Item {
     if (installRunning)
       return;
     refreshGames();
-    if (installIsDev)
+    // Consume the flag rather than re-deriving from installRunningId: by now a
+    // later install may own that id, and the dev tools would never rescan.
+    if (devRefreshPending) {
+      devRefreshPending = false;
       refreshDevTools();
+    }
   }
 
   function loadInstallLog() {

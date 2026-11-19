@@ -565,6 +565,53 @@ class TestPollSafety:
             "the installRunning guard must come before the games reset"
         )
 
+    def test_dev_refresh_survives_an_overlapping_install(self):
+        # The post-install refresh must not re-derive "was this a dev install"
+        # from installRunningId: a second install started inside the 2.5s/9s
+        # window replaces that id, so a dev install followed quickly by an app
+        # install would never rescan the tools. A pending flag set at finish
+        # time and consumed by the refresh is the fix.
+        text = read(REPO / "Panel.qml")
+        assert re.search(
+            r"property bool devRefreshPending\s*:\s*false", text
+        ), "Panel.qml must declare devRefreshPending"
+
+        refresh = self._function_body(text, "refreshAfterInstall")
+        assert "installIsDev" not in refresh, (
+            "refreshAfterInstall must not gate the dev refresh on installIsDev"
+        )
+        flag = refresh.find("devRefreshPending")
+        scan = refresh.find("refreshDevTools()")
+        assert flag >= 0, "refreshAfterInstall must consume devRefreshPending"
+        assert scan > flag, "devRefreshPending must be checked before refreshDevTools()"
+        assert "devRefreshPending = false" in refresh, (
+            "the pending flag must be consumed, not left set forever"
+        )
+
+        for fn_name in ("finishInstall", "stopInstall"):
+            body = self._function_body(text, fn_name)
+            assert "if (installIsDev)" in body, fn_name + " must branch on installIsDev"
+            set_at = body.find("devRefreshPending = true")
+            assert set_at >= 0, fn_name + " must set devRefreshPending"
+            assert set_at > body.find("if (installIsDev)"), (
+                fn_name + " must set the flag inside the installIsDev branch"
+            )
+
+    @staticmethod
+    def _function_body(text, name):
+        match = re.search(r"function " + name + r"\([^)]*\)\s*\{", text)
+        assert match, "no " + name + "()"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced " + name)
+
     def test_refresh_dev_honours_preserve(self):
         text = read(REPO / "Panel.qml")
         fn = re.search(r"function refreshDev\((\w+)\)", text)
