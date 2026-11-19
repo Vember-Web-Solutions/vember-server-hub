@@ -4,7 +4,7 @@ A local server hub plugin for [Omarchy](https://omarchy.org/) (Quickshell shell)
 
 ## Features
 
-- **Overview** — server name/role summary, Tailnet and SSH status chips, and at-a-glance cards linking into each area; inner **Overview | Update** tabs with the Omarchy update action and its live log. The log persists, and if you reopen the panel mid-update it reattaches to the running update instead of offering a second one.
+- **Overview** — server name/role summary, Tailnet and SSH status chips, and at-a-glance cards linking into each area; inner **Overview | Update** tabs with the Omarchy update action and its live log. The log persists, and if you reopen the panel mid-update it reattaches to the running update instead of offering a second one. If the update terminal is closed before it finishes, the hub notices within one check and stops tracking instead of hanging on "running".
 - **Access** — Tailnet (Tailscale) status/details and SSH info with authorized key management (view/add/remove/generate identity), organized in inner tabs.
 - **Containers** — Docker container list and details with actionable controls; on-demand container size info and pull/progress feedback where available.
 - **Dev**
