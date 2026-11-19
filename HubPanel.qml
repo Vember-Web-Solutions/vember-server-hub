@@ -4031,6 +4031,7 @@ PanelWindow {
 
     // Update dialog (GitHub build update)
     Rectangle {
+      id: updateDialogRoot
       visible: panel.updateDialogOpen
       anchors.fill: parent
       radius: card.radius
@@ -4041,7 +4042,7 @@ PanelWindow {
       property real progress: hub.pluginUpdateBusy ? hub.pluginUpdateProgress : (hub.updateCheckBusy ? 0 : hub.pluginUpdateProgress)
       property bool done: !hub.pluginUpdateBusy && !hub.updateCheckBusy && hub.pluginUpdateProgress >= 1 && HubModel.trimText(hub.pluginUpdateError).length === 0
 
-      MouseArea { anchors.fill: parent; onClicked: { if (!busy) panel.updateDialogOpen = false; } }
+      MouseArea { anchors.fill: parent; onClicked: { if (!updateDialogRoot.busy) panel.updateDialogOpen = false; } }
 
       Rectangle {
         id: updateDialog
@@ -4078,7 +4079,7 @@ PanelWindow {
           }
 
           Text {
-            visible: HubModel.trimText(hub.pluginUpdatePun).length > 0 && (hub.pluginUpdateBusy || done)
+            visible: HubModel.trimText(hub.pluginUpdatePun).length > 0 && (hub.pluginUpdateBusy || updateDialogRoot.done)
             textFormat: Text.PlainText
             text: hub.pluginUpdatePun
             color: Color.accent
@@ -4100,7 +4101,7 @@ PanelWindow {
           }
 
           Rectangle {
-            visible: busy || hub.pluginUpdateProgress > 0 || done
+            visible: updateDialogRoot.busy || hub.pluginUpdateProgress > 0 || updateDialogRoot.done
             width: parent.width
             height: 10
             radius: 5
@@ -4111,11 +4112,11 @@ PanelWindow {
               height: parent.height
               radius: 5
               color: HubModel.trimText(hub.pluginUpdateError).length > 0 ? "#ef4444" : Color.accent
-              width: progress > 0 ? (parent.width * Math.max(0, Math.min(1, progress))) : (busy ? parent.width * 0.35 : 0)
-              x: (busy && progress <= 0) ? -width : 0
+              width: updateDialogRoot.progress > 0 ? (parent.width * Math.max(0, Math.min(1, updateDialogRoot.progress))) : (updateDialogRoot.busy ? parent.width * 0.35 : 0)
+              x: (updateDialogRoot.busy && updateDialogRoot.progress <= 0) ? -width : 0
               Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
               SequentialAnimation on x {
-                running: busy && progress <= 0 && panel.updateDialogOpen
+                running: updateDialogRoot.busy && updateDialogRoot.progress <= 0 && panel.updateDialogOpen
                 loops: Animation.Infinite
                 NumberAnimation { from: -updateProgressFill.width; to: updateDialog.width; duration: Style.duration(1200); easing.type: Easing.InOutQuad }
               }
@@ -4126,12 +4127,12 @@ PanelWindow {
             spacing: 8
             anchors.right: parent.right
             Button {
-              text: busy ? "Updating…" : "Close"
-              enabled: !busy
+              text: updateDialogRoot.busy ? "Updating…" : "Close"
+              enabled: !updateDialogRoot.busy
               onClicked: panel.updateDialogOpen = false
             }
             Button {
-              visible: done
+              visible: updateDialogRoot.done
               iconText: "󰑓"
               text: "Reload"
               active: true
@@ -4141,17 +4142,17 @@ PanelWindow {
               }
             }
             Button {
-              visible: hub.updateAvailable && !done
+              visible: hub.updateAvailable && !updateDialogRoot.done
               iconText: "󰚰"
-              text: busy ? "Updating…" : "Update now"
+              text: updateDialogRoot.busy ? "Updating…" : "Update now"
               active: true
-              enabled: !busy
+              enabled: !updateDialogRoot.busy
               onClicked: {
                 hub.startPluginUpdate();
               }
             }
             Button {
-              visible: !hub.updateAvailable && !busy && !done
+              visible: !hub.updateAvailable && !updateDialogRoot.busy && !updateDialogRoot.done
               iconText: "󰑐"
               text: "Check again"
               onClicked: {
