@@ -1410,10 +1410,12 @@ Item {
     property string actionName: "pull"
     property string containerName: ""
     property string imageName: ""
+    property string lastLine: ""
     function handleLine(line) {
       var t = Shell.trim(line);
       if (t.length === 0)
         return;
+      lastLine = t;
       root.dockerPullStatus = t;
       var m = /(\d{1,3})%/.exec(t);
       if (m) {
@@ -1435,8 +1437,12 @@ Item {
         root.dockerPullPercent = 1;
         root.dockerPullResult = "Updated image: " + image;
       } else {
+        // Surface the daemon's own last line: "code 1" alone does not say
+        // whether it was a bad tag, no space left, or a network stall.
+        var reason = Shell.trim(lastLine);
         root.dockerPullStatus = "Pull failed (code " + code + ")";
-        root.dockerPullResult = "Pull failed for " + image + " (code " + code + ")";
+        root.dockerPullResult = "Pull failed for " + image +
+          (reason.length > 0 ? (": " + reason) : (" (code " + code + ")")) + ".";
       }
       root.refreshDocker();
     }
