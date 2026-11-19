@@ -292,3 +292,61 @@ class TestRequiredProperties:
                 if not re.search(r"\b" + prop + r"\s*:", block):
                     problems.append("%s requires %s but does not receive it" % (name, prop))
         assert not problems, "unsatisfied required properties:\n  " + "\n  ".join(problems)
+
+
+class TestManifest:
+    """The manifest is the contract Omarchy reads, and QML hardcodes its id.
+
+    Panel.qml builds every plugin path from the literal
+    `elena.vember-server-hub`, so changing the manifest id without changing
+    those paths would leave the panel watching and reading a directory that no
+    longer exists. These checks run anywhere, including CI, where Omarchy's own
+    validator is unavailable.
+    """
+
+    REQUIRED = ("schemaVersion", "id", "name", "version", "build", "author", "license", "kinds", "entryPoints")
+
+    @staticmethod
+    def _manifest():
+        import json
+
+        return json.loads((REPO / "manifest.json").read_text())
+
+    def test_required_fields_are_present(self):
+        manifest = self._manifest()
+        missing = [key for key in self.REQUIRED if key not in manifest]
+        assert not missing, "manifest.json is missing: " + ", ".join(missing)
+
+    def test_entry_points_exist(self):
+        manifest = self._manifest()
+        entry = manifest["entryPoints"]
+        assert entry, "no entry points declared"
+        for kind, path in entry.items():
+            assert (REPO / path).is_file(), "%s entry point missing: %s" % (kind, path)
+
+    def test_entry_point_kinds_are_declared(self):
+        manifest = self._manifest()
+        # "panel" and "barWidget" are how the shell finds the two entry points.
+        for kind in manifest["entryPoints"]:
+            assert kind in ("panel", "barWidget"), "unknown entry point kind: " + kind
+        assert "panel" in manifest["entryPoints"]
+
+    def test_id_matches_the_paths_hardcoded_in_qml(self):
+        manifest = self._manifest()
+        plugin_id = manifest["id"]
+        offenders = []
+        for path in QML_FILES:
+            for match in re.finditer(r"plugins/([A-Za-z0-9._-]+)/", read(path)):
+                if match.group(1) != plugin_id:
+                    offenders.append("%s points at %s" % (relative(path), match.group(1)))
+        assert not offenders, (
+            "manifest id is %s but QML uses other plugin ids:\n  %s"
+            % (plugin_id, "\n  ".join(sorted(set(offenders))))
+        )
+
+    def test_build_is_an_integer_and_version_is_semver(self):
+        manifest = self._manifest()
+        assert isinstance(manifest["build"], int), "build must be an integer"
+        assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]), (
+            "version must be MAJOR.MINOR.PATCH, got %s" % manifest["version"]
+        )
