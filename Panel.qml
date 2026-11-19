@@ -373,6 +373,8 @@ Item {
   }
 
   function setupCodeServerTerminal(password, port) {
+    if (codeServerBusy)
+      return;
     var pass = Shell.trim(password);
     if (pass.length === 0) {
       codeServerStatusText = "Set a password for Code Server before setup.";
