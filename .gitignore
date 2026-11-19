@@ -9,3 +9,8 @@ Thumbs.db
 *~
 .idea/
 .vscode/
+
+# Python test environment (pytest drives the JS model through node)
+.venv/
+__pycache__/
+.pytest_cache/

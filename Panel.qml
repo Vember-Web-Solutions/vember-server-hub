@@ -1,7 +1,15 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import "model/HubModel.js" as HubModel
+import "model/DevTools.mjs" as DevTools
+import "model/Docker.mjs" as Docker
+import "model/Gaming.mjs" as Gaming
+import "model/InstallLog.mjs" as InstallLog
+import "model/Shell.mjs" as Shell
+import "model/Ssh.mjs" as Ssh
+import "model/SystemInfo.mjs" as SystemInfo
+import "model/Systemd.mjs" as Systemd
+import "model/Tailscale.mjs" as Tailscale
 
 Item {
   id: root
@@ -178,7 +186,7 @@ Item {
   }
 
   function defaultServerName() {
-    return HubModel.trimText(Quickshell.env("HOSTNAME") || "vemberos") || "vemberos";
+    return Shell.trim(Quickshell.env("HOSTNAME") || "vemberos") || "vemberos";
   }
 
   function loadManifestInfo() {
@@ -191,8 +199,8 @@ Item {
   }
 
   function openWizard(defaultName) {
-    serverNameDraft = HubModel.trimText(defaultName || serverName || defaultServerName());
-    serverRoleDraft = HubModel.trimText(serverRole || "");
+    serverNameDraft = Shell.trim(defaultName || serverName || defaultServerName());
+    serverRoleDraft = Shell.trim(serverRole || "");
     wizardOpen = true;
   }
 
@@ -202,7 +210,7 @@ Item {
     var seen = {};
     var src = order || [];
     for (var i = 0; i < src.length; i++) {
-      var id = HubModel.trimText(src[i]);
+      var id = Shell.trim(src[i]);
       if (defaults.indexOf(id) !== -1 && !seen[id]) {
         seen[id] = true;
         out.push(id);
@@ -240,15 +248,15 @@ Item {
     order[idx] = order[nextIdx];
     order[nextIdx] = tmp;
     tabOrder = order;
-    if (configReady || HubModel.trimText(serverName).length > 0)
+    if (configReady || Shell.trim(serverName).length > 0)
       writeHubConfig(false);
   }
 
   function saveServerName(name) {
-    var n = HubModel.trimText(name);
+    var n = Shell.trim(name);
     if (n.length === 0)
       n = defaultServerName();
-    var r = HubModel.trimText(serverRoleDraft);
+    var r = Shell.trim(serverRoleDraft);
     serverName = n;
     serverNameDraft = n;
     serverRole = r;
@@ -259,15 +267,15 @@ Item {
   }
 
   function setPreferredEditor(editorId) {
-    preferredEditor = HubModel.trimText(editorId);
-    if (configReady || HubModel.trimText(serverName).length > 0)
+    preferredEditor = Shell.trim(editorId);
+    if (configReady || Shell.trim(serverName).length > 0)
       writeHubConfig(false);
   }
 
   function openRepoInEditor(repoPath) {
-    var path = HubModel.trimText(repoPath);
+    var path = Shell.trim(repoPath);
     if (path.length === 0) return;
-    var editor = HubModel.trimText(preferredEditor);
+    var editor = Shell.trim(preferredEditor);
     if (editor.length === 0) {
       devStatus = "Select a preferred editor in Dev tab to open repositories.";
       lastActionMessage = devStatus;
@@ -301,11 +309,11 @@ Item {
     devOpenRepoProc.running = false;
     devOpenRepoProc.command = ["sh", "-c", cmd, "sh", path, editor];
     devOpenRepoProc.running = true;
-    devStatus = "Opening " + path + " in " + HubModel.devToolLabel(editor) + "…";
+    devStatus = "Opening " + path + " in " + DevTools.label(editor) + "…";
   }
 
   function selectDevRepo(repoPath) {
-    var path = HubModel.trimText(repoPath);
+    var path = Shell.trim(repoPath);
     devSelectedRepoPath = path;
     devRepoDetail = ({});
     devRepoDetailBusy = false;
@@ -313,7 +321,7 @@ Item {
     if (path.length === 0) return;
     devRepoDetailBusy = true;
     devRepoDetailProc.repoPath = path;
-    devRepoDetailProc.command = HubModel.devRepoDetailCommand(path);
+    devRepoDetailProc.command = DevTools.repoDetailCommand(path);
     devRepoDetailProc.running = true;
   }
 
@@ -355,7 +363,7 @@ Item {
   function _appendCodeServerSetupLog(line) {
     var t = String(line || "").replace(/\r/g, "");
     t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
-    if (HubModel.trimText(t).length === 0) return;
+    if (Shell.trim(t).length === 0) return;
     var next = (root.codeServerSetupLog.length > 0 ? (root.codeServerSetupLog + "\n") : "") + t;
     if (next.length > 12000) next = next.slice(next.length - 12000);
     root.codeServerSetupLog = next;
@@ -399,7 +407,7 @@ Item {
           root.codeServerSetupBytesDone = done;
           root.codeServerSetupBytesTotal = total;
           root.codeServerSetupProgress = Math.max(0, Math.min(1, done / total));
-          root.codeServerSetupDetail = "Downloading image… " + HubModel.humanBytes(done) + " / " + HubModel.humanBytes(total);
+          root.codeServerSetupDetail = "Downloading image… " + Shell.humanBytes(done) + " / " + Shell.humanBytes(total);
         }
       }
       return;
@@ -432,7 +440,7 @@ Item {
   }
 
   function setupCodeServerTerminal(password, port) {
-    var pass = HubModel.trimText(password);
+    var pass = Shell.trim(password);
     if (pass.length === 0) {
       codeServerStatusText = "Set a password for Code Server before setup.";
       lastActionMessage = "Code Server setup needs a password.";
@@ -447,7 +455,7 @@ Item {
     if (!isFinite(p) || Math.round(p) < 1 || Math.round(p) > 65535) p = 8443;
     p = Math.round(p);
     codeServerPort = p;
-    if (configReady || HubModel.trimText(serverName).length > 0) writeHubConfig(false);
+    if (configReady || Shell.trim(serverName).length > 0) writeHubConfig(false);
 
     codeServerBusy = true;
     codeServerSetupStage = "preparing";
@@ -613,7 +621,7 @@ Item {
 
   function runDevInstallSilent(toolId) {
     if (devInstallBusy || installRunning) return;
-    var label = HubModel.devToolLabel(toolId);
+    var label = DevTools.label(toolId);
     var cmd = "";
     if (toolId === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";
     else if (toolId === "python") cmd = "sudo -n pacman -S --needed --noconfirm python python-pip";
@@ -632,7 +640,7 @@ Item {
   }
 
   function openDevInstallTerminal(toolId) {
-    var label = HubModel.devToolLabel(toolId);
+    var label = DevTools.label(toolId);
     var cmd = "";
     if (toolId === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";
     else if (toolId === "python") cmd = "sudo pacman -S --needed --noconfirm python python-pip";
@@ -664,7 +672,7 @@ Item {
   }
 
   function addAuthorizedKey() {
-    var key = HubModel.trimText(sshNewKeyText);
+    var key = Shell.trim(sshNewKeyText);
     if (key.length === 0) {
       sshAuthorizedKeysStatus = "Paste a public key to add.";
       return;
@@ -728,7 +736,7 @@ Item {
   }
 
   function refreshDockerDetailSize(name) {
-    var target = HubModel.trimText(name);
+    var target = Shell.trim(name);
     dockerDetailSizeName = target;
     dockerDetailSizeText = "";
     dockerDetailSizeError = "";
@@ -752,7 +760,7 @@ Item {
   function refreshGames() {
     steamNote = "";
     bnetNote = "";
-    var steamRoot = HubModel.steamRootPath(homeDir);
+    var steamRoot = Gaming.steamRootPath(homeDir);
     steamInstalled = false;
     bnetInstalled = false;
     steamRunning = false;
@@ -764,26 +772,26 @@ Item {
     if (!bnetPgrepProc.running) bnetPgrepProc.running = true;
     steamDirProc.command = ["sh", "-c", "[ -d \"$1\" ] || command -v steam >/dev/null 2>&1", "sh", steamRoot];
     if (!steamDirProc.running) steamDirProc.running = true;
-    bnetDirProc.command = ["test", "-d", HubModel.battlenetPrefixPath(homeDir)];
+    bnetDirProc.command = ["test", "-d", Gaming.battlenetPrefixPath(homeDir)];
     if (!bnetDirProc.running) bnetDirProc.running = true;
     // Baseline count: default + common external library; vdf load will refine to all libraries.
     var baselineDirs = [steamRoot + "/steamapps", "/mnt/games/SteamLibrary/steamapps"];
     steamManifestProc.running = false;
-    steamManifestProc.command = HubModel.steamManifestCountCommandForDirs(baselineDirs);
+    steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(baselineDirs);
     steamManifestProc.running = true;
     steamVdfView.path = "";
-    steamVdfView.path = HubModel.steamLibraryVdfPath(homeDir);
-    bnetGameCountProc.command = HubModel.battlenetGameCountCommand(homeDir);
+    steamVdfView.path = Gaming.steamLibraryVdfPath(homeDir);
+    bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
     if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
 
     extraAppsScanBusy = true;
     extraAppsScanProc.running = false;
-    extraAppsScanProc.command = HubModel.extraAppsScanCommand();
+    extraAppsScanProc.command = Gaming.scanCommand();
     extraAppsScanProc.running = true;
   }
 
   function launchExtraApp(appId) {
-    var def = HubModel.extraAppDefById(appId);
+    var def = Gaming.defById(appId);
     if (!def) {
       lastActionMessage = "Unknown app: " + appId;
       return;
@@ -797,7 +805,7 @@ Item {
   }
 
   function installExtraApp(appId) {
-    var def = HubModel.extraAppDefById(appId);
+    var def = Gaming.defById(appId);
     if (!def) {
       lastActionMessage = "Unknown app: " + appId;
       return;
@@ -807,13 +815,13 @@ Item {
   }
 
   function installSteam() {
-    runInstallInTerminal("steam", "Vember Install: Steam", HubModel.steamInstallCommand(), "Steam");
+    runInstallInTerminal("steam", "Vember Install: Steam", Gaming.steamInstallCommand(), "Steam");
   }
 
   function openBattlenetSetup() {
     extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
-    Qt.openUrlExternally(HubModel.battlenetSetupUrl());
+    Qt.openUrlExternally(Gaming.battlenetSetupUrl());
   }
 
   function runInstallInTerminal(id, title, cmd, label) {
@@ -821,11 +829,11 @@ Item {
       lastActionMessage = "An install is already running: " + (installTitle.length > 0 ? installTitle : installRunningId);
       return;
     }
-    var command = HubModel.trimText(cmd);
+    var command = Shell.trim(cmd);
     if (command.length === 0)
       command = "echo 'No install command configured.'; exit 1";
-    var logPath = HubModel.installLogPath(homeDir);
-    var titlePath = HubModel.installTitlePath(homeDir);
+    var logPath = InstallLog.logPath(homeDir);
+    var titlePath = InstallLog.titlePath(homeDir);
     installRunning = true;
     installRunningId = String(id || "");
     installTitle = String(title || "Install");
@@ -840,8 +848,8 @@ Item {
     }
     installTerminalProc.running = false;
     installTerminalProc.command = ["sh", "-c",
-      HubModel.installTerminalScript(installTitle, command, logPath, titlePath,
-        HubModel.installLockPath(homeDir), installRunningId)];
+      InstallLog.terminalScript(installTitle, command, logPath, titlePath,
+        InstallLog.lockPath(homeDir), installRunningId)];
     installTerminalProc.running = true;
     installLogProc.running = false;
     installLogProc.command = ["tail", "-n", "+1", "-F", logPath];
@@ -855,7 +863,7 @@ Item {
     installNoOutputTimer.stop();
     installStallTimer.stop();
     installRunning = false;
-    var label = HubModel.trimText(installTitle).length > 0 ? installTitle.replace(/^Vember Install:\s*/, "") : "Install";
+    var label = Shell.trim(installTitle).length > 0 ? installTitle.replace(/^Vember Install:\s*/, "") : "Install";
     if (code === 0)
       extraAppInstallStatus = label + " finished.";
     else if (code === null || isNaN(code))
@@ -897,8 +905,8 @@ Item {
     installClearProc.running = false;
     installClearProc.command = ["sh", "-c",
       "rm -f \"$1\" \"$2\" \"$3\"", "sh",
-      HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir),
-      HubModel.installLockPath(homeDir)];
+      InstallLog.titlePath(homeDir), InstallLog.logPath(homeDir),
+      InstallLog.lockPath(homeDir)];
     installClearProc.running = true;
   }
 
@@ -922,8 +930,8 @@ Item {
       "else printf 'NONE\\n\\n'; fi; " +
       "printf -- '---VEMBER-LOG---\\n'; " +
       "[ -f \"$l\" ] && tail -c 12000 \"$l\" || true",
-      "sh", HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir),
-      HubModel.installLockPath(homeDir)];
+      "sh", InstallLog.titlePath(homeDir), InstallLog.logPath(homeDir),
+      InstallLog.lockPath(homeDir)];
     installLogReadProc.running = true;
   }
 
@@ -933,12 +941,12 @@ Item {
     tailscaleBusy = true;
     tailscaleNote = "Running pkexec systemctl " + action + " tailscaled…";
     tsActionProc.actionName = action;
-    tsActionProc.command = HubModel.pkexecSystemctlCommand(action, "tailscaled");
+    tsActionProc.command = Systemd.pkexecCommand(action, "tailscaled");
     tsActionProc.running = true;
   }
 
   function runTailscaleActionInTerminal(action) {
-    tsTerminalProc.command = HubModel.terminalSystemctlCommand(action, "tailscaled");
+    tsTerminalProc.command = Systemd.terminalCommand(action, "tailscaled");
     tsTerminalProc.running = true;
     tailscaleNote = "Opened terminal for: sudo systemctl " + action + " tailscaled";
   }
@@ -947,12 +955,12 @@ Item {
     if (omarchyUpdateRunning)
       return;
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
-    var lockPath = HubModel.omarchyUpdateLockPath(homeDir);
-    var termCmd = "printf '%s\\n' \"$$\" > " + HubModel.shellQuote(lockPath) +
-      "; ( /usr/share/omarchy/bin/omarchy-update ) 2>&1 | tee " + HubModel.shellQuote(logPath) +
+    var lockPath = InstallLog.omarchyLockPath(homeDir);
+    var termCmd = "printf '%s\\n' \"$$\" > " + Shell.quote(lockPath) +
+      "; ( /usr/share/omarchy/bin/omarchy-update ) 2>&1 | tee " + Shell.quote(logPath) +
       "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi" +
-      "; echo \"[vember-update-exit:${code}]\" | tee -a " + HubModel.shellQuote(logPath) +
-      "; rm -f " + HubModel.shellQuote(lockPath) +
+      "; echo \"[vember-update-exit:${code}]\" | tee -a " + Shell.quote(logPath) +
+      "; rm -f " + Shell.quote(lockPath) +
       "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
     omarchyUpdateStatus = "Running Omarchy update in default terminal (interactive)… streaming live log below.";
@@ -961,10 +969,10 @@ Item {
     omarchyUpdateLogProc.running = false;
     omarchyUpdateTerminalProc.running = false;
     omarchyUpdateTerminalProc.command = ["sh", "-c",
-      "mkdir -p " + HubModel.shellQuote(homeDir + "/.cache/vember-server-hub") +
-      " && : > " + HubModel.shellQuote(logPath) +
-      " && xdg-terminal-exec --title=" + HubModel.shellQuote("Vember Omarchy Update") +
-      " bash -lc " + HubModel.shellQuote(termCmd) + " </dev/null >/dev/null 2>&1 & " +
+      "mkdir -p " + Shell.quote(homeDir + "/.cache/vember-server-hub") +
+      " && : > " + Shell.quote(logPath) +
+      " && xdg-terminal-exec --title=" + Shell.quote("Vember Omarchy Update") +
+      " bash -lc " + Shell.quote(termCmd) + " </dev/null >/dev/null 2>&1 & " +
       "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true"];
     omarchyUpdateTerminalProc.running = true;
     omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F", logPath];
@@ -995,7 +1003,7 @@ Item {
       "printf -- '---VEMBER-UPDATE-LOG---\\n'; " +
       "[ -f \"$f\" ] && tail -c 14000 \"$f\" 2>/dev/null || true",
       "sh", homeDir + "/.cache/vember-server-hub/omarchy-update.log",
-      HubModel.omarchyUpdateLockPath(homeDir)];
+      InstallLog.omarchyLockPath(homeDir)];
     omarchyUpdateLogReadProc.running = true;
   }
 
@@ -1020,7 +1028,7 @@ Item {
   }
 
   function _resolvedPluginRepoDir() {
-    var d = HubModel.trimText(pluginRepoDir);
+    var d = Shell.trim(pluginRepoDir);
     if (d.length > 0) return d;
     return homeDir + "/Projects/vember-server";
   }
@@ -1062,14 +1070,14 @@ Item {
     dockerBusyName = name;
     dockerActionProc.actionName = action;
     dockerActionProc.containerName = name;
-    dockerActionProc.command = HubModel.dockerActionCommand(action, name);
+    dockerActionProc.command = Docker.actionCommand(action, name);
     dockerActionProc.running = true;
   }
 
   function runDockerPull(image, name) {
     if (dockerBusy)
       return;
-    if (HubModel.trimText(image).length === 0) {
+    if (Shell.trim(image).length === 0) {
       dockerPullResult = "Cannot pull image for " + name + ": image name unknown.";
       dockerPullingName = name;
       dockerPullActive = false;
@@ -1086,37 +1094,37 @@ Item {
     dockerPullProc.actionName = "pull";
     dockerPullProc.containerName = name;
     dockerPullProc.imageName = image;
-    dockerPullProc.command = HubModel.dockerPullCommand(image);
+    dockerPullProc.command = Docker.pullCommand(image);
     dockerPullProc.running = true;
   }
 
   // --- Processes: Tailscale ---
   Process {
     id: tsActiveProc
-    command: HubModel.systemctlIsActiveCommand("tailscaled")
-    stdout: StdioCollector { onStreamFinished: root.tailscaleActive = HubModel.trimText(text) || "unknown" }
+    command: Systemd.isActiveCommand("tailscaled")
+    stdout: StdioCollector { onStreamFinished: root.tailscaleActive = Shell.trim(text) || "unknown" }
   }
   Process {
     id: tsEnabledProc
-    command: HubModel.systemctlIsEnabledCommand("tailscaled")
-    stdout: StdioCollector { onStreamFinished: root.tailscaleEnabled = HubModel.trimText(text) || "unknown" }
+    command: Systemd.isEnabledCommand("tailscaled")
+    stdout: StdioCollector { onStreamFinished: root.tailscaleEnabled = Shell.trim(text) || "unknown" }
   }
   Process {
     id: tsIpProc
-    command: HubModel.tailscaleIpCommand()
-    stdout: StdioCollector { onStreamFinished: root.tailscaleIp = HubModel.nonEmptyLines(text).join(", ") }
+    command: Tailscale.ipCommand()
+    stdout: StdioCollector { onStreamFinished: root.tailscaleIp = Shell.nonEmptyLines(text).join(", ") }
   }
   Process {
     id: tsStatusProc
-    command: HubModel.tailscaleStatusCommand()
-    stdout: StdioCollector { onStreamFinished: root.tailscaleStatusText = HubModel.trimText(text) }
+    command: Tailscale.statusCommand()
+    stdout: StdioCollector { onStreamFinished: root.tailscaleStatusText = Shell.trim(text) }
   }
   Process {
     id: tsStatusJsonProc
-    command: HubModel.tailscaleStatusJsonCommand()
+    command: Tailscale.statusJsonCommand()
     stdout: StdioCollector {
       onStreamFinished: {
-        var info = HubModel.parseTailscaleStatusJson(text);
+        var info = Tailscale.parseStatusJson(text);
         if (info.ok) {
           root.tailscaleTailnetName = info.tailnetName || "";
           root.tailscaleSelf = info.self;
@@ -1152,27 +1160,27 @@ Item {
   // --- Processes: SSH ---
   Process {
     id: sshActiveProc
-    command: HubModel.systemctlIsActiveCommand("sshd")
-    stdout: StdioCollector { onStreamFinished: root.sshActive = HubModel.trimText(text) || "unknown" }
+    command: Systemd.isActiveCommand("sshd")
+    stdout: StdioCollector { onStreamFinished: root.sshActive = Shell.trim(text) || "unknown" }
   }
   Process {
     id: sshEnabledProc
-    command: HubModel.systemctlIsEnabledCommand("sshd")
-    stdout: StdioCollector { onStreamFinished: root.sshEnabled = HubModel.trimText(text) || "unknown" }
+    command: Systemd.isEnabledCommand("sshd")
+    stdout: StdioCollector { onStreamFinished: root.sshEnabled = Shell.trim(text) || "unknown" }
   }
   Process {
     id: sshHostKeysProc
-    command: HubModel.sshHostKeyFingerprintsCommand()
+    command: Ssh.hostKeyFingerprintsCommand()
     stdout: StdioCollector {
-      onStreamFinished: root.sshHostKeys = HubModel.parseSshHostKeyFingerprints(text)
+      onStreamFinished: root.sshHostKeys = Ssh.parseHostKeyFingerprints(text)
     }
   }
   Process {
     id: sshAuthorizedKeysProc
-    command: HubModel.authorizedKeysReadCommand(root.homeDir)
+    command: Ssh.authorizedKeysReadCommand(root.homeDir)
     stdout: StdioCollector {
       onStreamFinished: {
-        root.sshAuthorizedKeys = HubModel.parseAuthorizedKeys(text);
+        root.sshAuthorizedKeys = Ssh.parseAuthorizedKeys(text);
         if (root.sshSelectedKeyIndex >= root.sshAuthorizedKeys.length)
           root.sshSelectedKeyIndex = root.sshAuthorizedKeys.length > 0 ? 0 : -1;
       }
@@ -1193,7 +1201,7 @@ Item {
         root.sshAuthorizedKeysStatus = "Key added.";
         root.refreshAuthorizedKeys();
       } else {
-        var err = HubModel.trimText(sshAuthorizedKeysAddProc.stderr.text || "");
+        var err = Shell.trim(sshAuthorizedKeysAddProc.stderr.text || "");
         root.sshAuthorizedKeysStatus = "Failed to add key (code " + code + ")" + (err.length > 0 ? (": " + err) : ".");
       }
     }
@@ -1209,7 +1217,7 @@ Item {
         root.sshSelectedKeyIndex = -1;
         root.refreshAuthorizedKeys();
       } else {
-        var err = HubModel.trimText(sshAuthorizedKeysRemoveProc.stderr.text || "");
+        var err = Shell.trim(sshAuthorizedKeysRemoveProc.stderr.text || "");
         root.sshAuthorizedKeysStatus = "Failed to remove key (code " + code + ")" + (err.length > 0 ? (": " + err) : ".");
       }
     }
@@ -1220,8 +1228,8 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.sshGenerateBusy = false;
-      var out = HubModel.trimText(sshGenerateKeyProc.stdout.text || "");
-      var err = HubModel.trimText(sshGenerateKeyProc.stderr.text || "");
+      var out = Shell.trim(sshGenerateKeyProc.stdout.text || "");
+      var err = Shell.trim(sshGenerateKeyProc.stderr.text || "");
       if (code === 0) {
         root.sshGeneratedPublicKey = out;
         root.sshAuthorizedKeysStatus = "Generated identity keypair: ~/.ssh/id_ed25519 (public key shown below).";
@@ -1262,7 +1270,7 @@ Item {
         // don't append the internal marker line to visible log
         return;
       }
-      if (HubModel.trimText(t).length === 0)
+      if (Shell.trim(t).length === 0)
         return;
       var next = (root.omarchyUpdateLog.length > 0 ? (root.omarchyUpdateLog + "\n") : "") + t;
       if (next.length > 14000)
@@ -1275,7 +1283,7 @@ Item {
       // tail process exited (stopped by user or after marker handling)
       if (root.omarchyUpdateRunning) {
         root.omarchyUpdateRunning = false;
-        if (HubModel.trimText(root.omarchyUpdateStatus).indexOf("Running") === 0)
+        if (Shell.trim(root.omarchyUpdateStatus).indexOf("Running") === 0)
           root.omarchyUpdateStatus = "Live log stopped.";
       }
     }
@@ -1290,7 +1298,7 @@ Item {
         var raw = String(text || "").replace(/\r/g, "");
         var logMark = "---VEMBER-UPDATE-LOG---";
         var markIdx = raw.indexOf(logMark);
-        var lockState = HubModel.trimText(markIdx >= 0 ? raw.slice(0, markIdx) : "");
+        var lockState = Shell.trim(markIdx >= 0 ? raw.slice(0, markIdx) : "");
         var body = markIdx >= 0 ? raw.slice(markIdx + logMark.length) : raw;
         // strip ANSI codes
         var t = body.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
@@ -1310,7 +1318,7 @@ Item {
           out.push(line);
         }
         // trim trailing empty lines
-        while (out.length > 0 && HubModel.trimText(out[out.length - 1]).length === 0) out.pop();
+        while (out.length > 0 && Shell.trim(out[out.length - 1]).length === 0) out.pop();
         var joined = out.join("\n");
         if (joined.length > 14000) joined = joined.slice(joined.length - 14000);
         root.omarchyUpdateLog = joined;
@@ -1324,7 +1332,7 @@ Item {
           omarchyUpdateLogProc.running = true;
           return;
         }
-        if (HubModel.trimText(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
+        if (Shell.trim(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
           if (lastMarkerCode !== null) {
             if (lastMarkerCode === "" ) root.omarchyUpdateStatus = "Omarchy update finished (exit code unknown).";
             else if (Number(lastMarkerCode) === 0) root.omarchyUpdateStatus = "Omarchy update finished.";
@@ -1379,12 +1387,12 @@ Item {
   // --- Processes: Docker ---
   Process {
     id: dockerPsProc
-    command: HubModel.dockerPsCommand()
+    command: Docker.psCommand()
     stdout: StdioCollector {
-      onStreamFinished: root.dockerContainers = HubModel.parseDockerPs(text)
+      onStreamFinished: root.dockerContainers = Docker.parsePs(text)
     }
     stderr: StdioCollector {
-      onStreamFinished: if (HubModel.trimText(text).length > 0) root.dockerError = HubModel.trimText(text)
+      onStreamFinished: if (Shell.trim(text).length > 0) root.dockerError = Shell.trim(text)
     }
     onExited: function(code) {
       if (code !== 0 && root.dockerContainers.length === 0 && root.dockerError.length === 0)
@@ -1415,7 +1423,7 @@ Item {
     property string containerName: ""
     property string imageName: ""
     function handleLine(line) {
-      var t = HubModel.trimText(line);
+      var t = Shell.trim(line);
       if (t.length === 0)
         return;
       root.dockerPullStatus = t;
@@ -1452,11 +1460,11 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.dockerPruneBusy = false;
-      var out = HubModel.trimText(dockerPruneProc.stdout.text || "");
-      var err = HubModel.trimText(dockerPruneProc.stderr.text || "");
+      var out = Shell.trim(dockerPruneProc.stdout.text || "");
+      var err = Shell.trim(dockerPruneProc.stderr.text || "");
       if (code === 0) {
         if (out.length > 0) {
-          var lines = out.split("\n").map(function(l){ return HubModel.trimText(l); }).filter(function(l){ return l.length > 0; });
+          var lines = out.split("\n").map(function(l){ return Shell.trim(l); }).filter(function(l){ return l.length > 0; });
           root.lastActionMessage = "Pruned stopped containers. " + lines.join(" • ");
         } else {
           root.lastActionMessage = "Pruned stopped containers.";
@@ -1478,17 +1486,17 @@ Item {
         return;
       root.dockerDetailSizeBusy = false;
       if (code === 0) {
-        var out = HubModel.trimText(stdout.text || "");
+        var out = Shell.trim(stdout.text || "");
         var line = "";
         var parts = out.split(/\r?\n/);
         for (var i = 0; i < parts.length; i++) {
-          var t = HubModel.trimText(parts[i]);
+          var t = Shell.trim(parts[i]);
           if (t.length > 0) { line = t; break; }
         }
         root.dockerDetailSizeText = line.length > 0 ? line : "Unknown";
         root.dockerDetailSizeError = "";
       } else {
-        var err = HubModel.trimText(stderr.text || "");
+        var err = Shell.trim(stderr.text || "");
         root.dockerDetailSizeText = "";
         root.dockerDetailSizeError = err.length > 0 ? err : ("Failed to query size (code " + code + ").");
       }
@@ -1499,7 +1507,7 @@ Item {
     if (dockerPruneBusy || dockerBusy)
       return;
     dockerPruneBusy = true;
-    dockerPruneProc.command = HubModel.dockerPruneCommand();
+    dockerPruneProc.command = Docker.pruneCommand();
     dockerPruneProc.running = true;
     lastActionMessage = "Pruning stopped containers…";
   }
@@ -1507,7 +1515,7 @@ Item {
   // --- Processes / views: Games ---
   Process {
     id: steamPgrepProc
-    command: HubModel.pgrepExactCommand("steam")
+    command: SystemInfo.pgrepExactCommand("steam")
     onExited: function(code) { root.steamRunning = (code === 0) }
   }
   Process {
@@ -1519,7 +1527,7 @@ Item {
     id: steamManifestProc
     stdout: StdioCollector {
       onStreamFinished: {
-        var scan = HubModel.parseSteamManifestScan(text);
+        var scan = Gaming.parseSteamManifestScan(text);
         root.steamGameCount = scan.count;
         root.steamDedicatedServers = scan.servers || [];
       }
@@ -1528,7 +1536,7 @@ Item {
   }
   Process {
     id: bnetGameCountProc
-    stdout: StdioCollector { onStreamFinished: root.bnetGameCount = HubModel.parseBattlenetGameCount(text) }
+    stdout: StdioCollector { onStreamFinished: root.bnetGameCount = Gaming.parseBattlenetGameCount(text) }
     stderr: StdioCollector {}
   }
   Process {
@@ -1543,19 +1551,19 @@ Item {
     id: steamVdfView
     printErrors: false
     onLoaded: {
-      var paths = HubModel.parseLibraryPathsFromVdf(text());
+      var paths = Gaming.parseLibraryPaths(text());
       var dirs = [];
       for (var i = 0; i < paths.length; i++) {
-        var p = HubModel.trimText(paths[i]);
+        var p = Shell.trim(paths[i]);
         if (p.length > 0)
           dirs.push(p + "/steamapps");
       }
       if (dirs.length === 0) {
-        var steamRoot = HubModel.steamRootPath(root.homeDir);
+        var steamRoot = Gaming.steamRootPath(root.homeDir);
         dirs = [steamRoot + "/steamapps", "/mnt/games/SteamLibrary/steamapps"];
       }
       steamManifestProc.running = false;
-      steamManifestProc.command = HubModel.steamManifestCountCommandForDirs(dirs);
+      steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(dirs);
       steamManifestProc.running = true;
       root.steamNote = "Steam libraries detected: " + dirs.length + " (filtered installed games across libraries).";
     }
@@ -1568,14 +1576,14 @@ Item {
     id: extraAppsScanProc
     stdout: StdioCollector {
       onStreamFinished: {
-        root.extraApps = HubModel.parseExtraAppsScan(text, HubModel.extraAppsCatalog());
+        root.extraApps = Gaming.parseScan(text, Gaming.catalog());
       }
     }
     stderr: StdioCollector {}
     onExited: function(code) {
       root.extraAppsScanBusy = false;
       if (code !== 0 && (!root.extraApps || root.extraApps.length === 0)) {
-        root.extraApps = HubModel.parseExtraAppsScan("", HubModel.extraAppsCatalog());
+        root.extraApps = Gaming.parseScan("", Gaming.catalog());
       }
     }
   }
@@ -1590,7 +1598,7 @@ Item {
       if (code === 0) {
         root.lastActionMessage = "Launched " + (appName || appId) + ".";
       } else {
-        var err = HubModel.trimText(stderr.text || "");
+        var err = Shell.trim(stderr.text || "");
         root.lastActionMessage = "Failed to launch " + (appName || appId) + (err.length > 0 ? (": " + err) : (" (code " + code + ")."));
       }
       root.refreshGames();
@@ -1603,7 +1611,7 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
-      if (code !== 0 && root.installRunning && HubModel.trimText(root.installLog).length === 0) {
+      if (code !== 0 && root.installRunning && Shell.trim(root.installLog).length === 0) {
         root.finishInstall(null);
         root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.extraAppInstallStatus;
@@ -1615,14 +1623,14 @@ Item {
   Process {
     id: installLogProc
     function appendLine(line) {
-      var t = HubModel.stripAnsi(line);
+      var t = Shell.stripAnsi(line);
       var m = t.match(/\[vember-install-exit:(-?\d*)\]/);
       if (m) {
-        var codeStr = HubModel.trimText(m[1]);
+        var codeStr = Shell.trim(m[1]);
         root.finishInstall(codeStr.length === 0 ? null : Number(codeStr));
         return;
       }
-      if (HubModel.trimText(t).length === 0)
+      if (Shell.trim(t).length === 0)
         return;
       var next = (root.installLog.length > 0 ? (root.installLog + "\n") : "") + t;
       if (next.length > 12000)
@@ -1634,7 +1642,7 @@ Item {
     onExited: function(code) {
       if (root.installRunning) {
         root.installRunning = false;
-        if (HubModel.trimText(root.extraAppInstallStatus).indexOf("Installing") === 0)
+        if (Shell.trim(root.extraAppInstallStatus).indexOf("Installing") === 0)
           root.extraAppInstallStatus = "Install log stream ended.";
         root.lastActionMessage = root.extraAppInstallStatus;
       }
@@ -1653,14 +1661,14 @@ Item {
         var logMark = "---VEMBER-LOG---";
         var stateIdx = raw.indexOf(stateMark);
         var logIdx = raw.indexOf(logMark);
-        var title = stateIdx >= 0 ? HubModel.trimText(raw.slice(0, stateIdx)) : HubModel.trimText(raw);
+        var title = stateIdx >= 0 ? Shell.trim(raw.slice(0, stateIdx)) : Shell.trim(raw);
         var stateBlock = (stateIdx >= 0 && logIdx > stateIdx)
           ? raw.slice(stateIdx + stateMark.length, logIdx) : "";
         var body = logIdx >= 0 ? raw.slice(logIdx + logMark.length) : raw;
         var stateLines = stateBlock.split("\n");
-        var state = HubModel.trimText(stateLines[0] || "");
-        var runningId = HubModel.trimText(stateLines[1] || "");
-        var parsed = HubModel.parseInstallLog(body, 12000);
+        var state = Shell.trim(stateLines[0] || "");
+        var runningId = Shell.trim(stateLines[1] || "");
+        var parsed = InstallLog.parse(body, 12000);
         if (title.length > 0)
           root.installTitle = title;
         root.installLog = parsed.text;
@@ -1679,14 +1687,14 @@ Item {
           }
           root.lastActionMessage = root.extraAppInstallStatus;
           installLogProc.running = false;
-          installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
+          installLogProc.command = ["tail", "-n", "+1", "-F", InstallLog.logPath(root.homeDir)];
           installLogProc.running = true;
           // The lock proves the terminal opened, so only nudge for prompts;
           // the stall timer must not stop a genuinely live install.
           installNoOutputTimer.restart();
           return;
         }
-        if (HubModel.trimText(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
+        if (Shell.trim(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
           var label = title.length > 0 ? title.replace(/^Vember Install:\s*/, "") : "Install";
           if (parsed.finished) {
             if (parsed.exitCode === 0)
@@ -1730,7 +1738,7 @@ Item {
     interval: 5000
     repeat: false
     onTriggered: {
-      if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
+      if (!root.installRunning || Shell.trim(root.installLog).length > 0)
         return;
       root.extraAppInstallStatus = "No output yet — check the terminal window for a password or y/n prompt.";
       root.lastActionMessage = root.extraAppInstallStatus;
@@ -1745,11 +1753,11 @@ Item {
     interval: 120000
     repeat: false
     onTriggered: {
-      if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
+      if (!root.installRunning || Shell.trim(root.installLog).length > 0)
         return;
       installLockCheckProc.command = ["sh", "-c",
         "pid=$(sed -n 2p \"$1\" 2>/dev/null); [ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null",
-        "sh", HubModel.installLockPath(root.homeDir)];
+        "sh", InstallLog.lockPath(root.homeDir)];
       installLockCheckProc.running = true;
     }
   }
@@ -1774,10 +1782,10 @@ Item {
   // --- Processes: Game mount ---
   Process {
     id: findmntProc
-    command: HubModel.findmntCommand(root.gameMount)
+    command: SystemInfo.findmntCommand(root.gameMount)
     stdout: StdioCollector {
       onStreamFinished: {
-        var info = HubModel.parseFindmnt(text);
+        var info = SystemInfo.parseFindmnt(text);
         root.gameMountPresent = !!info;
       }
     }
@@ -1787,25 +1795,25 @@ Item {
   }
   Process {
     id: dfProc
-    command: HubModel.dfBytesCommand(root.gameMount)
+    command: SystemInfo.dfBytesCommand(root.gameMount)
     stdout: StdioCollector {
       onStreamFinished: {
-        var info = HubModel.parseDfBytes(text);
+        var info = SystemInfo.parseDfBytes(text);
         if (info) {
           root.gameMountPresent = true;
           root.gameMountUsedBytes = info.usedBytes;
           root.gameMountAvailBytes = info.availBytes;
           root.gameMountTotalBytes = info.totalBytes;
           root.gameMountUseRatio = info.totalBytes > 0 ? Math.max(0, Math.min(1, info.usedBytes / info.totalBytes)) : 0;
-          root.gameMountUsePercentText = HubModel.trimText(info.usePercent);
-          root.gameMountSummary = HubModel.humanBytes(info.usedBytes) + " used / "
-            + HubModel.humanBytes(info.availBytes) + " free / "
-            + HubModel.humanBytes(info.totalBytes) + " total (" + info.usePercent + ")";
+          root.gameMountUsePercentText = Shell.trim(info.usePercent);
+          root.gameMountSummary = Shell.humanBytes(info.usedBytes) + " used / "
+            + Shell.humanBytes(info.availBytes) + " free / "
+            + Shell.humanBytes(info.totalBytes) + " total (" + info.usePercent + ")";
         }
       }
     }
     stderr: StdioCollector {
-      onStreamFinished: if (HubModel.trimText(text).length > 0) root.gameMountError = HubModel.trimText(text)
+      onStreamFinished: if (Shell.trim(text).length > 0) root.gameMountError = Shell.trim(text)
     }
   }
 
@@ -1840,7 +1848,7 @@ Item {
     command: ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/manifest.json"]
     stdout: StdioCollector {
       onStreamFinished: {
-        var raw = HubModel.trimText(text);
+        var raw = Shell.trim(text);
         if (raw.length === 0)
           return;
         try {
@@ -1858,7 +1866,7 @@ Item {
     command: ["sh", "-c", "if [ -f \"$1\" ]; then cat \"$1\"; fi", "sh", root.configPath]
     stdout: StdioCollector {
       onStreamFinished: {
-        var raw = HubModel.trimText(text);
+        var raw = Shell.trim(text);
         if (raw.length === 0) {
           root.configReady = false;
           root.serverName = "";
@@ -1868,9 +1876,9 @@ Item {
         }
         try {
           var obj = JSON.parse(raw);
-          var name = HubModel.trimText(obj && obj.serverName ? obj.serverName : "");
-          var role = HubModel.trimText(obj && obj.serverRole ? obj.serverRole : "");
-          var editor = HubModel.trimText(obj && obj.preferredEditor ? obj.preferredEditor : "");
+          var name = Shell.trim(obj && obj.serverName ? obj.serverName : "");
+          var role = Shell.trim(obj && obj.serverRole ? obj.serverRole : "");
+          var editor = Shell.trim(obj && obj.preferredEditor ? obj.preferredEditor : "");
           var order = root.normalizedTabOrder(obj && obj.tabOrder ? obj.tabOrder : root.tabOrder);
           var cfgPort = Number(obj && obj.codeServerPort ? obj.codeServerPort : 8443);
           if (!isFinite(cfgPort)) cfgPort = 8443;
@@ -1936,7 +1944,7 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {
       onStreamFinished: {
-        var err = HubModel.trimText(text);
+        var err = Shell.trim(text);
         if (err.length > 0) {
           root.lastActionMessage = "Failed to save hub config: " + err;
           root.restartingForServerName = false;
@@ -1962,10 +1970,10 @@ Item {
   // --- Processes: Dev ---
   Process {
     id: devToolsProc
-    command: HubModel.devToolCheckCommand()
+    command: DevTools.checkCommand()
     stdout: StdioCollector {
       onStreamFinished: {
-        root.devTools = HubModel.parseDevToolChecks(text);
+        root.devTools = DevTools.parseChecks(text);
         if (root.devToolsOnlyRefresh) {
           root.devToolsOnlyRefresh = false;
           codeServerProc.running = false;
@@ -1978,7 +1986,7 @@ Item {
     }
     stderr: StdioCollector {
       onStreamFinished: {
-        var err = HubModel.trimText(text);
+        var err = Shell.trim(text);
         if (err.length > 0) root.devError = err;
       }
     }
@@ -1993,10 +2001,10 @@ Item {
   }
   Process {
     id: devReposProc
-    command: HubModel.devReposScanCommand(root.homeDir)
+    command: DevTools.reposScanCommand(root.homeDir)
     stdout: StdioCollector {
       onStreamFinished: {
-        root.devRepos = HubModel.parseDevRepos(text);
+        root.devRepos = DevTools.parseRepos(text);
       }
     }
     stderr: StdioCollector {}
@@ -2008,10 +2016,10 @@ Item {
   }
   Process {
     id: codeServerProc
-    command: HubModel.codeServerPsCommand()
+    command: DevTools.codeServerPsCommand()
     stdout: StdioCollector {
       onStreamFinished: {
-        var info = HubModel.parseCodeServerStatus(text);
+        var info = DevTools.parseCodeServerStatus(text);
         root.codeServerPresent = !!info.present;
         root.codeServerRunning = !!info.running;
         root.codeServerState = info.state || "unknown";
@@ -2023,7 +2031,7 @@ Item {
     onExited: function(code) {
       root.devBusy = false;
       var base = root.devToolsOnlyRefresh ? "Dev tools refreshed." : ("Found " + root.devRepos.length + " repo(s).");
-      if (HubModel.trimText(root.devInstallStatus).length === 0 || root.devToolsOnlyRefresh)
+      if (Shell.trim(root.devInstallStatus).length === 0 || root.devToolsOnlyRefresh)
         root.devStatus = base + " VS Code Server: " + (root.codeServerPresent ? root.codeServerState : "not set up") + ".";
       else
         root.devStatus = root.devInstallStatus + " VS Code Server: " + (root.codeServerPresent ? root.codeServerState : "not set up") + ".";
@@ -2036,9 +2044,9 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.devInstallBusy = false;
-      var label = HubModel.devToolLabel(root.devInstallToolId);
-      var err = HubModel.trimText(devInstallSilentProc.stderr.text || "");
-      var out = HubModel.trimText(devInstallSilentProc.stdout.text || "");
+      var label = DevTools.label(root.devInstallToolId);
+      var err = Shell.trim(devInstallSilentProc.stderr.text || "");
+      var out = Shell.trim(devInstallSilentProc.stdout.text || "");
       if (code === 0) {
         root.devInstallStatus = label + " installed. Refreshing…";
         root.devStatus = root.devInstallStatus;
@@ -2062,14 +2070,14 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
-      var label = HubModel.devToolLabel(editorId);
+      var label = DevTools.label(editorId);
       if (code === 0) {
-        var out = HubModel.trimText(stdout.text || "");
-        var bin = out.indexOf("BIN=") === 0 ? HubModel.trimText(out.slice(4)) : "";
+        var out = Shell.trim(stdout.text || "");
+        var bin = out.indexOf("BIN=") === 0 ? Shell.trim(out.slice(4)) : "";
         root.devStatus = "Opened " + repoPath + " in " + label + (bin.length > 0 ? (" (" + bin + ")") : "") + ".";
         root.lastActionMessage = "Opened in " + label + ".";
       } else {
-        var err = HubModel.trimText(stderr.text || "");
+        var err = Shell.trim(stderr.text || "");
         var msg = err.length > 0 ? err : ("Failed to open in " + label + " (code " + code + ").");
         root.devStatus = msg;
         root.lastActionMessage = msg;
@@ -2087,7 +2095,7 @@ Item {
         return;
       root.devRepoDetailBusy = false;
       if (code === 0) {
-        root.devRepoDetail = HubModel.parseDevRepoDetail(stdout.text || "");
+        root.devRepoDetail = DevTools.parseRepoDetail(stdout.text || "");
       } else {
         root.devRepoDetail = { error: "Failed to load repo details (code " + code + ")." };
       }
@@ -2367,8 +2375,72 @@ Item {
     watchChanges: true
     onFileChanged: root.scheduleHotReload()
   }
+  // Hot reload when model/Docker.mjs changes.
   FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/HubModel.js"
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Docker.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/DevTools.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/DevTools.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Gaming.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Gaming.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/InstallLog.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/InstallLog.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Omarchy.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Omarchy.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Shell.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Shell.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Ssh.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Ssh.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Systemd.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Systemd.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/SystemInfo.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/SystemInfo.mjs"
+    printErrors: false
+    watchChanges: true
+    onFileChanged: root.scheduleHotReload()
+  }
+  // Hot reload when model/Tailscale.mjs changes.
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Tailscale.mjs"
     printErrors: false
     watchChanges: true
     onFileChanged: root.scheduleHotReload()
@@ -2407,7 +2479,7 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
-      var dir = HubModel.trimText(stdout.text || "");
+      var dir = Shell.trim(stdout.text || "");
       if (dir.length === 0) dir = root.homeDir + "/Projects/vember-server";
       root.pluginRepoDir = dir;
       pluginUpdateAheadProc.running = false;
@@ -2426,14 +2498,14 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.updateCheckBusy = false;
-      var n = Number(HubModel.trimText(stdout.text || "0"));
+      var n = Number(Shell.trim(stdout.text || "0"));
       if (isNaN(n) || n < 0) n = 0;
       root.pluginUpdateRemoteCommits = n;
       root.updateAvailable = n > 0;
       root.updateAvailableBuild = n > 0 ? (String(n) + " new commit" + (n === 1 ? "" : "s")) : "";
       if (n > 0) {
         root.pluginUpdateStatus = "Update ready on GitHub (" + root.updateAvailableBuild + ").";
-      } else if (HubModel.trimText(root.pluginUpdateStatus) === "Checking for updates…") {
+      } else if (Shell.trim(root.pluginUpdateStatus) === "Checking for updates…") {
         root.pluginUpdateStatus = "You’re up to date.";
       }
     }
@@ -2448,7 +2520,7 @@ Item {
         root.pluginUpdateBusy = false;
         pluginUpdatePunTimer.running = false;
         root.pluginUpdateProgress = 0;
-        var err = HubModel.trimText(stderr.text || stdout.text || "");
+        var err = Shell.trim(stderr.text || stdout.text || "");
         root.pluginUpdateError = err.length > 0 ? err : ("git fetch failed (code " + code + ").");
         root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
         root.pluginUpdatePun = "Well, that didn’t ship. Check the status above.";
@@ -2474,12 +2546,12 @@ Item {
         root.updateAvailable = false;
         root.pluginUpdateRemoteCommits = 0;
         root.updateAvailableBuild = "";
-        var out = HubModel.trimText(stdout.text || "");
+        var out = Shell.trim(stdout.text || "");
         root.pluginUpdateStatus = "Update complete. Reload the hub to apply changes." + (out.length > 0 ? "" : "");
         root.pluginUpdatePun = "All patched up! Time for a quick reload dance.";
       } else {
         root.pluginUpdateProgress = 0;
-        var err = HubModel.trimText(stderr.text || stdout.text || "");
+        var err = Shell.trim(stderr.text || stdout.text || "");
         root.pluginUpdateError = err.length > 0 ? err : ("git pull failed (code " + code + ").");
         root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
         root.pluginUpdatePun = "Update hit a snag. The repo might have local changes or need attention.";
