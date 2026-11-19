@@ -34,6 +34,32 @@ export class Ssh {
   return String(homeDir || "") + "/.ssh/authorized_keys";
   }
 
+  // Validates a pasted OpenSSH public key before it is appended to
+  // authorized_keys. Returns { ok:true, type, keyData, comment } for a
+  // well-formed single-line key, or { ok:false, reason } otherwise. This keeps
+  // a bad paste from being written silently: a private key, a multi-line
+  // blob, or a typo would otherwise be appended and show "Key added." while
+  // never authenticating (and a pasted private key must never touch disk).
+  validatePublicKeyLine(text) {
+  var raw = String(text || "");
+  if (raw.indexOf("\n") !== -1 || raw.indexOf("\r") !== -1)
+    return { ok: false, reason: "Add one public key at a time (single line)." };
+  var t = shell.trim(raw);
+  if (t.length === 0)
+    return { ok: false, reason: "Paste a public key to add." };
+  if (t.indexOf("PRIVATE KEY") !== -1)
+    return { ok: false, reason: "That looks like a private key. Paste the .pub public key instead." };
+  var parts = t.split(/\s+/);
+  var type = parts[0];
+  var keyData = parts[1] || "";
+  // Same key-type prefixes the parser accepts, so any real public key passes.
+  if (!/^(ssh-|ecdsa-sha2-|sk-ssh-|sk-ecdsa-)/.test(type))
+    return { ok: false, reason: "Not an SSH public key (expected ssh-ed25519, ssh-rsa, or ecdsa-…)." };
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(keyData))
+    return { ok: false, reason: "The key body is not valid base64." };
+  return { ok: true, type: type, keyData: keyData, comment: parts.slice(2).join(" ") };
+  }
+
   authorizedKeysReadCommand(homeDir) {
   var path = authorizedKeysPath(homeDir);
   return ["sh", "-c", "if [ -f \"$1\" ]; then cat \"$1\"; fi", "sh", path];
@@ -96,5 +122,6 @@ export const ssh = impl;
 export function hostKeyFingerprintsCommand(...args) { return impl.hostKeyFingerprintsCommand(...args); }
 export function parseHostKeyFingerprints(...args) { return impl.parseHostKeyFingerprints(...args); }
 export function authorizedKeysPath(...args) { return impl.authorizedKeysPath(...args); }
+export function validatePublicKeyLine(...args) { return impl.validatePublicKeyLine(...args); }
 export function authorizedKeysReadCommand(...args) { return impl.authorizedKeysReadCommand(...args); }
 export function parseAuthorizedKeys(...args) { return impl.parseAuthorizedKeys(...args); }

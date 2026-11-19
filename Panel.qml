@@ -642,15 +642,15 @@ Item {
   }
 
   function addAuthorizedKey() {
-    var key = Shell.trim(sshNewKeyText);
-    if (key.length === 0) {
-      sshAuthorizedKeysStatus = "Paste a public key to add.";
+    // Validate before writing: a private key, multi-line blob or typo would
+    // otherwise be appended to authorized_keys and reported as added while
+    // never authenticating. The validated, normalised key is what gets written.
+    var v = Ssh.validatePublicKeyLine(sshNewKeyText);
+    if (!v.ok) {
+      sshAuthorizedKeysStatus = v.reason;
       return;
     }
-    if (key.indexOf("\n") !== -1) {
-      sshAuthorizedKeysStatus = "Add one public key at a time (single line).";
-      return;
-    }
+    var key = v.type + " " + v.keyData + (v.comment.length > 0 ? (" " + v.comment) : "");
     sshAuthorizedKeysAddProc.running = false;
     sshAuthorizedKeysAddProc.command = ["sh", "-c",
       "set -e; mkdir -p \"$HOME/.ssh\"; chmod 700 \"$HOME/.ssh\"; touch \"$HOME/.ssh/authorized_keys\"; chmod 600 \"$HOME/.ssh/authorized_keys\"; printf '%s\\n' \"$1\" >> \"$HOME/.ssh/authorized_keys\"",

@@ -1073,3 +1073,47 @@ class TestConfigWriteFailureSurfacing:
         assert "else" in exit_body, (
             "onExited must have an else branch for a non-zero exit"
         )
+
+
+class TestSshAddKeyValidation:
+    """A pasted key must be validated before addAuthorizedKey writes it.
+
+    Without validation a private key, multi-line blob or typo is appended to
+    authorized_keys and reported as added while never authenticating. The
+    function must call Ssh.validatePublicKeyLine and bail on a bad result
+    before starting the add process.
+    """
+
+    @staticmethod
+    def _fn():
+        text = read(REPO / "Panel.qml")
+        m = re.search(r"function\s+addAuthorizedKey\s*\([^)]*\)\s*\{", text)
+        assert m, "no addAuthorizedKey in Panel.qml"
+        start = text.index("{", m.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in addAuthorizedKey")
+
+    def test_validates_before_writing(self):
+        body = self._fn()
+        assert "Ssh.validatePublicKeyLine" in body, (
+            "addAuthorizedKey must validate the pasted key before writing it"
+        )
+        # The validation must gate the process start.
+        val_idx = body.index("Ssh.validatePublicKeyLine")
+        proc_idx = body.index("sshAuthorizedKeysAddProc.running = true")
+        assert val_idx < proc_idx, (
+            "validation must happen before the add process is started"
+        )
+
+    def test_rejects_on_invalid(self):
+        body = self._fn()
+        assert "v.ok" in body and "return" in body, (
+            "addAuthorizedKey must return early when validation fails"
+        )
