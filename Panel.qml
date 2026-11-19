@@ -1728,32 +1728,30 @@ Item {
     onExited: function(code) {
       if (!root.installRunning)
         return;
-      if (code === 0) {
-        // Alive. Only nudge about a password prompt when nothing has been
-        // written yet; otherwise leave the streamed output alone.
-        if (Shell.trim(root.installLog).length === 0) {
+      var hasOutput = Shell.trim(root.installLog).length > 0;
+      var verdict = InstallLog.watchdogVerdict(code, hasOutput);
+      if (verdict === "alive") {
+        // Only nudge about a password prompt when nothing has been written
+        // yet; otherwise leave the streamed output alone.
+        if (!hasOutput) {
           root.extraAppInstallStatus = "Still waiting — the terminal may be asking for a password. Tracking continues.";
           root.lastActionMessage = root.extraAppInstallStatus;
         }
-      } else if (code === 3) {
-        // The lock is there but its pid line is not readable yet. This is a
-        // moment during the wrapper's write, not a dead terminal; wait for the
-        // next tick rather than stopping a live install.
-      } else if (code === 2 && Shell.trim(root.installLog).length === 0) {
+      } else if (verdict === "never-started") {
         // No lock and no output: the terminal never started. The tail would
         // otherwise wait on a file that will never be written.
         root.finishInstall(null);
         root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.extraAppInstallStatus;
-      } else if (code === 1) {
+      } else if (verdict === "dead") {
         // Lock present, pid gone: the terminal was closed before the exit
         // marker was written, so tracking would never end on its own.
         root.stopInstall();
         root.extraAppInstallStatus = "The install terminal closed before finishing. Tracking stopped.";
         root.lastActionMessage = root.extraAppInstallStatus;
       }
-      // code === 2 with output means the wrapper is mid-teardown; the exit
-      // marker is already in the log and `tail` will finish on its next read.
+      // "wait" (lock pid not written yet) and "teardown" (lock gone, output
+      // present) both do nothing: the next tick or `tail` resolves them.
     }
   }
 

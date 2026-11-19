@@ -54,6 +54,30 @@ export class InstallLog {
   return { text: joined, finished: finished, exitCode: exitCode };
   }
 
+  // Maps the lock-check exit code (and whether the log has output) to a
+  // decision for the install watchdog. Keeping this here means the branch that
+  // used to strand the panel on "running" is covered by a unit test rather than
+  // living only in a QML string handler.
+  //
+  //   0 alive             -> keep tracking (nudge only when there is no output)
+  //   1 lock, pid dead    -> terminal closed early; stop tracking
+  //   2 no lock, no log   -> terminal never started; finish with an error
+  //   2 no lock, has log  -> wrapper mid-teardown; let `tail` finish
+  //   3 lock, no pid yet  -> transient during the lock write; wait
+  watchdogVerdict(code, hasOutput) {
+  var c = Number(code);
+  var out = !!hasOutput;
+  if (c === 0)
+    return "alive";
+  if (c === 1)
+    return "dead";
+  if (c === 2)
+    return out ? "teardown" : "never-started";
+  if (c === 3)
+    return "wait";
+  return "wait";
+  }
+
   terminalScript(title, cmd, logPath, titlePath, lockPath, id) {
   var dir = String(logPath).replace(/\/[^\/]*$/, "");
   var lock = String(lockPath || "");
@@ -92,4 +116,5 @@ export function titlePath(...args) { return impl.titlePath(...args); }
 export function lockPath(...args) { return impl.lockPath(...args); }
 export function omarchyLockPath(...args) { return impl.omarchyLockPath(...args); }
 export function parse(...args) { return impl.parse(...args); }
+export function watchdogVerdict(...args) { return impl.watchdogVerdict(...args); }
 export function terminalScript(...args) { return impl.terminalScript(...args); }

@@ -81,6 +81,47 @@ class TestParse:
         assert out["text"] == "abcdefghij"
 
 
+class TestWatchdogVerdict:
+    """The install watchdog's branch decision, pulled out of QML to be testable.
+
+    The bug this guards: a terminal closed after the first line of output left
+    the panel stuck on "running". The verdict for a dead pid must be "dead"
+    regardless of whether the log has content, and "never-started" only applies
+    when there is no output to tail.
+    """
+
+    def _verdict(self, js, code, has_output):
+        return js(
+            "console.log(JSON.stringify(InstallLog.watchdogVerdict(%d, %s)))"
+            % (code, "true" if has_output else "false")
+        )
+
+    def test_alive_is_alive_with_or_without_output(self, js):
+        assert self._verdict(js, 0, False) == "alive"
+        assert self._verdict(js, 0, True) == "alive"
+
+    def test_dead_pid_is_dead_even_with_output(self, js):
+        # This is the regression: a dead terminal that produced output must
+        # still be reported dead, not ignored because the log is non-empty.
+        assert self._verdict(js, 1, False) == "dead"
+        assert self._verdict(js, 1, True) == "dead"
+
+    def test_missing_lock_without_output_never_started(self, js):
+        assert self._verdict(js, 2, False) == "never-started"
+
+    def test_missing_lock_with_output_is_teardown(self, js):
+        # The wrapper removes the lock after writing the exit marker; `tail`
+        # is about to finish, so the watchdog should do nothing.
+        assert self._verdict(js, 2, True) == "teardown"
+
+    def test_lock_without_pid_waits(self, js):
+        assert self._verdict(js, 3, False) == "wait"
+        assert self._verdict(js, 3, True) == "wait"
+
+    def test_unknown_code_waits(self, js):
+        assert self._verdict(js, 7, False) == "wait"
+
+
 class TestTerminalScript:
     ARGS = (
         '"Install Steam", "echo hi", "/h/.cache/hub/install.log",'
