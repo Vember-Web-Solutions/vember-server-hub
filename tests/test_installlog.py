@@ -139,3 +139,74 @@ class TestTerminalScript:
             ["bash", "-n"], input=script, capture_output=True, text=True
         )
         assert result.returncode == 0, result.stderr
+
+
+class TestInteractivePrompts:
+    """The original bug: an install that asked for a sudo password or a y/n
+    appeared to hang.
+
+    The payload has to keep the terminal's pty as its stdin. This runs the real
+    generated script against a stub xdg-terminal-exec that allocates a pty and
+    types an answer, the way a terminal emulator does.
+    """
+
+    @staticmethod
+    def _stub(bindir):
+        stub = bindir / "xdg-terminal-exec"
+        stub.write_text(
+            """#!/usr/bin/env bash
+# Drop --flags, then run the command on a pty fed with a typed answer.
+while [ $# -gt 0 ]; do case "$1" in --*) shift ;; *) break ;; esac; done
+cmd="$(printf '%q' "$1")"; shift
+while [ $# -gt 0 ]; do cmd="$cmd $(printf '%q' "$1")"; shift; done
+printf 'yes\\n' | script -qec "$cmd" /dev/null
+"""
+        )
+        stub.chmod(0o755)
+
+    def test_payload_can_read_a_typed_answer(self, js, tmp_path):
+        import json
+        import os
+        import shutil
+        import time
+
+        if shutil.which("script") is None:
+            import pytest
+
+            pytest.skip("script(1) is not installed")
+
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        self._stub(bindir)
+
+        log = tmp_path / "install.log"
+        title = tmp_path / "title.txt"
+        lock = tmp_path / "install.lock"
+
+        payload = "printf 'continue? '; read -r answer; echo \"got:$answer\"; exit 7"
+        script = js(
+            "console.log(JSON.stringify(InstallLog.terminalScript('Smoke', %s, %s, %s, %s, 'smoke')))"
+            % (
+                json.dumps(payload),
+                json.dumps(str(log)),
+                json.dumps(str(title)),
+                json.dumps(str(lock)),
+            )
+        )
+
+        env = dict(os.environ, PATH="%s:%s" % (bindir, os.environ["PATH"]))
+        subprocess.run(
+            ["bash", "-c", script], env=env, capture_output=True, timeout=60
+        )
+
+        # The launcher backgrounds the terminal, so wait for the payload to end.
+        deadline = time.time() + 30
+        while time.time() < deadline:
+            if log.exists() and "[vember-install-exit:" in log.read_text():
+                break
+            time.sleep(0.2)
+
+        text = log.read_text()
+        assert "got:yes" in text, "payload never received the typed answer:\n" + text
+        assert "[vember-install-exit:7]" in text
+        assert not lock.exists(), "lock file outlived the install"
