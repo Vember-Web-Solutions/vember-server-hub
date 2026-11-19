@@ -39,7 +39,6 @@ Item {
   property bool restartingForServerName: false
   property bool pendingConfigRestart: false
   property bool updateAvailable: false
-  property string updateAvailableVersion: ""
   property string updateAvailableBuild: ""
   property bool updateCheckBusy: false
   property bool pluginUpdateBusy: false
@@ -1790,14 +1789,46 @@ Item {
     command: ["sh", "-c", "cat \"$1\" 2>/dev/null || true", "sh", Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/manifest.json"]
     stdout: StdioCollector {
       onStreamFinished: {
-        var raw = Shell.trim(text);
-        if (raw.length === 0)
+        // Parsing lives in Config.mjs so every branch below is covered by
+        // tests; this handler only maps the result onto panel state.
+        var cfg = Config.parseHubConfig(text);
+
+        if (cfg.state === "empty") {
+          // No file yet: keep the editor, tab order and port we already have.
+          root.configReady = false;
+          root.serverName = "";
+          root.serverRole = "";
+          root.openWizard(root.defaultServerName());
           return;
-        try {
-          var obj = JSON.parse(raw);
-          if (obj && obj.version) root.pluginVersion = String(obj.version);
-          if (obj && obj.build !== undefined && obj.build !== null) root.pluginBuild = Number(obj.build) || 1;
-        } catch (e) {}
+        }
+
+        if (cfg.state === "invalid") {
+          // Unreadable JSON: start from defaults rather than half-applied state.
+          root.configReady = false;
+          root.serverName = "";
+          root.serverRole = "";
+          root.preferredEditor = "";
+          root.tabOrder = cfg.tabOrder;
+          root.codeServerPort = cfg.codeServerPort;
+          root.openWizard(root.defaultServerName());
+          return;
+        }
+
+        root.preferredEditor = cfg.preferredEditor;
+        root.tabOrder = cfg.tabOrder;
+        root.codeServerPort = cfg.codeServerPort;
+        root.serverName = cfg.serverName;
+        root.serverNameDraft = cfg.serverName;
+        root.serverRole = cfg.serverRole;
+        root.serverRoleDraft = cfg.serverRole;
+
+        if (cfg.state === "ready") {
+          root.configReady = true;
+          root.wizardOpen = false;
+        } else {
+          root.configReady = false;
+          root.openWizard(root.defaultServerName());
+        }
       }
     }
     stderr: StdioCollector {}

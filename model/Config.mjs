@@ -33,6 +33,73 @@ export class Config {
   }
   return out;
   }
+
+  // Turn the contents of config.json into the fields the panel needs.
+  //
+  // The four outcomes are deliberately distinct, because the panel treats
+  // them differently:
+  //
+  //   "empty"   no file yet            - keep editor/order/port, ask for a name
+  //   "ready"   a name is configured   - use everything, no wizard
+  //   "wizard"  file exists, no name   - use editor/order/port, ask for a name
+  //   "invalid" unreadable JSON        - reset to defaults, ask for a name
+  //
+  // Returning the state rather than booleans keeps the QML side a plain
+  // switch, and lets tests cover every branch without a running shell.
+  parseHubConfig(raw) {
+  var text = shell.trim(raw);
+  if (text.length === 0) {
+    return { state: "empty" };
+  }
+
+  var obj;
+  try {
+    obj = JSON.parse(text);
+  } catch (e) {
+    return {
+      state: "invalid",
+      serverName: "",
+      serverRole: "",
+      preferredEditor: "",
+      tabOrder: this.normalizedTabOrder([]),
+      codeServerPort: 8443
+    };
+  }
+
+  // JSON.parse("[]") and JSON.parse("null") both succeed without producing a
+  // config object, so they are treated as corrupt rather than as an empty file.
+  if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+    return {
+      state: "invalid",
+      serverName: "",
+      serverRole: "",
+      preferredEditor: "",
+      tabOrder: this.normalizedTabOrder([]),
+      codeServerPort: 8443
+    };
+  }
+
+  var name = shell.trim(obj.serverName ? obj.serverName : "");
+  var role = shell.trim(obj.serverRole ? obj.serverRole : "");
+  var editor = shell.trim(obj.preferredEditor ? obj.preferredEditor : "");
+  var order = this.normalizedTabOrder(obj.tabOrder ? obj.tabOrder : []);
+
+  // A port outside the valid range is a typo, not a preference: fall back to
+  // the default rather than refusing to start the container.
+  var port = Number(obj.codeServerPort ? obj.codeServerPort : 8443);
+  if (!isFinite(port)) port = 8443;
+  port = Math.round(port);
+  if (port < 1 || port > 65535) port = 8443;
+
+  return {
+    state: name.length > 0 ? "ready" : "wizard",
+    serverName: name,
+    serverRole: role,
+    preferredEditor: editor,
+    tabOrder: order,
+    codeServerPort: port
+  };
+  }
 }
 
 const impl = new Config();
@@ -41,3 +108,4 @@ const impl = new Config();
 export const config = impl;
 export function defaultTabOrder(...args) { return impl.defaultTabOrder(...args); }
 export function normalizedTabOrder(...args) { return impl.normalizedTabOrder(...args); }
+export function parseHubConfig(...args) { return impl.parseHubConfig(...args); }
