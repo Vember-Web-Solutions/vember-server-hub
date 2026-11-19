@@ -405,14 +405,14 @@ Column {
                     iconText: "󰏔"
                     text: (hub.devInstallBusy && hub.devInstallToolId === modelData.id) ? "Installing…" : "Install"
                     tooltipText: "Try silent install for " + DevTools.label(modelData.id)
-                    enabled: !hub.devInstallBusy && !hub.installRunning
+                    enabled: !hub.devInstallBusy && !hub.installRunning && !hub.omarchyUpdateRunning
                     onClicked: hub.runDevInstallSilent(modelData.id)
                   }
                   Button {
                     iconText: "󰆍"
                     text: (hub.installRunning && hub.installRunningId === ("dev:" + modelData.id)) ? "Installing…" : "Terminal"
                     tooltipText: "Open the default terminal to install " + DevTools.label(modelData.id)
-                    enabled: !hub.devInstallBusy && !hub.installRunning
+                    enabled: !hub.devInstallBusy && !hub.installRunning && !hub.omarchyUpdateRunning
                     onClicked: hub.openDevInstallTerminal(modelData.id)
                   }
                 }

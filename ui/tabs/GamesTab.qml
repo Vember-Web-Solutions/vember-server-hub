@@ -374,7 +374,7 @@ Column {
                   iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
                   text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : (modelData.kind === "bnet" ? "Set up" : (modelData.id === "minecraft-launcher" ? "Add" : "Install"))
                   tooltipText: modelData.kind === "steam" ? "Install Steam in the default terminal (answer the sudo prompt there)" : (modelData.kind === "bnet" ? "Open the Lutris Battle.net install page" : (modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)))
-                  enabled: !hub.installRunning
+                  enabled: !hub.installRunning && !hub.omarchyUpdateRunning
                   onClicked: {
                     if (modelData.kind === "extra") hub.installExtraApp(modelData.id);
                     else if (modelData.kind === "steam") hub.installSteam();
@@ -568,7 +568,7 @@ Column {
                   iconText: "󰏔"
                   text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : "Install"
                   tooltipText: "Install " + (modelData.name || modelData.id) + " in the default terminal"
-                  enabled: !hub.installRunning
+                  enabled: !hub.installRunning && !hub.omarchyUpdateRunning
                   onClicked: hub.installExtraApp(modelData.id)
                 }
               }

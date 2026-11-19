@@ -1426,3 +1426,73 @@ class TestWatchdogFailuresAreVisible:
             "installTerminalProc must not stop tracking; the watchdog decides"
         )
         assert "stopInstall" not in body
+
+
+class TestMutualExclusionIsVisible:
+    """The UI must show that installs and updates cannot run together.
+
+    The functions refuse, but a button that stays enabled and then quietly
+    does nothing is the dead-button problem again. Every entry point that
+    starts an install or an update is disabled while the other runs.
+    """
+
+    def _read(self, rel):
+        return read(REPO / rel)
+
+    INSTALL_ENTRY_POINTS = [
+        "hub.installExtraApp(",
+        "hub.installSteam(",
+        "hub.runDevInstallSilent(",
+        "hub.openDevInstallTerminal(",
+        "hub.runInstallInTerminal(",
+    ]
+
+    def _install_buttons(self, rel, install_flag):
+        """Yield (enabled line, handler) for buttons that start an install.
+
+        Buttons that stop tracking or clear the log are not install entry
+        points and must not be checked for the other flag.
+        """
+        lines = self._read(rel).splitlines()
+        for i, line in enumerate(lines):
+            if "enabled:" not in line or install_flag not in line:
+                continue
+            # The handler may be a one-liner or a block, so scan a window
+            # rather than just the onClicked line. Match the calls that start
+            # an install specifically: `hub.installLog` and `hub.installRunning`
+            # appear all over the log panel and would match a loose pattern.
+            window = "\n".join(lines[i : i + 8])
+            if any(call in window for call in self.INSTALL_ENTRY_POINTS):
+                yield line, window
+
+    def test_games_install_buttons_check_both(self):
+        found = list(self._install_buttons("ui/tabs/GamesTab.qml", "hub.installRunning"))
+        assert found, "no Games install buttons found"
+        for line, handler in found:
+            assert "omarchyUpdateRunning" in line, (
+                "a Games install button ignores a running update: " + line.strip()
+            )
+
+    def test_games_install_buttons_exist_in_both_sections(self):
+        # The Games tab renders the install log twice; keep the guard honest
+        # if one of those sections loses its button.
+        found = list(self._install_buttons("ui/tabs/GamesTab.qml", "hub.installRunning"))
+        assert len(found) >= 2, "expected install buttons in both Games sections"
+
+    def test_dev_install_buttons_check_both(self):
+        text = self._read("ui/tabs/DevTab.qml")
+        for line in text.splitlines():
+            if "enabled: !hub.devInstallBusy && !hub.installRunning" in line:
+                assert "omarchyUpdateRunning" in line, (
+                    "a Dev install button ignores a running update: " + line.strip()
+                )
+
+    def test_update_button_checks_installs(self):
+        text = self._read("ui/tabs/OverviewTab.qml")
+        match = re.search(r"onClicked:\s*hub\.runOmarchyUpdateInPanel\(\)", text)
+        assert match, "update button not found"
+        # The enabled binding sits just above the handler.
+        window = text[max(0, match.start() - 600) : match.start()]
+        assert "enabled: !hub.omarchyUpdateRunning && !hub.installRunning" in window, (
+            "the Update Omarchy button must be disabled while an install runs"
+        )

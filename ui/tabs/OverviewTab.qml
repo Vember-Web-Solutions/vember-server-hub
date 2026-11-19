@@ -480,8 +480,10 @@ Column {
             iconText: "󰚰"
             text: hub.omarchyUpdateRunning ? "Updating…" : "Update Omarchy"
             active: true
-            enabled: !hub.omarchyUpdateRunning
-            tooltipText: "Run omarchy-update and show live log"
+            // An install and an update share the same terminal window class,
+            // so only one may run at a time.
+            enabled: !hub.omarchyUpdateRunning && !hub.installRunning
+            tooltipText: hub.installRunning ? "An install is running; let it finish first" : "Run omarchy-update and show live log"
             onClicked: hub.runOmarchyUpdateInPanel()
           }
           Button {

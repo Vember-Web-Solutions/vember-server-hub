@@ -296,7 +296,12 @@ Work that fell out of the split, done in the same arc:
   what the focus step selects on — and neither entry point checked the other.
   Starting an update while an install ran gave two matching windows, so focus
   went to whichever mapped first and the other terminal's prompts were missed.
-  Both entry points now refuse while the other is running.
+  Both entry points now refuse while the other is running, and every button
+  that starts one is disabled while the other runs — a button that stays
+  enabled and quietly does nothing is the same dead-button problem.
+  `TestMutualExclusionIsVisible` pins the gating; it matches the calls that
+  start an install specifically, since `hub.installLog` and `hub.installRunning`
+  appear throughout the log panel and a looser pattern caught the Clear button.
 
 ## Done when
 
@@ -305,8 +310,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 435 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,710 lines. The growth is comments, per-file
+- 439 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,712 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,190) was already there.
 - The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
@@ -315,6 +320,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,700, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,498 lines across 12 files and drives the real modules
+- The test suite is 3,568 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.17, build 72 → 93.
+- Version 0.1.0 → 0.6.18, build 72 → 94.
