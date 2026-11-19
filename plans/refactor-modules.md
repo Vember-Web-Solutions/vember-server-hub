@@ -72,6 +72,24 @@ Work that fell out of the split, done in the same arc:
   the manifest and `Panel.qml` version fallback agreeing.
 - **Interactive installs:** a pty test runs the real generated script against a
   stub terminal and types an answer, which is the failure that started this.
+- **Failure reporting:** `Shell.failureMessage` folds the first meaningful
+  stderr line into an action's failure message. Docker and Code Server actions
+  were discarding the daemon's own reason, leaving only "(code 1)".
+- **Manifest guard:** tests check the manifest's required fields, that its
+  entry points exist and are of known kinds, that its id matches the plugin
+  paths hardcoded in QML, and that the version is semver with an integer build.
+  These need no Omarchy install, so they also run in CI.
+- **One tab order:** the default order was written out three times; it now
+  lives only in `Config.mjs`, and the arrange dialog's swap is `Config.moveTab`
+  (a pure function that returns a new array and treats an off-end move as a
+  no-op).
+- **One container name:** `DevTools.codeServerContainer` /
+  `codeServerConfigDir` are the only source for the code-server container and
+  its config directory, which were spelled out a dozen times in `Panel.qml`.
+- **Atomic config write:** `Config.writeCommand` writes `config.json` to a
+  sibling temp file and renames it into place, so a crash cannot leave a
+  truncated file that parses as corrupt and blanks every setting. The payload
+  is passed as its own argument, never interpolated into the shell string.
 
 ## Done when
 
@@ -80,11 +98,13 @@ plugin warnings in the journal.
 
 ## Result
 
-- 311 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,349 lines. The growth is comments, per-file
+- 339 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,395 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,263) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,889 lines: `HubPanel.qml` 4,376 → 413,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,476. The largest file is now
-  `Panel.qml` at 2,476, then `ui/tabs/GamesTab.qml` at 803.
+  moved into `model/*.mjs` (1,310) and `ui/` (4,173) was already there.
+- The three monoliths went 7,694 → 2,888 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,481. The largest file is now
+  `Panel.qml` at 2,481, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 2,162 lines across 11 files and drives the real modules
+  through node, so it exercises the same code the shell runs.
 - Version 0.1.0 → 0.5.0, build 72 → 75.
