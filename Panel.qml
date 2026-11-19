@@ -560,7 +560,12 @@ Item {
   }
 
   // --- Developer tools and repos ---
+  // Targeted refresh after installing a dev tool: re-check the tools and the
+  // code-server status, but skip the full repo rescan. `devToolsOnlyRefresh`
+  // tells devToolsProc to jump straight to codeServerProc instead of chaining
+  // into devReposProc; it is cleared once codeServerProc finishes.
   function refreshDevTools() {
+    devToolsOnlyRefresh = true;
     devToolsProc.running = false;
     devToolsProc.running = true;
   }
@@ -2028,8 +2033,9 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         root.devTools = DevTools.parseChecks(text);
+        // The flag is read again in codeServerProc.onExited to pick the right
+        // status message, so it is cleared there, not here.
         if (root.devToolsOnlyRefresh) {
-          root.devToolsOnlyRefresh = false;
           codeServerProc.running = false;
           codeServerProc.running = true;
         } else {
@@ -2047,6 +2053,8 @@ Item {
     onExited: function(code) {
       if (code !== 0 && root.devTools.length === 0)
         root.devError = "Failed to detect dev tools (code " + code + ").";
+      // If the tools scan failed outright, codeServerProc never starts, so the
+      // flag would leak. Clear it and drop the busy state here.
       if (code !== 0 && root.devToolsOnlyRefresh) {
         root.devToolsOnlyRefresh = false;
         root.devBusy = false;
@@ -2084,8 +2092,14 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.devBusy = false;
-      var base = root.devToolsOnlyRefresh ? "Dev tools refreshed." : ("Found " + root.devRepos.length + " repo(s).");
-      if (Shell.trim(root.devInstallStatus).length === 0 || root.devToolsOnlyRefresh)
+      // Capture and clear the tools-only flag here: this is the end of both
+      // chains (tools-only and full), and the poll's refreshDev(preserve=true)
+      // does not reset it. Leaving it set would make the next full refresh
+      // skip the repo scan.
+      var toolsOnly = root.devToolsOnlyRefresh;
+      root.devToolsOnlyRefresh = false;
+      var base = toolsOnly ? "Dev tools refreshed." : ("Found " + root.devRepos.length + " repo(s).");
+      if (Shell.trim(root.devInstallStatus).length === 0 || toolsOnly)
         root.devStatus = base + " VS Code Server: " + (root.codeServerPresent ? root.codeServerState : "not set up") + ".";
       else
         root.devStatus = root.devInstallStatus + " VS Code Server: " + (root.codeServerPresent ? root.codeServerState : "not set up") + ".";
@@ -2111,10 +2125,9 @@ Item {
         root.devStatus = root.devInstallStatus;
       }
       root.devInstallToolId = "";
-      // targeted refresh of dev tools section (and code-server status cheap enough)
+      // Targeted refresh: re-checks tools and code-server status, skips the
+      // repo scan. refreshDevTools chains into codeServerProc itself.
       root.refreshDevTools();
-      codeServerProc.running = false;
-      codeServerProc.running = true;
     }
   }
   Process {

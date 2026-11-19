@@ -601,3 +601,73 @@ class TestPollSafety:
         assert "refreshTailscale(true)" in window, (
             "tsActionProc.onExited must preserve its result note"
         )
+
+
+class TestDevToolsTargetedRefresh:
+    """refreshDevTools() must be a targeted refresh, not a full repo rescan.
+
+    It is called after installing a dev tool, where only the tool list and the
+    code-server status can have changed. The old code declared a
+    `devToolsOnlyRefresh` flag but never set it, so every install triggered a
+    full repo scan; worse, the flag was cleared in devToolsProc before
+    codeServerProc read it, so the "Dev tools refreshed." message could never
+    fire. The flag is now set by refreshDevTools() and cleared once, at the end
+    of the codeServerProc chain.
+    """
+
+    def test_refresh_dev_tools_sets_the_flag(self):
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshDevTools\(\)\s*\{", text)
+        assert fn, "no refreshDevTools() in Panel.qml"
+        window = text[fn.start():fn.start() + 400]
+        assert "devToolsOnlyRefresh = true" in window, (
+            "refreshDevTools must set devToolsOnlyRefresh so the repo scan is "
+            "skipped after a tool install"
+        )
+
+    def test_tools_proc_does_not_clear_the_flag_early(self):
+        # devToolsProc.onStreamFinished branches on the flag but must leave it
+        # for codeServerProc.onExited to read and clear. (onExited clears it only
+        # on the failure path, where codeServerProc never starts.)
+        text = read(REPO / "Panel.qml")
+        idx = text.index("id: devToolsProc")
+        block_start = text.rindex("Process {", 0, idx)
+        block_end = text.index("\n  Process {", idx)
+        block = text[block_start:block_end]
+        assert "devToolsOnlyRefresh" in block, "devToolsProc must branch on the flag"
+        # Scope the check to onStreamFinished: that is where the flag must
+        # survive. onExited's failure-path clear is legitimate.
+        stream_start = block.index("onStreamFinished")
+        stream_end = block.index("stderr:", stream_start)
+        stream = block[stream_start:stream_end]
+        assert "root.devToolsOnlyRefresh = false" not in stream, (
+            "devToolsProc.onStreamFinished must not clear the flag; codeServerProc "
+            "reads it to choose the status message and clears it at the end"
+        )
+
+    def test_code_server_proc_clears_the_flag(self):
+        text = read(REPO / "Panel.qml")
+        idx = text.index("id: codeServerProc")
+        block_start = text.rindex("Process {", 0, idx)
+        block_end = text.index("\n  Process {", idx)
+        block = text[block_start:block_end]
+        assert "root.devToolsOnlyRefresh = false" in block, (
+            "codeServerProc.onExited must clear the flag; the poll's "
+            "refreshDev(preserve=true) does not, so a leaked flag would make the "
+            "next full refresh skip the repo scan"
+        )
+
+    def test_install_does_not_double_restart_code_server(self):
+        # devInstallSilentProc.onExited used to call refreshDevTools() and then
+        # restart codeServerProc by hand. refreshDevTools now chains into
+        # codeServerProc itself, so the manual restart is a redundant race.
+        text = read(REPO / "Panel.qml")
+        idx = text.index("id: devInstallSilentProc")
+        block_start = text.rindex("Process {", 0, idx)
+        block_end = text.index("\n  Process {", idx)
+        block = text[block_start:block_end]
+        assert "refreshDevTools()" in block, "the install handler must refresh tools"
+        assert "codeServerProc.running = true" not in block, (
+            "the install handler must not restart codeServerProc by hand; "
+            "refreshDevTools chains into it"
+        )
