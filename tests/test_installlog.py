@@ -194,7 +194,18 @@ class TestTerminalScript:
         script = js("console.log(JSON.stringify(InstallLog.terminalScript(%s)))" % self.ARGS)
         assert "xdg-terminal-exec" in script
         assert "--app-id=vember-install" in script
-        assert "class:^(vember-install)$" in script
+        assert "class:vember-install" in script
+
+    def test_script_focuses_with_the_lua_dispatcher(self, js):
+        # Hyprland 0.56 evaluates `hyprctl dispatch <arg>` as Lua, so the old
+        # `focuswindow class:^(...)$` argument is a syntax error. The script
+        # must use the dispatcher object, and must read success from the output
+        # because a miss still exits 0.
+        script = js("console.log(JSON.stringify(InstallLog.terminalScript(%s)))" % self.ARGS)
+        assert "hl.dsp.focus" in script
+        assert "window=" in script
+        assert "*ok*" in script
+        assert "focus_win()" in script
 
     def test_script_records_lock_with_id_and_pid(self, js):
         # The lock writer sits inside the single-quoted payload handed to

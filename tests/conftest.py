@@ -26,6 +26,7 @@ MODULES = [
     "Gaming",
     "DevTools",
     "Ssh",
+    "Hypr",
 ]
 
 # Import every module once; tests then use `Shell.trim(...)` and friends.

@@ -6,6 +6,7 @@ import "model/DevTools.mjs" as DevTools
 import "model/Config.mjs" as Config
 import "model/Docker.mjs" as Docker
 import "model/Gaming.mjs" as Gaming
+import "model/Hypr.mjs" as Hypr
 import "model/InstallLog.mjs" as InstallLog
 import "model/Shell.mjs" as Shell
 import "model/Ssh.mjs" as Ssh
@@ -26,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.10"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 86
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.11"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 87
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -847,6 +848,11 @@ Item {
     installLogProc.running = true;
     installNoOutputTimer.restart();
     installStallTimer.restart();
+    // The hub is a full-screen overlay with exclusive keyboard focus. Left
+    // open, it hides the terminal and swallows the keystrokes the install
+    // needs (a sudo password, a y/n answer). Close it so the terminal is
+    // reachable; the log keeps streaming and reopening the hub reattaches.
+    root.requestClose();
   }
 
   function finishInstall(code) {
@@ -969,13 +975,18 @@ Item {
     omarchyUpdateTerminalProc.command = ["sh", "-c",
       "mkdir -p " + Shell.quote(homeDir + "/.cache/vember-server-hub") +
       " && : > " + Shell.quote(logPath) +
-      " && xdg-terminal-exec --title=" + Shell.quote("Vember Omarchy Update") +
+      " && xdg-terminal-exec --app-id=vember-install --title=" + Shell.quote("Vember Omarchy Update") +
       " bash -lc " + Shell.quote(termCmd) + " </dev/null >/dev/null 2>&1 & " +
-      "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true"];
+      "sleep 0.7; " + Hypr.focusByClassScript("vember-install", "Vember Omarchy Update")];
     omarchyUpdateTerminalProc.running = true;
     omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F", logPath];
     omarchyUpdateLogProc.running = true;
     omarchyUpdateStallTimer.restart();
+    // The hub is a full-screen overlay with exclusive keyboard focus: while it
+    // is open the terminal sits behind it and cannot be typed into, so the
+    // sudo prompt would be unreachable. Get out of the way; the log keeps
+    // streaming and reopening the hub reattaches to the running update.
+    root.requestClose();
   }
 
   function stopOmarchyUpdateLog() {
@@ -2475,7 +2486,7 @@ Item {
   readonly property var watchedFiles: [
     "manifest.json", "Panel.qml", "HubPanel.qml", "BarWidget.qml",
     "model/Config.mjs", "model/DevTools.mjs", "model/Docker.mjs",
-    "model/Gaming.mjs", "model/InstallLog.mjs",
+    "model/Gaming.mjs", "model/Hypr.mjs", "model/InstallLog.mjs",
     "model/Shell.mjs", "model/Ssh.mjs", "model/Systemd.mjs",
     "model/SystemInfo.mjs", "model/Tailscale.mjs",
     "ui/ArrangeTabsDialog.qml", "ui/CodeServerRemoveDialog.qml",

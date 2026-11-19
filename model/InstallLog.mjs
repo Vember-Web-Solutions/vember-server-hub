@@ -5,6 +5,7 @@
 // `InstallLog.name(...)` while tests use `new InstallLog()`.
 
 import { shell } from './Shell.mjs';
+import { hypr } from './Hypr.mjs';
 
 export class InstallLog {
   cacheDir(homeDir) {
@@ -114,10 +115,7 @@ export class InstallLog {
     " && xdg-terminal-exec --app-id=vember-install --title=" + shell.quote(title) +
     " bash -lc " + shell.quote(inner) +
     " </dev/null >/dev/null 2>&1 & " +
-    "sleep 0.7; hyprctl dispatch focuswindow " + shell.quote("class:^(vember-install)$") +
-    " >/dev/null 2>&1 || hyprctl dispatch focuswindow " + shell.quote("title:^(" + title + ")$") +
-    " >/dev/null 2>&1 || hyprctl dispatch focuswindow " + shell.quote("title:" + title) +
-    " >/dev/null 2>&1 || true";
+    "sleep 0.7; " + hypr.focusByClassScript("vember-install", title);
   }
 }
 

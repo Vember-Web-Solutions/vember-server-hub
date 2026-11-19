@@ -1181,3 +1181,58 @@ class TestNoDeadModelExports:
             r"^\s*" + name + r"\([^)]*\)\s*\{", "", stripped, count=1, flags=re.M
         )
         assert not re.search(r"\b" + name + r"\b", stripped)
+
+
+class TestInteractiveTerminalReachability:
+    """The hub must get out of the way of an interactive terminal.
+
+    The panel is a full-screen overlay with exclusive keyboard focus. While it
+    is open the install terminal sits behind it: not visible, and not clickable
+    because the overlay's backdrop swallows the click. The sudo password and
+    y/n prompts the terminal exists for would be unreachable, which is the
+    whole point of running installs there. So every path that opens an
+    interactive terminal closes the hub.
+    """
+
+    def _panel(self):
+        return read(REPO / "Panel.qml")
+
+    def _fn(self, name):
+        text = self._panel()
+        match = re.search(r"function\s+" + name + r"\s*\([^)]*\)\s*\{", text)
+        assert match, name + " not found in Panel.qml"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    def test_install_launch_closes_the_hub(self):
+        body = self._fn("runInstallInTerminal")
+        assert "requestClose()" in body, (
+            "runInstallInTerminal must close the hub so the terminal is reachable"
+        )
+
+    def test_omarchy_update_closes_the_hub(self):
+        body = self._fn("runOmarchyUpdateInPanel")
+        assert "requestClose()" in body, (
+            "runOmarchyUpdateInPanel must close the hub so the terminal is reachable"
+        )
+
+    def test_update_terminal_has_the_install_app_id(self):
+        # The focus selector is the class, so the update terminal needs the same
+        # app-id as an install or the class selector can never match.
+        body = self._fn("runOmarchyUpdateInPanel")
+        assert "--app-id=vember-install" in body
+
+    def test_focus_goes_through_the_hypr_helper(self):
+        # A hand-rolled `hyprctl dispatch focuswindow ...` is the broken legacy
+        # form on Hyprland 0.56. Focus must come from the model helper.
+        text = self._panel()
+        assert "Hypr.focusByClassScript" in text
+        assert "hyprctl dispatch focuswindow" not in text
