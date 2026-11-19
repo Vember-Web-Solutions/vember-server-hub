@@ -918,3 +918,35 @@ class TestEditorLaunchFailure:
             "openAuthorizedKeysEditor must not claim success before the process "
             "exits; set the success status from onExited instead"
         )
+
+
+class TestContainerSelectionStability:
+    """The container selection must survive a poll that reorders the list.
+
+    hub.dockerContainers is reassigned every 15s and can be reordered — a
+    container created at the top shifts every index down. An index-based
+    selection (selectedContainerIndex) would then silently point at a different
+    container, so the detail panel — including its Remove button — would target
+    the wrong one. Selection must be keyed by the container *name*.
+    """
+
+    def test_selection_is_keyed_by_name(self):
+        text = read(REPO / "ui" / "tabs" / "ContainersTab.qml")
+        assert "selectedContainerIndex" not in text, (
+            "index-based selection drifts when the poll reorders the list; key "
+            "off the container name instead"
+        )
+        assert "selectedContainerName" in text, (
+            "the tab must hold a name-keyed selection property"
+        )
+
+    def test_selected_is_looked_up_by_name(self):
+        text = read(REPO / "ui" / "tabs" / "ContainersTab.qml")
+        # The detail's `selected` must find the container by name in the list,
+        # not index into it.
+        m = re.search(r"property var selected:\s*\(function\(\)", text)
+        assert m, "the detail `selected` must be looked up by name, not by index"
+        window = text[m.start():m.start() + 400]
+        assert ".name === want" in window or ".name === " in window, (
+            "the lookup must compare container names"
+        )

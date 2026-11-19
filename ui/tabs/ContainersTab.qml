@@ -18,7 +18,11 @@ Column {
   visible: panel.currentTab === "containers"
   width: parent.width
   spacing: Style.spacing.md
-  property int selectedContainerIndex: -1
+  // Selection is keyed by container *name*, not list index: the 15s poll
+  // reassigns hub.dockerContainers and can reorder it (a container created at
+  // the top shifts every index down), which would silently point an index-based
+  // selection at a different container — and its Remove button.
+  property string selectedContainerName: ""
 
   Row {
     spacing: 8
@@ -83,14 +87,14 @@ Column {
             required property int index
             width: containersLeft.width
             radius: 8
-            color: containersTab.selectedContainerIndex === index ? panel.accentSoft(0.14) : panel.softText(0.03)
-            border.color: containersTab.selectedContainerIndex === index ? panel.accentSoft(0.35) : panel.softText(0.08)
+            color: containersTab.selectedContainerName === modelData.name ? panel.accentSoft(0.14) : panel.softText(0.03)
+            border.color: containersTab.selectedContainerName === modelData.name ? panel.accentSoft(0.35) : panel.softText(0.08)
             border.width: 1
             implicitHeight: ctrItemCol.implicitHeight + 12
             MouseArea {
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
-              onClicked: containersTab.selectedContainerIndex = index
+              onClicked: containersTab.selectedContainerName = modelData.name
             }
             RowLayout {
               id: ctrItemCol
@@ -153,7 +157,14 @@ Column {
         Layout.alignment: Qt.AlignTop
         spacing: 10
 
-        property var selected: (containersTab.selectedContainerIndex >= 0 && containersTab.selectedContainerIndex < hub.dockerContainers.length) ? hub.dockerContainers[containersTab.selectedContainerIndex] : null
+        property var selected: (function() {
+          var want = containersTab.selectedContainerName;
+          if (!want) return null;
+          var list = hub.dockerContainers || [];
+          for (var i = 0; i < list.length; i++)
+            if (list[i].name === want) return list[i];
+          return null;
+        })()
         // Key the size query off the container *name*, not the object. The 15s
         // poll reassigns hub.dockerContainers to fresh objects, so `selected`
         // changes identity every tick; onSelectedChanged would then re-run the
