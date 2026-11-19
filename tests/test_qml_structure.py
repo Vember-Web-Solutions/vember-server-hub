@@ -236,3 +236,59 @@ class TestBackendReferences:
                 if name not in exposed:
                     problems.append("%s: panel.%s" % (relative(path), name))
         assert not problems, "undefined panel members:\n  " + "\n  ".join(problems)
+
+
+class TestRequiredProperties:
+    """A `required property` with no value supplied is a load-time failure.
+
+    Extracting a component turns everything it leaned on into a required
+    property, and the compiler only complains when the panel is built. This
+    checks every ui component's top-level required properties are supplied at
+    its instantiation site.
+
+    Delegate properties (modelData, index) are provided by the view, so only
+    declarations at the component's own indentation are considered.
+    """
+
+    @staticmethod
+    def _required(path):
+        return re.findall(
+            r"^  required property [\w.]+ (\w+)", read(path), re.M
+        )
+
+    @staticmethod
+    def _instantiation(component, text):
+        # Capture the component's block: from "Name {" to the matching brace.
+        match = re.search(r"\b" + component + r"\s*\{", text)
+        if not match:
+            return None
+        depth = 0
+        for i in range(match.end() - 1, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[match.start():i + 1]
+        return None
+
+    def test_required_properties_are_supplied(self):
+        hub = read(REPO / "HubPanel.qml")
+        components = [
+            p for p in list((REPO / "ui").glob("*.qml"))
+            + list((REPO / "ui" / "tabs").glob("*.qml"))
+        ]
+        problems = []
+        for path in components:
+            name = path.stem
+            required = self._required(path)
+            if not required:
+                continue
+            block = self._instantiation(name, hub)
+            if block is None:
+                problems.append("%s is never instantiated in HubPanel.qml" % name)
+                continue
+            for prop in required:
+                if not re.search(r"\b" + prop + r"\s*:", block):
+                    problems.append("%s requires %s but does not receive it" % (name, prop))
+        assert not problems, "unsatisfied required properties:\n  " + "\n  ".join(problems)
