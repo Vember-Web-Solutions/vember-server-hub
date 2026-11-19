@@ -235,7 +235,7 @@ PanelWindow {
                 text: HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : "Vember Server Hub"
                 color: Color.menu.text
                 font.family: Style.font.family
-                font.pixelSize: Style.font.large
+                font.pixelSize: Style.font.heading
                 font.bold: true
               }
               Text {
@@ -390,7 +390,7 @@ PanelWindow {
                       text: hub.defaultServerName()
                       color: Color.menu.text
                       font.family: Style.font.family
-                      font.pixelSize: Math.round(Style.font.large * 1.4)
+                      font.pixelSize: Math.round(Style.font.heading * 1.4)
                       font.bold: true
                       elide: Text.ElideRight
                       verticalAlignment: Text.AlignVCenter
@@ -459,7 +459,7 @@ PanelWindow {
                   text: "At a glance"
                   color: Color.menu.text
                   font.family: Style.font.family
-                  font.pixelSize: Style.font.large
+                  font.pixelSize: Style.font.heading
                   font.bold: true
                 }
 
@@ -494,7 +494,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰖂"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text {
                           textFormat: Text.PlainText
                           text: HubModel.trimText(hub.tailscaleTailnetName).length > 0 ? hub.tailscaleTailnetName : (HubModel.trimText(hub.serverName).length > 0 ? hub.serverName : hub.defaultServerName())
@@ -562,7 +562,7 @@ PanelWindow {
                       }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text { textFormat: Text.PlainText; text: panel.runningDockerCount() + " running of " + hub.dockerContainers.length; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                       }
                     }
@@ -640,7 +640,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Development"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Development"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text {
                           textFormat: Text.PlainText
                           text: HubModel.trimText(hub.preferredEditor).length > 0 ? ("Editor: " + HubModel.devToolLabel(hub.preferredEditor)) : "No preferred editor set"
@@ -685,7 +685,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Games & storage"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Games & storage"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text { textFormat: Text.PlainText; text: hub.gameMount; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                       }
                       Rectangle {
@@ -777,7 +777,7 @@ PanelWindow {
                     ColumnLayout {
                       Layout.fillWidth: true
                       spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Update Omarchy"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Update Omarchy"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "Run Omarchy update in your default terminal (so you can answer prompts) while streaming live output below. The hub will try to focus the terminal."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
@@ -920,7 +920,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰖂"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Tailnet"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Tailnet"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text {
                           textFormat: Text.PlainText
                           text: HubModel.trimText(hub.tailscaleTailnetName).length > 0 ? hub.tailscaleTailnetName : "unknown"
@@ -992,7 +992,7 @@ PanelWindow {
 
                     RowLayout {
                       width: parent.width
-                      Text { textFormat: Text.PlainText; text: "Members"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Members"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "(" + hub.tailscalePeers.length + ")"; color: softText(0.75); font.family: Style.font.family }
                       Item { Layout.fillWidth: true }
                     }
@@ -1112,7 +1112,7 @@ PanelWindow {
                   Text { textFormat: Text.PlainText; text: "󰣀"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                   ColumnLayout {
                     Layout.fillWidth: true; spacing: 2
-                    Text { textFormat: Text.PlainText; text: "SSH"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                    Text { textFormat: Text.PlainText; text: "SSH"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                     Text { textFormat: Text.PlainText; text: "SSH service status and authorized key management for remote access to this machine."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     Text { textFormat: Text.PlainText; text: "Host: " + (HubModel.trimText(hub.sshHostName).length > 0 ? hub.sshHostName : "vemberos"); color: softText(0.82); font.family: Style.font.family; font.pixelSize: Style.font.body }
                   }
@@ -1593,7 +1593,7 @@ PanelWindow {
                         text: containerDetails.selected ? (containerDetails.selected.name || "unknown") : ""
                         color: Color.menu.text
                         font.family: Style.font.family
-                        font.pixelSize: Style.font.large
+                        font.pixelSize: Style.font.heading
                         font.bold: true
                         Layout.fillWidth: true
                         elide: Text.ElideRight
@@ -1783,7 +1783,7 @@ PanelWindow {
                     ColumnLayout {
                       Layout.fillWidth: true
                       spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Prune stopped containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Prune stopped containers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "Remove all stopped containers to free disk space (docker container prune -f). Running containers are not affected."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
@@ -1855,7 +1855,7 @@ PanelWindow {
                     ColumnLayout {
                       Layout.fillWidth: true
                       spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Docker Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Docker Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "Browse images, tags, and documentation on Docker Hub."; color: softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
@@ -2084,7 +2084,7 @@ PanelWindow {
                       text: libraryCol.hasKnownCounts ? String(libraryCol.totalKnownGames) : "—"
                       color: Color.menu.text
                       font.family: Style.font.family
-                      font.pixelSize: Math.round(Style.font.large * 2.2)
+                      font.pixelSize: Math.round(Style.font.heading * 2.2)
                       font.bold: true
                     }
                     Text {
@@ -2203,7 +2203,7 @@ PanelWindow {
                 }
                 visible: offerItems.length > 0
 
-                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                 Text { textFormat: Text.PlainText; text: "Install launchers to track and launch games from this hub."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
 
                 Flow {
@@ -2231,7 +2231,7 @@ PanelWindow {
                           ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
-                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                             Text { textFormat: Text.PlainText; text: "Not installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                           }
                         }
@@ -2337,7 +2337,7 @@ PanelWindow {
                 }
                 visible: installedApps.length > 0
 
-                Text { textFormat: Text.PlainText; text: "Installed apps"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Text { textFormat: Text.PlainText; text: "Installed apps"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                 Flow {
                   width: parent.width
                   spacing: 14
@@ -2363,7 +2363,7 @@ PanelWindow {
                           ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
-                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                             Text { textFormat: Text.PlainText; text: modelData.running ? "Installed • running" : "Installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                           }
                         }
@@ -2399,7 +2399,7 @@ PanelWindow {
                 }
                 visible: offerApps.length > 0
 
-                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                Text { textFormat: Text.PlainText; text: "Available to add"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                 Flow {
                   width: parent.width
                   spacing: 14
@@ -2425,7 +2425,7 @@ PanelWindow {
                           ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 2
-                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                            Text { textFormat: Text.PlainText; text: modelData.name || modelData.id; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                             Text { textFormat: Text.PlainText; text: "Not installed"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                           }
                         }
@@ -2486,7 +2486,7 @@ PanelWindow {
                     Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                     ColumnLayout {
                       Layout.fillWidth: true; spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Game servers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Game servers"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "Detected game server containers (Docker) and Steam dedicated servers installed on this host (best-effort). Container controls are available for Docker servers."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                     }
                   }
@@ -2760,7 +2760,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰊢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Repositories"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text { textFormat: Text.PlainText; text: "Select a repository to view details (size, git info) and open it in your editor."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                       }
                       Text { textFormat: Text.PlainText; text: String((hub.devRepos || []).length); color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
@@ -2842,7 +2842,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰋼"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "Details"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "Details"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text { textFormat: Text.PlainText; text: HubModel.trimText(hub.devSelectedRepoPath).length > 0 ? hub.devSelectedRepoPath : "Select a repository to see its details."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.WrapAnywhere; Layout.fillWidth: true }
                       }
                     }
@@ -2997,7 +2997,7 @@ PanelWindow {
                     Text { textFormat: Text.PlainText; text: "󰅨"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                     ColumnLayout {
                       Layout.fillWidth: true; spacing: 2
-                      Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                      Text { textFormat: Text.PlainText; text: "Tools"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                       Text { textFormat: Text.PlainText; text: "Toolchain and editor installs for this server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption }
                     }
                   }
@@ -3131,7 +3131,7 @@ PanelWindow {
                       Text { textFormat: Text.PlainText; text: "󰨞"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
                       ColumnLayout {
                         Layout.fillWidth: true; spacing: 2
-                        Text { textFormat: Text.PlainText; text: "VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                        Text { textFormat: Text.PlainText; text: "VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                         Text { textFormat: Text.PlainText; text: "Browser-based editor in Docker (code-server)"; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                       }
                       Rectangle {
@@ -3238,7 +3238,7 @@ PanelWindow {
                             textFormat: Text.PlainText
                             text: hub.codeServerSetupLog
                             color: softText(0.78)
-                            font.family: Style.font.mono
+                            font.family: Style.font.family
                             font.pixelSize: Style.font.caption
                             wrapMode: Text.WrapAnywhere
                           }
@@ -3348,7 +3348,7 @@ PanelWindow {
                         Text { textFormat: Text.PlainText; text: "󰘦"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                         ColumnLayout {
                           Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Docker map"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: "Docker map"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                           Text { textFormat: Text.PlainText; text: "How the VS Code Server container is set up on this machine."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                         }
                       }
@@ -3410,7 +3410,7 @@ PanelWindow {
                         Text { textFormat: Text.PlainText; text: "󰖟"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
                         ColumnLayout {
                           Layout.fillWidth: true; spacing: 2
-                          Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+                          Text { textFormat: Text.PlainText; text: "Access"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
                           Text { textFormat: Text.PlainText; text: "How to open and sign in to Code Server."; color: softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
                         }
                       }
@@ -3524,7 +3524,7 @@ PanelWindow {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: 2
-              Text { textFormat: Text.PlainText; text: "Set up VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Set up VS Code Server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
               Text { textFormat: Text.PlainText; text: "Create the code-server Docker container, set your sign-in password/port, provision Python, uv, GitHub CLI (gh), and Python extensions, and prepare a default Python workspace in ~/Projects."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
             }
           }
@@ -3657,7 +3657,7 @@ PanelWindow {
             width: parent.width
             spacing: 10
             Text { textFormat: Text.PlainText; text: "󰃢"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-            Text { textFormat: Text.PlainText; text: "Prune stopped containers?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+            Text { textFormat: Text.PlainText; text: "Prune stopped containers?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true; Layout.fillWidth: true }
           }
 
           Text {
@@ -3727,7 +3727,7 @@ PanelWindow {
             width: parent.width
             spacing: 10
             Text { textFormat: Text.PlainText; text: "󰆴"; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-            Text { textFormat: Text.PlainText; text: "Remove authorized key?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+            Text { textFormat: Text.PlainText; text: "Remove authorized key?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true; Layout.fillWidth: true }
           }
 
           Text {
@@ -3806,7 +3806,7 @@ PanelWindow {
             width: parent.width
             spacing: 10
             Text { textFormat: Text.PlainText; text: "󰆴"; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
-            Text { textFormat: Text.PlainText; text: "Uninstall VS Code Server?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true; Layout.fillWidth: true }
+            Text { textFormat: Text.PlainText; text: "Uninstall VS Code Server?"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true; Layout.fillWidth: true }
           }
 
           Text {
@@ -3954,7 +3954,7 @@ PanelWindow {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: 2
-              Text { textFormat: Text.PlainText; text: "Arrange tabs"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Arrange tabs"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
               Text { textFormat: Text.PlainText; text: "Move tabs up or down, then save the order."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
             }
           }
@@ -4068,7 +4068,7 @@ PanelWindow {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: 2
-              Text { textFormat: Text.PlainText; text: hub.updateAvailable ? "Update ready" : "Plugin update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: hub.updateAvailable ? "Update ready" : "Plugin update"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
               Text {
                 textFormat: Text.PlainText
                 text: hub.updateAvailable ? ("New commits available on GitHub" + (hub.pluginUpdateRemoteCommits > 0 ? (" (" + hub.pluginUpdateRemoteCommits + ")") : "") + ".") : (hub.updateCheckBusy ? "Checking GitHub for updates…" : "Check GitHub for a newer build.")
@@ -4270,7 +4270,7 @@ PanelWindow {
             ColumnLayout {
               Layout.fillWidth: true
               spacing: 2
-              Text { textFormat: Text.PlainText; text: "Welcome to Vember Server Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.large; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Welcome to Vember Server Hub"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
               Text { textFormat: Text.PlainText; text: "Name this server to personalize your hub."; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
             }
           }
