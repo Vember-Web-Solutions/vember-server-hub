@@ -1653,8 +1653,9 @@ Item {
           root.installLogProc.running = false;
           root.installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
           root.installLogProc.running = true;
+          // The lock proves the terminal opened, so only nudge for prompts;
+          // the 60s stall timer must not stop a genuinely live install.
           root.installNoOutputTimer.restart();
-          root.installStallTimer.restart();
           return;
         }
         if (HubModel.trimText(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
