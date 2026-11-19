@@ -52,7 +52,6 @@ Item {
   property string tailscaleActive: "unknown"
   property string tailscaleEnabled: "unknown"
   property string tailscaleIp: ""
-  property string tailscaleStatusText: ""
   property string tailscaleNote: ""
   property bool tailscaleBusy: false
   property string tailscaleTailnetName: ""
@@ -65,7 +64,6 @@ Item {
   property string dockerBusyName: ""
   property bool dockerPullActive: false
   property string dockerPullingName: ""
-  property string dockerPullingImage: ""
   property string dockerPullStatus: ""
   property real dockerPullPercent: -1
   property var _dockerPullLayers: ({})
@@ -85,7 +83,6 @@ Item {
   property bool bnetInstalled: false
   property bool bnetRunning: false
   property int bnetGameCount: -1
-  property string bnetNote: ""
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
@@ -99,7 +96,6 @@ Item {
   readonly property bool installIsDev: installRunningId.indexOf("dev:") === 0
 
   property bool gameMountPresent: false
-  property string gameMountSummary: ""
   property string gameMountError: ""
   property real gameMountUseRatio: 0
   property double gameMountUsedBytes: 0
@@ -115,7 +111,6 @@ Item {
 
   property string sshActive: "unknown"
   property string sshEnabled: "unknown"
-  property var sshHostKeys: []
   property string sshHostName: ""
 
   property var sshAuthorizedKeys: []
@@ -621,7 +616,6 @@ Item {
     sshHostName = Quickshell.env("HOSTNAME") || "vemberos";
     if (!sshActiveProc.running) sshActiveProc.running = true;
     if (!sshEnabledProc.running) sshEnabledProc.running = true;
-    if (!sshHostKeysProc.running) sshHostKeysProc.running = true;
     refreshAuthorizedKeys();
   }
 
@@ -697,7 +691,6 @@ Item {
     if (!tsActiveProc.running) tsActiveProc.running = true;
     if (!tsEnabledProc.running) tsEnabledProc.running = true;
     if (!tsIpProc.running) tsIpProc.running = true;
-    if (!tsStatusProc.running) tsStatusProc.running = true;
     if (!tsStatusJsonProc.running) tsStatusJsonProc.running = true;
   }
 
@@ -732,7 +725,6 @@ Item {
     var keep = preserveSelection === true;
     if (!keep) {
       steamNote = "";
-      bnetNote = "";
       steamInstalled = false;
       bnetInstalled = false;
       steamRunning = false;
@@ -1081,7 +1073,6 @@ Item {
     dockerBusyName = name;
     dockerPullActive = true;
     dockerPullingName = name;
-    dockerPullingImage = image;
     dockerPullStatus = "Pulling " + image + "…";
     dockerPullPercent = -1;
     _dockerPullLayers = ({});
@@ -1108,11 +1099,6 @@ Item {
     id: tsIpProc
     command: Tailscale.ipCommand()
     stdout: StdioCollector { onStreamFinished: root.tailscaleIp = Shell.nonEmptyLines(text).join(", ") }
-  }
-  Process {
-    id: tsStatusProc
-    command: Tailscale.statusCommand()
-    stdout: StdioCollector { onStreamFinished: root.tailscaleStatusText = Shell.trim(text) }
   }
   Process {
     id: tsStatusJsonProc
@@ -1167,13 +1153,6 @@ Item {
     id: sshEnabledProc
     command: Systemd.isEnabledCommand("sshd")
     stdout: StdioCollector { onStreamFinished: root.sshEnabled = Shell.trim(text) || "unknown" }
-  }
-  Process {
-    id: sshHostKeysProc
-    command: Ssh.hostKeyFingerprintsCommand()
-    stdout: StdioCollector {
-      onStreamFinished: root.sshHostKeys = Ssh.parseHostKeyFingerprints(text)
-    }
   }
   Process {
     id: sshAuthorizedKeysProc
@@ -1901,9 +1880,6 @@ Item {
           root.gameMountTotalBytes = info.totalBytes;
           root.gameMountUseRatio = info.totalBytes > 0 ? Math.max(0, Math.min(1, info.usedBytes / info.totalBytes)) : 0;
           root.gameMountUsePercentText = Shell.trim(info.usePercent);
-          root.gameMountSummary = Shell.humanBytes(info.usedBytes) + " used / "
-            + Shell.humanBytes(info.availBytes) + " free / "
-            + Shell.humanBytes(info.totalBytes) + " total (" + info.usePercent + ")";
         }
       }
     }
