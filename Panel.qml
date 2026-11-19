@@ -1673,6 +1673,10 @@ Item {
             root.devInstallToolId = runningId.slice(4);
           }
           root.extraAppInstallStatus = "Reattached to the running install. Live output below.";
+          if (root.installIsDev) {
+            root.devInstallStatus = root.extraAppInstallStatus;
+            root.devStatus = root.devInstallStatus;
+          }
           root.lastActionMessage = root.extraAppInstallStatus;
           installLogProc.running = false;
           installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
