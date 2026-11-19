@@ -871,6 +871,11 @@ Item {
     }
     extraAppInstallStatus = "Install tracking stopped (the terminal may still be running).";
     lastActionMessage = extraAppInstallStatus;
+    // Refresh counts like finishInstall does. Without this, an install whose
+    // terminal closed mid-run (the "dead" watchdog verdict) leaves the panel
+    // showing pre-install counts forever, since nothing else re-scans.
+    installRefreshTimer.restart();
+    installRefreshTimer2.restart();
   }
 
   function clearInstallLog() {

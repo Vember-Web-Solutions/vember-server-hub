@@ -475,6 +475,37 @@ class TestInstallWatchdog:
             "the Omarchy update reattach path must restart its watchdog"
         )
 
+    def test_stop_install_refreshes_counts_like_finish(self):
+        # finishInstall schedules a post-install refresh so counts update.
+        # stopInstall is what the "dead" verdict calls when a terminal closes
+        # mid-install; without the same refresh the panel keeps pre-install
+        # counts forever. Both teardown paths must schedule the refresh.
+        text = read(REPO / "Panel.qml")
+
+        def body(fn):
+            m = re.search(r"function " + fn + r"\([^)]*\)", text)
+            assert m, "no %s() in Panel.qml" % fn
+            start = text.index("{", m.end())
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return text[start:i + 1]
+            raise AssertionError("unbalanced braces in %s" % fn)
+
+        for fn in ("finishInstall", "stopInstall"):
+            b = body(fn)
+            assert "installRefreshTimer.restart()" in b, (
+                "%s must restart installRefreshTimer so counts refresh" % fn
+            )
+            assert "installRefreshTimer2.restart()" in b, (
+                "%s must restart installRefreshTimer2 so slow installs catch up"
+                % fn
+            )
+
 
 class TestPollSafety:
     """The 15s poll must not destroy state the user is looking at.
