@@ -470,7 +470,7 @@ plugin warnings in the journal.
 - Plugin source went 7,718 → 8887 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,227 lines: `HubPanel.qml` 4,376 → 424,
+- The three monoliths went 7,694 → 3,236 lines: `HubPanel.qml` 4,376 → 424,
   `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,812. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
