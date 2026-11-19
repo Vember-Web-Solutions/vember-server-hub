@@ -335,6 +335,14 @@ Work that fell out of the split, done in the same arc:
   `visible: hub.opened` and drops keyboard focus when closed, so the panel
   stays loaded but hidden. `TestManifest::test_panel_is_keep_loaded` pins both
   halves.
+- **A background action could fail into a closed panel.** A Docker pull takes
+  minutes and a stop can take ten seconds; the user can start one and close the
+  hub before it finishes. Its failure only set `lastActionMessage` (a toast) or
+  a result field, neither visible while the panel is closed. `notifyIfClosed()`
+  now raises a desktop notification when the panel is closed and stays quiet
+  when it is open, applied to the Docker action, pull and prune failures and to
+  the Code Server start/stop/uninstall failure.
+  `TestBackgroundActionFailuresAreVisible` pins the helper and each branch.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -354,16 +362,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 447 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,751 lines. The growth is comments, per-file
+- 452 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,765 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,146 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,739. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,160 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,753. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,739, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,749 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,753, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,802 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.23, build 72 → 99.
+- Version 0.1.0 → 0.6.24, build 72 → 100.

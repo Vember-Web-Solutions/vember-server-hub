@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.23"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 99
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.24"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 100
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1544,6 +1544,16 @@ Item {
     notifyProc.running = true;
   }
 
+  // A background action can outlive the hub: a Docker pull takes minutes and a
+  // stop can take ten seconds, so the user may close the hub while one runs.
+  // Its failure would otherwise only set lastActionMessage / a result field,
+  // which nobody can see once the panel is closed. Notify in that case; when
+  // the hub is open the toast already shows it, so this stays quiet.
+  function notifyIfClosed(text) {
+    if (!root.opened)
+      root.notify(text);
+  }
+
   function launchSteam() {
     steamLaunchProc.running = false;
     steamLaunchProc.running = true;
@@ -1596,6 +1606,7 @@ Item {
         // Include the daemon's own reason: "code 1" alone is not actionable.
         root.lastActionMessage = Shell.failureMessage(
           "Docker " + actionName + " failed for " + target, code, dockerActionProc.stderr.text);
+        root.notifyIfClosed(root.lastActionMessage);
       }
       root.refreshDocker();
     }
@@ -1653,6 +1664,7 @@ Item {
         root.dockerPullStatus = "Pull failed (code " + code + ")";
         root.dockerPullResult = "Pull failed for " + image +
           (reason.length > 0 ? (": " + reason) : (" (code " + code + ")")) + ".";
+        root.notifyIfClosed(root.dockerPullResult);
       }
       root.refreshDocker();
     }
@@ -1675,6 +1687,7 @@ Item {
         }
       } else {
         root.lastActionMessage = "Docker prune failed (code " + code + ")" + (err.length > 0 ? (": " + err) : ".");
+        root.notifyIfClosed(root.lastActionMessage);
       }
       root.refreshDocker();
     }
@@ -2587,6 +2600,7 @@ Item {
       } else {
         root.devStatus = Shell.failureMessage(
           "VS Code Server " + actionName + " failed", code, codeServerActionProc.stderr.text);
+        root.notifyIfClosed(root.devStatus);
       }
       root.refreshCodeServer();
       root.refreshDocker();

@@ -1616,6 +1616,59 @@ class TestMutualExclusionIsVisible:
         )
 
 
+class TestBackgroundActionFailuresAreVisible:
+    """A Docker pull takes minutes and a stop can take ten seconds.
+
+    The user can start one and close the hub before it finishes. Its failure
+    would then only set lastActionMessage (shown as a toast) or a result field,
+    neither of which is visible while the panel is closed. These actions must
+    notify when the panel is closed, and stay quiet when it is open so the toast
+    is not duplicated by a desktop notification.
+    """
+
+    def test_notify_if_closed_only_fires_when_closed(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"function notifyIfClosed\(text\)\s*\{", text)
+        assert match, "no notifyIfClosed() helper"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[start : i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced notifyIfClosed")
+        assert "!root.opened" in body, "notifyIfClosed must guard on !root.opened"
+        assert "root.notify(text)" in body, "notifyIfClosed must call notify()"
+
+    @pytest.mark.parametrize(
+        "anchor",
+        [
+            # dockerActionProc: start/stop/restart (stop can take ~10s)
+            "dockerActionProc.stderr.text);",
+            # dockerPullProc: minutes
+            'root.dockerPullResult = "Pull failed for " + image +',
+            # dockerPruneProc: can take a while
+            '"Docker prune failed (code " + code + ")"',
+            # codeServerActionProc: start/stop/uninstall
+            '"VS Code Server " + actionName + " failed"',
+        ],
+    )
+    def test_failure_branch_notifies_when_closed(self, anchor):
+        text = read(REPO / "Panel.qml")
+        at = text.find(anchor)
+        assert at >= 0, "anchor not found: " + anchor
+        window = text[at : at + 400]
+        assert "notifyIfClosed" in window, (
+            "a background action failure must call notifyIfClosed so it is "
+            "visible when the hub is closed: " + anchor
+        )
+
+
 class TestNotificationsAreQueued:
     """A burst of notifications must not drop any.
 
