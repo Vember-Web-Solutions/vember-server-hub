@@ -54,6 +54,21 @@ export class InstallLog {
   return { text: joined, finished: finished, exitCode: exitCode };
   }
 
+  // Builds the argv that asks the lock file whether the process it names is
+  // still alive. Exit codes are the watchdog's vocabulary:
+  //   0 alive, 1 lock present but pid dead, 2 no lock, 3 pid not readable yet.
+  // The install lock stores id on line 1 and pid on line 2; the Omarchy update
+  // lock stores only the pid on line 1, so the pid line is a parameter.
+  lockCheckCommand(lockPath, pidLine) {
+  var n = Number(pidLine || 1);
+  return ["sh", "-c",
+    "k=\"$1\"; [ -f \"$k\" ] || exit 2; " +
+    "pid=$(sed -n " + n + "p \"$k\" 2>/dev/null); " +
+    "[ -n \"$pid\" ] || exit 3; " +
+    "kill -0 \"$pid\" 2>/dev/null && exit 0; exit 1",
+    "sh", String(lockPath || "")];
+  }
+
   // Maps the lock-check exit code (and whether the log has output) to a
   // decision for the install watchdog. Keeping this here means the branch that
   // used to strand the panel on "running" is covered by a unit test rather than
@@ -117,4 +132,5 @@ export function lockPath(...args) { return impl.lockPath(...args); }
 export function omarchyLockPath(...args) { return impl.omarchyLockPath(...args); }
 export function parse(...args) { return impl.parse(...args); }
 export function watchdogVerdict(...args) { return impl.watchdogVerdict(...args); }
+export function lockCheckCommand(...args) { return impl.lockCheckCommand(...args); }
 export function terminalScript(...args) { return impl.terminalScript(...args); }

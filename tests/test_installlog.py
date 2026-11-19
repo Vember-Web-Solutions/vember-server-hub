@@ -122,6 +122,61 @@ class TestWatchdogVerdict:
         assert self._verdict(js, 7, False) == "wait"
 
 
+class TestLockCheckCommand:
+    """The lock check is real shell; run it against real lock files.
+
+    Exit codes are the watchdog's vocabulary: 0 alive, 1 dead, 2 no lock,
+    3 pid not written yet. Both the install watchdog and the Omarchy update
+    watchdog depend on them, and the two lock files put the pid on different
+    lines, so the pid line is checked explicitly.
+    """
+
+    @staticmethod
+    def _dead_pid():
+        p = subprocess.Popen(["sh", "-c", "exit 0"])
+        p.wait()
+        return p.pid
+
+    def _run(self, js, lock, pid_line):
+        import json
+
+        argv = js(
+            "console.log(JSON.stringify(InstallLog.lockCheckCommand(%s, %d)))"
+            % (json.dumps(str(lock)), pid_line)
+        )
+        return subprocess.run(argv).returncode
+
+    def test_alive_process_reports_zero(self, js, tmp_path):
+        import os
+
+        lock = tmp_path / "install.lock"
+        lock.write_text("abc123\n%d\n" % os.getpid())
+        assert self._run(js, lock, 2) == 0
+
+    def test_dead_pid_reports_one(self, js, tmp_path):
+        lock = tmp_path / "install.lock"
+        lock.write_text("abc123\n%d\n" % self._dead_pid())
+        assert self._run(js, lock, 2) == 1
+
+    def test_missing_lock_reports_two(self, js, tmp_path):
+        assert self._run(js, tmp_path / "nope.lock", 2) == 2
+
+    def test_lock_without_pid_line_reports_three(self, js, tmp_path):
+        lock = tmp_path / "install.lock"
+        lock.write_text("abc123\n")
+        assert self._run(js, lock, 2) == 3
+
+    def test_pid_line_is_honoured(self, js, tmp_path):
+        import os
+
+        # The Omarchy update lock stores only the pid, on line 1.
+        lock = tmp_path / "omarchy-update.lock"
+        lock.write_text("%d\n" % os.getpid())
+        assert self._run(js, lock, 1) == 0
+        # Reading line 2 of the same file finds nothing.
+        assert self._run(js, lock, 2) == 3
+
+
 class TestTerminalScript:
     ARGS = (
         '"Install Steam", "echo hi", "/h/.cache/hub/install.log",'

@@ -917,10 +917,12 @@ Item {
     omarchyUpdateTerminalProc.running = true;
     omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F", logPath];
     omarchyUpdateLogProc.running = true;
+    omarchyUpdateStallTimer.restart();
   }
 
   function stopOmarchyUpdateLog() {
     omarchyUpdateLogProc.running = false;
+    omarchyUpdateStallTimer.stop();
     omarchyUpdateRunning = false;
     omarchyUpdateStatus = "Live log stopped.";
   }
@@ -1208,6 +1210,7 @@ Item {
         else
           root.omarchyUpdateStatus = "Omarchy update exited (code " + code + ").";
         omarchyUpdateLogProc.running = false;
+        omarchyUpdateStallTimer.stop();
         // don't append the internal marker line to visible log
         return;
       }
@@ -1224,6 +1227,7 @@ Item {
       // tail process exited (stopped by user or after marker handling)
       if (root.omarchyUpdateRunning) {
         root.omarchyUpdateRunning = false;
+        omarchyUpdateStallTimer.stop();
         if (Shell.trim(root.omarchyUpdateStatus).indexOf("Running") === 0)
           root.omarchyUpdateStatus = "Live log stopped.";
       }
@@ -1271,6 +1275,7 @@ Item {
           omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F",
             root.homeDir + "/.cache/vember-server-hub/omarchy-update.log"];
           omarchyUpdateLogProc.running = true;
+          omarchyUpdateStallTimer.restart();
           return;
         }
         if (Shell.trim(root.omarchyUpdateStatus).length === 0 && joined.length > 0) {
@@ -1285,6 +1290,43 @@ Item {
       }
     }
     stderr: StdioCollector {}
+  }
+
+  // Watchdog for the Omarchy update. Same failure mode as an install: if the
+  // terminal is closed mid-update there is no exit marker and `tail -F` never
+  // ends, so the panel would sit on "running" forever. The update lock stores
+  // only the pid, on line 1, so that is the pid line passed here.
+  Timer {
+    id: omarchyUpdateStallTimer
+    interval: 30000
+    repeat: true
+    onTriggered: {
+      if (!root.omarchyUpdateRunning)
+        return;
+      omarchyUpdateLockCheckProc.command =
+        InstallLog.lockCheckCommand(InstallLog.omarchyLockPath(root.homeDir), 1);
+      omarchyUpdateLockCheckProc.running = true;
+    }
+  }
+
+  Process {
+    id: omarchyUpdateLockCheckProc
+    onExited: function(code) {
+      if (!root.omarchyUpdateRunning)
+        return;
+      var hasOutput = Shell.trim(root.omarchyUpdateLog).length > 0;
+      var verdict = InstallLog.watchdogVerdict(code, hasOutput);
+      if (verdict === "never-started") {
+        root.stopOmarchyUpdateLog();
+        root.omarchyUpdateStatus = "Could not open the update terminal. Check that xdg-terminal-exec works.";
+        root.lastActionMessage = root.omarchyUpdateStatus;
+      } else if (verdict === "dead") {
+        root.stopOmarchyUpdateLog();
+        root.omarchyUpdateStatus = "The update terminal closed before finishing. Tracking stopped.";
+        root.lastActionMessage = root.omarchyUpdateStatus;
+      }
+      // alive / wait / teardown: keep tracking; `tail` or the next tick resolves it.
+    }
   }
 
   // --- Processes: Launchers ---
@@ -1711,14 +1753,9 @@ Item {
     onTriggered: {
       if (!root.installRunning)
         return;
-      // Exit codes: 0 alive, 1 lock present but pid dead, 2 no lock,
-      // 3 lock present but pid not written yet (transient during the write).
-      installLockCheckProc.command = ["sh", "-c",
-        "k=\"$1\"; [ -f \"$k\" ] || exit 2; " +
-        "pid=$(sed -n 2p \"$k\" 2>/dev/null); " +
-        "[ -n \"$pid\" ] || exit 3; " +
-        "kill -0 \"$pid\" 2>/dev/null && exit 0; exit 1",
-        "sh", InstallLog.lockPath(root.homeDir)];
+      // The install lock stores id on line 1 and pid on line 2.
+      installLockCheckProc.command =
+        InstallLog.lockCheckCommand(InstallLog.lockPath(root.homeDir), 2);
       installLockCheckProc.running = true;
     }
   }

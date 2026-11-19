@@ -404,8 +404,9 @@ class TestInstallWatchdog:
 
     def test_watchdog_checks_the_lock_pid(self):
         block = self._timer_block("installStallTimer")
-        assert re.search(r"kill -0", block), (
-            "liveness is checked with `kill -0 <pid>` on the lock's pid"
+        assert "lockCheckCommand" in block, (
+            "liveness must be checked through InstallLog.lockCheckCommand, "
+            "which runs `kill -0 <pid>` on the lock's pid"
         )
 
     def test_reattach_starts_the_watchdog(self):
@@ -416,4 +417,27 @@ class TestInstallWatchdog:
         window = text[reattach:reattach + 900]
         assert "installStallTimer.restart()" in window, (
             "the reattach path must restart installStallTimer"
+        )
+
+    def test_omarchy_watchdog_exists_and_repeats(self):
+        # The Omarchy update has the same failure mode as an install: close the
+        # terminal mid-update and there is no exit marker. It needs the same
+        # repeating liveness check, with the pid on line 1 of its lock.
+        block = self._timer_block("omarchyUpdateStallTimer")
+        assert re.search(r"\brepeat:\s*true", block), (
+            "the Omarchy update watchdog must repeat"
+        )
+        assert "lockCheckCommand" in block and ", 1)" in block, (
+            "the Omarchy update lock stores its pid on line 1"
+        )
+        assert "omarchyUpdateLog" not in block, (
+            "the Omarchy watchdog must not bail on log content either"
+        )
+
+    def test_omarchy_reattach_starts_the_watchdog(self):
+        text = read(REPO / "Panel.qml")
+        reattach = text.index("Reattached to the running Omarchy update")
+        window = text[reattach:reattach + 700]
+        assert "omarchyUpdateStallTimer.restart()" in window, (
+            "the Omarchy update reattach path must restart its watchdog"
         )
