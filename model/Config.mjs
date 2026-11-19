@@ -138,6 +138,17 @@ export class Config {
   next[j] = tmp;
   return next;
   }
+  // The shell command that persists config.json. The write is atomic: a
+  // half-written file would fail JSON.parse and read as corrupt, blanking every
+  // setting on the next load. Writing to a sibling temp file and renaming means
+  // the real file is either the old contents or the new ones, never a fragment.
+  // The payload is passed as its own argument, so it is never shell-parsed.
+  writeCommand(path, payload) {
+  var tmp = String(path) + ".tmp.$$";
+  return ["sh", "-c",
+    "mkdir -p \"$(dirname \"$2\")\" && { printf '%s' \"$1\" > \"$3\" && mv -f \"$3\" \"$2\"; }",
+    "sh", String(payload), String(path), tmp];
+  }
 }
 
 const impl = new Config();
@@ -150,3 +161,4 @@ export function parseHubConfig(...args) { return impl.parseHubConfig(...args); }
 export function tabDef(...args) { return impl.tabDef(...args); }
 export function orderedTabs(...args) { return impl.orderedTabs(...args); }
 export function moveTab(...args) { return impl.moveTab(...args); }
+export function writeCommand(...args) { return impl.writeCommand(...args); }

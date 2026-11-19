@@ -224,7 +224,7 @@ Item {
       codeServerPort: codeServerPort,
       wizardCompleted: true
     });
-    configWriteProc.command = ["sh", "-c", "mkdir -p \"$(dirname \"$2\")\"; printf '%s' \"$1\" > \"$2\"", "sh", payload, root.configPath];
+    configWriteProc.command = Config.writeCommand(root.configPath, payload);
     configWriteProc.running = true;
   }
 

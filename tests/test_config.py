@@ -1,6 +1,7 @@
 """Tests for model/Config.mjs: tab ordering that survives config drift."""
 
 import json
+import subprocess
 
 
 class TestDefaults:
@@ -300,3 +301,50 @@ class TestMoveTab:
             "Config.moveTab(['a','b','c'], 0, -1).length]))"
         )
         assert out == [3, 3]
+
+
+class TestWriteCommand:
+    """Persisting config.json. A partial write would read back as corrupt.
+
+    parseHubConfig treats unparseable JSON as `invalid`, which blanks every
+    setting, so the write has to be all-or-nothing.
+    """
+
+    def cmd(self, js, path, payload):
+        return js(
+            "console.log(JSON.stringify(Config.writeCommand(%s, %s)))"
+            % (json.dumps(path), json.dumps(payload))
+        )
+
+    def test_payload_is_its_own_argument(self, js):
+        # Passed as argv, never interpolated into the shell string, so quotes
+        # and $ in the JSON cannot be reinterpreted.
+        out = self.cmd(js, "/tmp/c.json", '{"name":"a $b \\"c\\""}')
+        assert out[4] == '{"name":"a $b \\"c\\""}'
+
+    def test_write_goes_through_a_temp_file_and_rename(self, js):
+        out = self.cmd(js, "/tmp/c.json", "{}")
+        script = out[2]
+        assert "mv -f" in script
+        assert out[6].startswith("/tmp/c.json") and ".tmp" in out[6]
+
+    def test_temp_file_is_a_sibling_of_the_target(self, js):
+        # A temp file on another filesystem cannot be renamed atomically.
+        out = self.cmd(js, "/home/u/.config/x/config.json", "{}")
+        tmp = out[6]
+        assert tmp.rsplit("/", 1)[0] == "/home/u/.config/x"
+
+    def test_round_trip_through_a_real_shell(self, js, tmp_path):
+        target = tmp_path / "config.json"
+        out = self.cmd(js, str(target), '{"serverName":"Vember OS"}')
+        subprocess.run(out, check=True)
+        assert json.loads(target.read_text())["serverName"] == "Vember OS"
+        # No temp file is left behind on success.
+        assert not list(tmp_path.glob("*.tmp*"))
+
+    def test_overwrite_replaces_wholesale(self, js, tmp_path):
+        target = tmp_path / "config.json"
+        target.write_text('{"old": "content that is longer"}')
+        out = self.cmd(js, str(target), '{"new":1}')
+        subprocess.run(out, check=True)
+        assert json.loads(target.read_text()) == {"new": 1}
