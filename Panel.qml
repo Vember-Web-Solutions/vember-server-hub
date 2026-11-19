@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.20"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 96
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.21"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 97
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -954,6 +954,12 @@ Item {
   }
 
   function refreshAfterInstall() {
+    // A new install can start inside the 2.5s/9s window after the previous one
+    // finished. A full games reset then would blank the counts while the new
+    // install is still streaming; that install triggers its own refresh when it
+    // finishes, so skip this one.
+    if (installRunning)
+      return;
     refreshGames();
     if (installIsDev)
       refreshDevTools();

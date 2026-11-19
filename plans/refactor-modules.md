@@ -303,6 +303,11 @@ Work that fell out of the split, done in the same arc:
   closed, the notification is the only feedback, so a dropped one is invisible.
   Notifications now queue and drain one at a time on `onExited`.
   `TestNotificationsAreQueued` pins the queue, the running guard and the drain.
+- **The post-install refresh could clobber a new install.** `refreshAfterInstall`
+  runs 2.5s and 9s after an install finishes. A new install started inside that
+  window would get a full games reset while it streamed, blanking the counts
+  until the scans caught up. It now skips while an install is running; the new
+  install refreshes on its own finish.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -322,16 +327,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 444 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,734 lines. The growth is comments, per-file
+- 445 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,740 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,129 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,722. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,135 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,728. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,722, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,656 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,728, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,682 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.20, build 72 → 96.
+- Version 0.1.0 → 0.6.21, build 72 → 97.

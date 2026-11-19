@@ -539,6 +539,32 @@ class TestPollSafety:
             "opening the panel should do a full refresh, not a preserving one"
         )
 
+    def test_post_install_refresh_skips_a_new_install(self):
+        # refreshAfterInstall runs 2.5s and 9s after an install finishes. If a
+        # new install started in that window, a full games reset would blank
+        # the counts while it streams; the new install refreshes on its own
+        # finish instead.
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"function refreshAfterInstall\(\)\s*\{", text)
+        assert match, "no refreshAfterInstall()"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[start : i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced refreshAfterInstall")
+        guard = body.find("if (installRunning)")
+        assert guard >= 0, "refreshAfterInstall must skip while an install runs"
+        assert body.find("refreshGames()") > guard, (
+            "the installRunning guard must come before the games reset"
+        )
+
     def test_refresh_dev_honours_preserve(self):
         text = read(REPO / "Panel.qml")
         fn = re.search(r"function refreshDev\((\w+)\)", text)
