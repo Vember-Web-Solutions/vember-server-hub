@@ -865,3 +865,56 @@ class TestNoDeadProperties:
             "these properties are declared but never read (dead state): "
             + ", ".join(dead)
         )
+
+
+class TestEditorLaunchFailure:
+    """Opening authorized_keys must not claim success before it is known.
+
+    sshAuthorizedKeysEditorProc used to set "Opened authorized_keys in editor."
+    the moment the launch was requested, with no onExited handler. If
+    omarchy-launch-editor was missing or failed, the user was told it opened
+    when nothing happened. The status must be set from the process's exit code.
+    """
+
+    @staticmethod
+    def _proc_block():
+        text = read(REPO / "Panel.qml")
+        id_match = re.search(r"^\s*id:\s*sshAuthorizedKeysEditorProc\s*$", text, re.M)
+        assert id_match, "no sshAuthorizedKeysEditorProc in Panel.qml"
+        open_idx = text.rfind("{", 0, id_match.start())
+        depth = 0
+        for i in range(open_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[open_idx:i + 1]
+        raise AssertionError("unbalanced braces in sshAuthorizedKeysEditorProc")
+
+    def test_proc_has_on_exited(self):
+        block = self._proc_block()
+        assert "onExited:" in block, (
+            "the editor proc must handle onExited so a failed launch is reported"
+        )
+
+    def test_success_status_set_on_exit_not_on_request(self):
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function openAuthorizedKeysEditor\(\)", text)
+        assert fn, "no openAuthorizedKeysEditor()"
+        start = text.index("{", fn.end())
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in openAuthorizedKeysEditor")
+        assert "Opened authorized_keys in editor." not in body, (
+            "openAuthorizedKeysEditor must not claim success before the process "
+            "exits; set the success status from onExited instead"
+        )

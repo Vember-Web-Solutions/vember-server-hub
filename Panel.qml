@@ -116,6 +116,7 @@ Item {
   property int sshSelectedKeyIndex: -1
   property string sshNewKeyText: ""
   property string sshAuthorizedKeysStatus: ""
+  property string sshAuthorizedKeysEditorError: ""
   property string sshGeneratedPublicKey: ""
   property bool sshGenerateBusy: false
 
@@ -621,10 +622,11 @@ Item {
   }
 
   function openAuthorizedKeysEditor() {
+    sshAuthorizedKeysEditorError = "";
     sshAuthorizedKeysEditorProc.running = false;
     sshAuthorizedKeysEditorProc.command = ["omarchy-launch-editor", root.homeDir + "/.ssh/authorized_keys"];
     sshAuthorizedKeysEditorProc.running = true;
-    sshAuthorizedKeysStatus = "Opened authorized_keys in editor.";
+    sshAuthorizedKeysStatus = "Opening authorized_keys in editor…";
   }
 
   function addAuthorizedKey() {
@@ -1169,7 +1171,19 @@ Item {
   Process {
     id: sshAuthorizedKeysEditorProc
     stdout: StdioCollector {}
-    stderr: StdioCollector {}
+    stderr: StdioCollector {
+      onStreamFinished: root.sshAuthorizedKeysEditorError = Shell.trim(text)
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.sshAuthorizedKeysStatus = "Opened authorized_keys in editor.";
+      } else {
+        var err = Shell.trim(root.sshAuthorizedKeysEditorError || "");
+        root.sshAuthorizedKeysStatus = Shell.failureMessage(
+          "Could not open authorized_keys in an editor", code, err) +
+          " Try editing ~/.ssh/authorized_keys directly.";
+      }
+    }
   }
   Process {
     id: sshAuthorizedKeysAddProc
