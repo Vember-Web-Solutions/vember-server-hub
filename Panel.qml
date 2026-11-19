@@ -1709,17 +1709,37 @@ Item {
     }
   }
 
-  // Escalation: a terminal that never opened leaves the runner stuck otherwise
+  // Escalation: silence usually means a password prompt is waiting on the tty,
+  // which never reaches the log. Ask the lock file whether the terminal is
+  // still alive before giving up on it.
   Timer {
     id: installStallTimer
-    interval: 60000
+    interval: 120000
     repeat: false
     onTriggered: {
       if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
         return;
-      root.stopInstall();
-      root.extraAppInstallStatus = "No install output after 60s — the terminal may not have opened. Use the Install button to try again.";
-      root.lastActionMessage = root.extraAppInstallStatus;
+      installLockCheckProc.command = ["sh", "-c",
+        "pid=$(sed -n 2p \"$1\" 2>/dev/null); [ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null",
+        "sh", HubModel.installLockPath(root.homeDir)];
+      installLockCheckProc.running = true;
+    }
+  }
+
+  Process {
+    id: installLockCheckProc
+    onExited: function(code) {
+      if (!root.installRunning)
+        return;
+      if (code === 0) {
+        root.extraAppInstallStatus = "Still waiting — the terminal may be asking for a password. Tracking continues.";
+        root.lastActionMessage = root.extraAppInstallStatus;
+        installStallTimer.restart();
+      } else {
+        root.stopInstall();
+        root.extraAppInstallStatus = "The install terminal is no longer running. Tracking stopped.";
+        root.lastActionMessage = root.extraAppInstallStatus;
+      }
     }
   }
 
