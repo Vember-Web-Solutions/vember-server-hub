@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.11"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 87
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.12"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 88
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -186,6 +186,16 @@ Item {
       root.opened = false;
   }
 
+  // The hub is a full-screen overlay with exclusive keyboard focus: anything
+  // it launches lands behind it, and the backdrop swallows the clicks meant for
+  // that surface. So when an action hands off to something outside the hub — a
+  // terminal that needs a sudo password, an editor, a game launcher, a browser
+  // — close the hub. Its own background work (installs, scans, logs) keeps
+  // running, and reopening the hub shows the current state.
+  function handOffToExternalSurface() {
+    requestClose();
+  }
+
   function status() {
     return JSON.stringify({
       opened: root.opened,
@@ -293,6 +303,7 @@ Item {
     devOpenRepoProc.command = ["sh", "-c", cmd, "sh", path, editor];
     devOpenRepoProc.running = true;
     devStatus = "Opening " + path + " in " + DevTools.label(editor) + "…";
+    handOffToExternalSurface();
   }
 
   function selectDevRepo(repoPath) {
@@ -315,7 +326,11 @@ Item {
   // unconditional reset deselected the repository being inspected every 15
   // seconds and blanked its detail panel.
   function refreshAll(preserveSelection) {
-    lastActionMessage = "";
+    // Do not blank the status line while an install or update is running: the
+    // hub closes itself when one starts, so reopening it mid-install is the
+    // normal path, and the message is the only sign of what is going on.
+    if (!installRunning && !omarchyUpdateRunning)
+      lastActionMessage = "";
     refreshTailscale();
     refreshDocker();
     refreshGames(preserveSelection === true);
@@ -576,6 +591,7 @@ Item {
 
   function openCodeServer() {
     Qt.openUrlExternally("http://localhost:" + codeServerPort);
+    handOffToExternalSurface();
   }
 
   // --- Developer tools and repos ---
@@ -640,6 +656,7 @@ Item {
     sshAuthorizedKeysEditorProc.command = ["omarchy-launch-editor", root.homeDir + "/.ssh/authorized_keys"];
     sshAuthorizedKeysEditorProc.running = true;
     sshAuthorizedKeysStatus = "Opening authorized_keys in editor…";
+    handOffToExternalSurface();
   }
 
   function addAuthorizedKey() {
@@ -793,6 +810,7 @@ Item {
     extraAppLaunchProc.command = def.launchCmd;
     extraAppLaunchProc.running = true;
     lastActionMessage = "Launching " + (def.name || appId) + "…";
+    handOffToExternalSurface();
   }
 
   function installExtraApp(appId) {
@@ -813,6 +831,7 @@ Item {
     extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
     Qt.openUrlExternally(Gaming.battlenetSetupUrl());
+    handOffToExternalSurface();
   }
 
   // --- Terminal installs: log, lock and reattach ---
@@ -850,9 +869,8 @@ Item {
     installStallTimer.restart();
     // The hub is a full-screen overlay with exclusive keyboard focus. Left
     // open, it hides the terminal and swallows the keystrokes the install
-    // needs (a sudo password, a y/n answer). Close it so the terminal is
-    // reachable; the log keeps streaming and reopening the hub reattaches.
-    root.requestClose();
+    // needs (a sudo password, a y/n answer).
+    handOffToExternalSurface();
   }
 
   function finishInstall(code) {
@@ -952,6 +970,7 @@ Item {
     tsTerminalProc.command = Systemd.terminalCommand(action, "tailscaled");
     tsTerminalProc.running = true;
     tailscaleNote = "Opened terminal for: sudo systemctl " + action + " tailscaled";
+    handOffToExternalSurface();
   }
 
   // --- Omarchy system update ---
@@ -984,9 +1003,8 @@ Item {
     omarchyUpdateStallTimer.restart();
     // The hub is a full-screen overlay with exclusive keyboard focus: while it
     // is open the terminal sits behind it and cannot be typed into, so the
-    // sudo prompt would be unreachable. Get out of the way; the log keeps
-    // streaming and reopening the hub reattaches to the running update.
-    root.requestClose();
+    // sudo prompt would be unreachable.
+    handOffToExternalSurface();
   }
 
   function stopOmarchyUpdateLog() {
@@ -1442,12 +1460,14 @@ Item {
     steamLaunchProc.running = false;
     steamLaunchProc.running = true;
     lastActionMessage = "Launching Steam…";
+    handOffToExternalSurface();
   }
 
   function launchBattleNet() {
     bnetLaunchProc.running = false;
     bnetLaunchProc.running = true;
     lastActionMessage = "Launching Battle.net…";
+    handOffToExternalSurface();
   }
 
   // --- Hot reload ---

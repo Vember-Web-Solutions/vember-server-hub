@@ -1183,16 +1183,35 @@ class TestNoDeadModelExports:
         assert not re.search(r"\b" + name + r"\b", stripped)
 
 
-class TestInteractiveTerminalReachability:
-    """The hub must get out of the way of an interactive terminal.
+class TestExternalHandOffReachability:
+    """The hub must get out of the way of anything it launches.
 
-    The panel is a full-screen overlay with exclusive keyboard focus. While it
-    is open the install terminal sits behind it: not visible, and not clickable
-    because the overlay's backdrop swallows the click. The sudo password and
-    y/n prompts the terminal exists for would be unreachable, which is the
-    whole point of running installs there. So every path that opens an
-    interactive terminal closes the hub.
+    The panel is a full-screen overlay with exclusive keyboard focus. Anything
+    it starts lands behind it: not visible, and not clickable either, because
+    the overlay's backdrop swallows the click. For an install terminal that
+    means the sudo prompt and y/n questions the terminal exists for are
+    unreachable, so the fix would be worthless; for an editor or a game
+    launcher it means the click looks like it did nothing.
+
+    Every action that hands off to a surface outside the hub therefore closes
+    the hub. The hub's own background work — installs, scans, log streaming —
+    is independent of panel visibility, so closing loses nothing, and
+    reopening reattaches to whatever is running.
     """
+
+    # Functions that start something the user must see or type into.
+    HANDOFF_FUNCTIONS = [
+        "runInstallInTerminal",
+        "runOmarchyUpdateInPanel",
+        "runTailscaleActionInTerminal",
+        "openAuthorizedKeysEditor",
+        "openCodeServer",
+        "openBattlenetSetup",
+        "launchSteam",
+        "launchBattleNet",
+        "launchExtraApp",
+        "openRepoInEditor",
+    ]
 
     def _panel(self):
         return read(REPO / "Panel.qml")
@@ -1212,16 +1231,21 @@ class TestInteractiveTerminalReachability:
                     return text[start : i + 1]
         raise AssertionError("unbalanced braces in " + name)
 
-    def test_install_launch_closes_the_hub(self):
-        body = self._fn("runInstallInTerminal")
+    def test_the_helper_actually_closes_the_hub(self):
+        # The rest of this class checks that the helper is *called*. If the
+        # helper itself stopped closing, every one of those checks would still
+        # pass while nothing closed.
+        body = self._fn("handOffToExternalSurface")
         assert "requestClose()" in body, (
-            "runInstallInTerminal must close the hub so the terminal is reachable"
+            "handOffToExternalSurface must call requestClose()"
         )
 
-    def test_omarchy_update_closes_the_hub(self):
-        body = self._fn("runOmarchyUpdateInPanel")
-        assert "requestClose()" in body, (
-            "runOmarchyUpdateInPanel must close the hub so the terminal is reachable"
+    @pytest.mark.parametrize("name", HANDOFF_FUNCTIONS)
+    def test_launch_path_closes_the_hub(self, name):
+        body = self._fn(name)
+        assert "handOffToExternalSurface()" in body, (
+            name + " must hand off to the external surface, or what it launches "
+            "lands behind the hub overlay"
         )
 
     def test_update_terminal_has_the_install_app_id(self):
@@ -1236,3 +1260,29 @@ class TestInteractiveTerminalReachability:
         text = self._panel()
         assert "Hypr.focusByClassScript" in text
         assert "hyprctl dispatch focuswindow" not in text
+
+    def test_no_launch_path_closes_the_hub_by_hand(self):
+        # Closing through the helper is what the guard above can see. A bare
+        # requestClose() next to a launch would satisfy the user and hide from
+        # the check, so the launch paths use the helper and nothing else.
+        for name in self.HANDOFF_FUNCTIONS:
+            body = self._fn(name)
+            assert "requestClose()" not in body, (
+                name + " should close the hub via handOffToExternalSurface()"
+            )
+
+    def test_reopening_mid_install_keeps_the_status_line(self):
+        # The hub closes itself when an install starts, so reopening it while
+        # the install runs is the normal path. refreshAll() clears the status
+        # line for a fresh open; it must not do that mid-install, or the only
+        # sign that anything is happening disappears.
+        body = self._fn("refreshAll")
+        clear = re.search(r"lastActionMessage = \"\";", body)
+        assert clear, "refreshAll should still clear the status line"
+        guard = body[: clear.start()]
+        assert "installRunning" in guard, (
+            "refreshAll must not clear the status line while an install runs"
+        )
+        assert "omarchyUpdateRunning" in guard, (
+            "refreshAll must not clear the status line while an update runs"
+        )

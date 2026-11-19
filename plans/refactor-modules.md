@@ -243,7 +243,23 @@ Work that fell out of the split, done in the same arc:
      hub first; the log keeps streaming to disk and reopening the hub
      reattaches to the running install or update.
   `TestFocusScript`, `TestFocusByClassScript` and
-  `TestInteractiveTerminalReachability` pin both halves.
+  `TestExternalHandOffReachability` pin both halves.
+- **The same overlay problem for every other hand-off.** Closing the hub was
+  not only about terminals: anything the panel launches lands behind a
+  full-screen overlay whose backdrop swallows clicks, so an editor, a browser
+  page or a game launcher looked like a dead button. Every action that hands
+  off to a surface outside the hub now goes through one helper,
+  `handOffToExternalSurface()`, so the rule lives in one place and the guard
+  can check the set rather than two functions: installs, the Omarchy update,
+  Tailscale actions, the authorized_keys editor, the code-server browser tab,
+  the Battle.net setup page, Steam, Battle.net, extra app launchers and opening
+  a repo in an editor. The guard also fails if a launch path closes the hub by
+  hand instead of through the helper, since that would satisfy the user and
+  hide from the check.
+  Reopening mid-install was the one regression this could cause: `refreshAll()`
+  cleared the status line on open, which would blank the only sign of a running
+  install now that opening the hub is what a user does to check on it. The
+  clear is skipped while an install or update is running.
 
 ## Done when
 
@@ -252,16 +268,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 404 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,621 lines. The growth is comments, per-file
+- 415 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,641 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,374) and `ui/` (4,190) was already there.
 - The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,615. `Panel.qml` grew by the
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,646. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,615, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,250 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,646, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,300 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.11, build 72 → 87.
+- Version 0.1.0 → 0.6.12, build 72 → 88.
