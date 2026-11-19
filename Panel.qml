@@ -36,7 +36,6 @@ Item {
   property var tabOrder: Config.defaultTabOrder()
   property bool configReady: false
   property bool wizardOpen: false
-  property bool restartingForServerName: false
   property bool pendingConfigRestart: false
   property bool updateAvailable: false
   property string updateAvailableBuild: ""
@@ -209,8 +208,6 @@ Item {
 
   function writeHubConfig(restartAfter) {
     pendingConfigRestart = !!restartAfter;
-    if (pendingConfigRestart) restartingForServerName = true;
-    else restartingForServerName = false;
     configWriteProc.running = false;
     var payload = JSON.stringify({
       serverName: serverName,
@@ -659,7 +656,6 @@ Item {
       sshAuthorizedKeysStatus = "Could not determine key line to remove.";
       return;
     }
-    sshAuthorizedKeysRemoveProc.targetLineNo = lineNo;
     sshAuthorizedKeysRemoveProc.running = false;
     sshAuthorizedKeysRemoveProc.command = ["sh", "-c",
       "set -e; file=\"$HOME/.ssh/authorized_keys\"; [ -f \"$file\" ] || exit 0; tmp=$(mktemp \"$HOME/.ssh/.authorized_keys.XXXXXX\"); awk -v n=\"$1\" 'NR!=n {print}' \"$file\" > \"$tmp\" && mv \"$tmp\" \"$file\"; chmod 600 \"$file\"",
@@ -1187,7 +1183,6 @@ Item {
   }
   Process {
     id: sshAuthorizedKeysRemoveProc
-    property int targetLineNo: 0
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
@@ -1991,7 +1986,6 @@ Item {
     interval: 350
     repeat: false
     onTriggered: {
-      root.restartingForServerName = false;
       root.open();
     }
   }
@@ -2004,7 +1998,6 @@ Item {
         var err = Shell.trim(text);
         if (err.length > 0) {
           root.lastActionMessage = "Failed to save hub config: " + err;
-          root.restartingForServerName = false;
           root.pendingConfigRestart = false;
         }
       }
@@ -2017,8 +2010,6 @@ Item {
         } else {
           root.lastActionMessage = "Hub settings saved.";
         }
-      } else {
-        root.restartingForServerName = false;
       }
       root.pendingConfigRestart = false;
     }
