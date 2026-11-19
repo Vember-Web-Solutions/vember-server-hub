@@ -66,6 +66,17 @@ export class Shell {
   });
   return out;
   }
+  // A one-line failure description. `what` is the whole phrase, so callers
+  // keep their own wording. Commands collect stderr but a bare "(code 1)"
+  // tells the user nothing, so the first meaningful stderr line is folded in
+  // when there is one.
+  failureMessage(what, code, stderr) {
+  var base = String(what) + " (code " + code + ")";
+  var detail = trim(stderr || "");
+  if (detail.length === 0) return base + ".";
+  var first = nonEmptyLines(detail)[0] || detail;
+  return base + ": " + trim(first) + ".";
+  }
 }
 
 const impl = new Shell();
@@ -81,3 +92,4 @@ export function safeName(...args) { return impl.safeName(...args); }
 export function statusLabel(...args) { return impl.statusLabel(...args); }
 export function humanBytes(...args) { return impl.humanBytes(...args); }
 export function parseKeyValueLines(...args) { return impl.parseKeyValueLines(...args); }
+export function failureMessage(...args) { return impl.failureMessage(...args); }

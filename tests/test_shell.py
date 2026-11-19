@@ -97,3 +97,56 @@ class TestKeyValueLines:
             'console.log(JSON.stringify(Shell.parseKeyValueLines("\\nA=1\\n\\n")))'
         )
         assert out == {"A": "1"}
+
+
+class TestFailureMessage:
+    """Failure lines carry the command's own reason, not just an exit code.
+
+    "Docker start failed for nginx (code 1)" leaves the user with nothing to
+    act on; the daemon usually says why.
+    """
+
+    def test_no_stderr_keeps_the_original_phrasing(self, js):
+        out = js(
+            "console.log(JSON.stringify("
+            "Shell.failureMessage('Docker start failed for nginx', 1, '')))"
+        )
+        assert out == "Docker start failed for nginx (code 1)."
+
+    def test_stderr_is_appended(self, js):
+        out = js(
+            "console.log(JSON.stringify(Shell.failureMessage("
+            "'Docker start failed for nginx', 1,"
+            "'Error response from daemon: port is already allocated')))"
+        )
+        assert out == (
+            "Docker start failed for nginx (code 1): "
+            "Error response from daemon: port is already allocated."
+        )
+
+    def test_only_the_first_meaningful_line_is_used(self, js):
+        # Multi-line stderr would otherwise stretch the status line.
+        out = js(
+            "console.log(JSON.stringify(Shell.failureMessage("
+            "'Install failed', 2, '\\n\\n  first reason  \\nsecond reason\\n')))"
+        )
+        assert out == "Install failed (code 2): first reason."
+
+    def test_missing_stderr_is_tolerated(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Shell.failureMessage('Thing failed', 3, null),"
+            "Shell.failureMessage('Thing failed', 3, undefined)]))"
+        )
+        assert out == ["Thing failed (code 3).", "Thing failed (code 3)."]
+
+    def test_whitespace_only_stderr_counts_as_empty(self, js):
+        out = js(
+            "console.log(JSON.stringify(Shell.failureMessage('Thing failed', 1, '   \\n  ')))"
+        )
+        assert out == "Thing failed (code 1)."
+
+    def test_zero_exit_code_is_reported_as_given(self, js):
+        # Callers only use this on failure, but the code must not be swallowed.
+        out = js("console.log(JSON.stringify(Shell.failureMessage('Thing failed', 0, '')))")
+        assert out == "Thing failed (code 0)."

@@ -1350,10 +1350,13 @@ Item {
       root.dockerBusy = false;
       var target = containerName;
       root.dockerBusyName = "";
-      if (code === 0)
+      if (code === 0) {
         root.lastActionMessage = "Docker " + actionName + " succeeded: " + target;
-      else
-        root.lastActionMessage = "Docker " + actionName + " failed for " + target + " (code " + code + ").";
+      } else {
+        // Include the daemon's own reason: "code 1" alone is not actionable.
+        root.lastActionMessage = Shell.failureMessage(
+          "Docker " + actionName + " failed for " + target, code, dockerActionProc.stderr.text);
+      }
       root.refreshDocker();
     }
   }
@@ -2318,12 +2321,11 @@ Item {
     stderr: StdioCollector {}
     onExited: function(code) {
       root.codeServerBusy = false;
-      if (actionName === "setup") {
-        // legacy path no longer used
-      } else if (code === 0) {
+      if (code === 0) {
         root.devStatus = "VS Code Server " + actionName + " succeeded.";
       } else {
-        root.devStatus = "VS Code Server " + actionName + " failed (code " + code + ").";
+        root.devStatus = Shell.failureMessage(
+          "VS Code Server " + actionName + " failed", code, codeServerActionProc.stderr.text);
       }
       root.refreshCodeServer();
       root.refreshDocker();
