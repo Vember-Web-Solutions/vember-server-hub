@@ -379,6 +379,15 @@ Work that fell out of the split, done in the same arc:
   wizard. `TestConfigRead` runs the real command against a missing, an
   unreadable and a readable file; `TestConfigReadFailureIsVisible` pins the
   handler.
+- **A plugin self-update could fail into a closed panel.** The update dialog
+  runs in the panel, but the user can close the hub while the `git fetch` or
+  `git pull` is in flight. Both failure branches only set `pluginUpdateStatus`,
+  which is invisible once the panel is closed, and the success branch's
+  "complete, now reload" is an action the user would never learn about. Both
+  plugin-update processes now call `notifyIfClosed()`; the success line also
+  lost a dead `? "" : ""` ternary.
+  `TestBackgroundActionFailuresAreVisible` covers both failure branches and
+  the completion notice.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -398,16 +407,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 472 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,824 lines. The growth is comments, per-file
+- 475 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,831 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,194 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,770. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,201 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,777. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,770, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,113 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,777, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 4,119 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.28, build 72 → 104.
+- Version 0.1.0 → 0.6.29, build 72 → 105.

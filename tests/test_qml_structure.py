@@ -1902,6 +1902,12 @@ class TestBackgroundActionFailuresAreVisible:
             '"Docker prune failed (code " + code + ")"',
             # codeServerActionProc: start/stop/uninstall
             '"VS Code Server " + actionName + " failed"',
+            # pluginUpdateFetchProc: a git fetch can outlive the hub
+            '"git fetch failed (code " + code + ")."',
+            # pluginUpdatePullProc: a git pull can outlive the hub
+            '"git pull failed (code " + code + ")."',
+            # pluginUpdatePullProc success: "complete, now reload" needs saying
+            'root.pluginUpdateStatus = "Update complete. Reload the hub to apply changes.";',
         ],
     )
     def test_failure_branch_notifies_when_closed(self, anchor):

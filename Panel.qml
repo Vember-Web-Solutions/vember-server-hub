@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.28"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 104
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.29"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 105
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2729,6 +2729,9 @@ Item {
         root.pluginUpdateError = err.length > 0 ? err : ("git fetch failed (code " + code + ").");
         root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
         root.pluginUpdatePun = "Well, that didn’t ship. Check the status above.";
+        // The fetch runs while the update dialog is open, but the user can
+        // close the hub before it finishes; a failure must not vanish with it.
+        root.notifyIfClosed(root.pluginUpdateStatus);
         return;
       }
       root.pluginUpdateProgress = 0.45;
@@ -2751,15 +2754,19 @@ Item {
         root.updateAvailable = false;
         root.pluginUpdateRemoteCommits = 0;
         root.updateAvailableBuild = "";
-        var out = Shell.trim(stdout.text || "");
-        root.pluginUpdateStatus = "Update complete. Reload the hub to apply changes." + (out.length > 0 ? "" : "");
+        root.pluginUpdateStatus = "Update complete. Reload the hub to apply changes.";
         root.pluginUpdatePun = "All patched up! Time for a quick reload dance.";
+        // The pull can outlive the hub: the user can start it and close the
+        // panel before it finishes. "Complete, now reload" is an action they
+        // would otherwise never learn about.
+        root.notifyIfClosed(root.pluginUpdateStatus);
       } else {
         root.pluginUpdateProgress = 0;
         var err = Shell.trim(stderr.text || stdout.text || "");
         root.pluginUpdateError = err.length > 0 ? err : ("git pull failed (code " + code + ").");
         root.pluginUpdateStatus = "Update failed: " + root.pluginUpdateError;
         root.pluginUpdatePun = "Update hit a snag. The repo might have local changes or need attention.";
+        root.notifyIfClosed(root.pluginUpdateStatus);
       }
     }
   }
