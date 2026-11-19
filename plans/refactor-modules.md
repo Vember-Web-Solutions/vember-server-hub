@@ -174,6 +174,23 @@ Work that fell out of the split, done in the same arc:
   when nothing happened. The status now comes from the exit code — success on 0,
   `Shell.failureMessage` with the stderr otherwise, plus a hint to edit the file
   directly. `TestEditorLaunchFailure` pins it.
+- **Container selection drifted on poll:** the container detail panel tracked
+  its selection by list index (`selectedContainerIndex`). The 15s poll
+  reassigns `hub.dockerContainers` and can reorder it — a container created at
+  the top shifts every index down — so an index-based selection silently
+  pointed at a *different* container, and the detail panel's actions (including
+  Remove) targeted the wrong one. Selection is now keyed by container name and
+  the detail's `selected` is looked up by name. `TestContainerSelectionStability`
+  pins it.
+- **Silent launcher failures:** `steamLaunchProc` and `bnetLaunchProc` set a
+  "Launching …" message and never inspected the exit code.
+  `omarchy-launch-battlenet` exits 1 with a message when Battle.net is not
+  installed, and a missing or failed binary is equally silent, so the user was
+  left looking at a "Launching…" message with nothing happening. Both now
+  surface a non-zero exit through `Shell.failureMessage`; a zero exit stays
+  quiet because a launcher runs in the foreground until the app closes (and
+  `steam` exits 0 immediately when it is already running).
+  `TestLauncherFailureSurfacing` pins it.
 
 ## Done when
 
@@ -182,16 +199,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 382 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,559 lines. The growth is comments, per-file
+- 386 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,584 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,368) and `ui/` (4,179) was already there.
-- The three monoliths went 7,694 → 2,988 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,581. `Panel.qml` grew by the
+  moved into `model/*.mjs` (1,368) and `ui/` (4,190) was already there.
+- The three monoliths went 7,694 → 3,002 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,595. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,581, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,861 lines across 11 files and drives the real modules
+  largest file is now `Panel.qml` at 2,595, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 2,939 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.5, build 72 → 81.
+- Version 0.1.0 → 0.6.6, build 72 → 82.
