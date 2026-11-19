@@ -150,6 +150,23 @@ Work that fell out of the split, done in the same arc:
   read it. It now sets the flag, leaves it for `codeServerProc` to read and
   clear at the end of the chain, and the install handler no longer restarts
   `codeServerProc` by hand. `TestDevToolsTargetedRefresh` pins it.
+- **Dead state and wasted poll work:** a dead-state sweep found seven properties
+  assigned but never read: `gameMountSummary`, `dockerPullingImage`, `bnetNote`,
+  `sshHostKeys`, `tailscaleStatusText`, `restartingForServerName` and
+  `targetLineNo`. Two of them were fed by processes — `tsStatusProc`
+  (`tailscale status`) and `sshHostKeysProc` (`ssh-keygen -lf`) — that ran real
+  shell-outs on every 15s poll while nothing displayed the result, so the cost
+  was two extra processes per tick, not just clutter. All removed. `steamNote`
+  was computed but never shown; it now captions the Steam count. A new
+  `TestNoDeadProperties` fails if any property is declared but never read,
+  mutation-verified.
+- **Stopped installs left stale counts:** `finishInstall` schedules the
+  post-install refresh (`installRefreshTimer` / `installRefreshTimer2`) so game
+  and dev counts update. `stopInstall`, which the "dead" watchdog verdict calls
+  when a terminal closes mid-install, did not, so the panel kept pre-install
+  counts forever because nothing else re-scans. `stopInstall` now schedules the
+  same refresh; `TestInstallWatchdog::test_stop_install_refreshes_counts_like_finish`
+  pins it.
 
 ## Done when
 
@@ -158,16 +175,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 378 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,572 lines. The growth is comments, per-file
+- 380 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,545 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,368) and `ui/` (4,178) was already there.
-- The three monoliths went 7,694 → 3,002 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,595. `Panel.qml` grew by the
+  moved into `model/*.mjs` (1,368) and `ui/` (4,179) was already there.
+- The three monoliths went 7,694 → 2,974 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,567. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
-  wired to the tested parser; the largest file is now `Panel.qml` at 2,595,
-  then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,727 lines across 11 files and drives the real modules
+  wired to the tested parser and shed the dead state found in the audit; the
+  largest file is now `Panel.qml` at 2,567, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 2,808 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.3, build 72 → 79.
+- Version 0.1.0 → 0.6.4, build 72 → 80.
