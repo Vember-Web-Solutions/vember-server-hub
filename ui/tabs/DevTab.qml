@@ -647,6 +647,17 @@ Column {
                 enabled: !hub.codeServerBusy
                 onClicked: panel.confirmRemoveCodeServer = true
               }
+              Button {
+                // Escape hatch for a setup that hangs. Every other button that
+                // could recover is disabled while codeServerBusy, and the chain
+                // has no timeout, so without this the only way out is a shell
+                // restart.
+                visible: hub.codeServerBusy
+                iconText: "󰅖"
+                text: "Stop waiting"
+                tooltipText: "Stop waiting for the current operation and re-enable the controls"
+                onClicked: hub.cancelCodeServerSetup()
+              }
             }
           }
 

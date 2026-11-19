@@ -858,6 +858,67 @@ class TestTransientStateIsClearedOnClose:
         )
 
 
+class TestCodeServerSetupHasAnEscapeHatch:
+    """A hung setup must not lock the Code Server UI until a shell restart.
+
+    The setup chain has no timeout, and start, stop, uninstall and set-up-again
+    are all disabled while codeServerBusy. A stall timer that fired during a
+    legitimately slow pull would be a false failure, so the escape hatch is a
+    user-driven cancel instead. It must stop every process in the chain, not
+    just the last one, or a stopped pull would still be running.
+    """
+
+    CHAIN = (
+        "codeServerSetupPrepProc",
+        "codeServerSetupPullProc",
+        "codeServerSetupRunProc",
+        "codeServerSetupProvisionProc",
+        "codeServerActionProc",
+        "codeServerSetupPollTimer",
+    )
+
+    def _body(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"function cancelCodeServerSetup\(\)\s*\{", text)
+        assert match, "no cancelCodeServerSetup() in Panel.qml"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced cancelCodeServerSetup")
+
+    @pytest.mark.parametrize("proc", CHAIN)
+    def test_cancel_stops_each_process_in_the_chain(self, proc):
+        body = self._body()
+        assert proc in body, (
+            "cancelCodeServerSetup must stop %s; leaving one running means the "
+            "cancel only looks like it worked" % proc
+        )
+
+    def test_cancel_clears_the_busy_flag(self):
+        assert re.search(r"codeServerBusy\s*=\s*false", self._body()), (
+            "cancelCodeServerSetup must clear codeServerBusy or the buttons stay "
+            "disabled"
+        )
+
+    def test_the_cancel_is_reachable_from_the_ui(self):
+        text = read(REPO / "ui" / "tabs" / "DevTab.qml")
+        assert "hub.cancelCodeServerSetup()" in text, (
+            "the Dev tab must offer the cancel, or it is unreachable"
+        )
+        # And it must be visible precisely while busy, which is when it is needed.
+        at = text.index("hub.cancelCodeServerSetup()")
+        window = text[max(0, at - 600):at]
+        assert "visible: hub.codeServerBusy" in window, (
+            "the cancel button must be visible while codeServerBusy"
+        )
+
+
 class TestDevToolsTargetedRefresh:
     """refreshDevTools() must be a targeted refresh, not a full repo rescan.
 

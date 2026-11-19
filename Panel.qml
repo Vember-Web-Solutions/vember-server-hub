@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.29"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 105
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.30"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 106
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -592,6 +592,35 @@ Item {
     codeServerActionProc.actionName = "uninstall";
     codeServerActionProc.command = ["docker", "rm", "-f", DevTools.codeServerContainer()];
     codeServerActionProc.running = true;
+  }
+
+  // The setup chain has no timeout: a genuinely hung docker exec would leave
+  // codeServerBusy true forever, and every button that could recover — start,
+  // stop, uninstall, set up again — is disabled while it is. A stall timer that
+  // fired during a legitimately slow pull would report a false failure, so the
+  // escape hatch is the user's own decision instead: stop waiting, clear the
+  // busy flag, and let them retry. The container may be left half-configured,
+  // which the message says, and a retry recreates it.
+  function cancelCodeServerSetup() {
+    if (!codeServerBusy)
+      return;
+    codeServerSetupPrepProc.running = false;
+    codeServerSetupPullProc.running = false;
+    codeServerSetupRunProc.running = false;
+    codeServerSetupProvisionProc.running = false;
+    codeServerActionProc.running = false;
+    codeServerSetupPollTimer.stop();
+    codeServerSetupPollsLeft = 0;
+    codeServerSetupProvisionAfterStart = false;
+    codeServerBusy = false;
+    codeServerSetupStage = "error";
+    codeServerSetupProgress = 0;
+    codeServerSetupDetail = "Setup stopped by request. The container may be half-configured; set it up again to retry.";
+    codeServerStatusText = codeServerSetupDetail;
+    _appendCodeServerSetupLog("Stopped by request.");
+    lastActionMessage = "VS Code Server setup stopped.";
+    notifyIfClosed(lastActionMessage);
+    refreshCodeServer();
   }
 
   // Opens a URL in the user's browser. Qt.openUrlExternally returns false when

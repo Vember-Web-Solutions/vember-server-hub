@@ -399,6 +399,16 @@ Work that fell out of the split, done in the same arc:
   lost a dead `? "" : ""` ternary.
   `TestBackgroundActionFailuresAreVisible` covers both failure branches and
   the completion notice.
+- **A hung Code Server setup locked the tab until a shell restart.** This was
+  the documented limitation: the setup chain has no timeout, and start, stop,
+  uninstall and set-up-again are all disabled while `codeServerBusy`. A stall
+  timer that fired during a legitimately slow pull would be a false failure, so
+  the escape hatch is the user's decision instead. `cancelCodeServerSetup()`
+  stops every process in the chain (prep, pull, run, provision, action) and the
+  poll timer, clears the busy flag, and leaves a message saying the container
+  may be half-configured and a retry recreates it. The Dev tab shows a "Stop
+  waiting" button while busy. `TestCodeServerSetupHasAnEscapeHatch` pins each
+  process and the UI path.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -418,16 +428,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 475 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,831 lines. The growth is comments, per-file
+- 483 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,871 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,201 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,777. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,230 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,806. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,777, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,119 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,806, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 4,180 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.29, build 72 → 105.
+- Version 0.1.0 → 0.6.30, build 72 → 106.
