@@ -1711,10 +1711,13 @@ Item {
     onTriggered: {
       if (!root.installRunning)
         return;
+      // Exit codes: 0 alive, 1 lock present but pid dead, 2 no lock,
+      // 3 lock present but pid not written yet (transient during the write).
       installLockCheckProc.command = ["sh", "-c",
         "k=\"$1\"; [ -f \"$k\" ] || exit 2; " +
         "pid=$(sed -n 2p \"$k\" 2>/dev/null); " +
-        "[ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null",
+        "[ -n \"$pid\" ] || exit 3; " +
+        "kill -0 \"$pid\" 2>/dev/null && exit 0; exit 1",
         "sh", InstallLog.lockPath(root.homeDir)];
       installLockCheckProc.running = true;
     }
@@ -1732,13 +1735,17 @@ Item {
           root.extraAppInstallStatus = "Still waiting — the terminal may be asking for a password. Tracking continues.";
           root.lastActionMessage = root.extraAppInstallStatus;
         }
+      } else if (code === 3) {
+        // The lock is there but its pid line is not readable yet. This is a
+        // moment during the wrapper's write, not a dead terminal; wait for the
+        // next tick rather than stopping a live install.
       } else if (code === 2 && Shell.trim(root.installLog).length === 0) {
         // No lock and no output: the terminal never started. The tail would
         // otherwise wait on a file that will never be written.
         root.finishInstall(null);
         root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.extraAppInstallStatus;
-      } else if (code !== 2) {
+      } else if (code === 1) {
         // Lock present, pid gone: the terminal was closed before the exit
         // marker was written, so tracking would never end on its own.
         root.stopInstall();
