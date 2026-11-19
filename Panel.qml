@@ -2056,6 +2056,13 @@ Item {
         } else {
           root.lastActionMessage = "Hub settings saved.";
         }
+      } else {
+        // A non-zero exit with empty stderr would otherwise leave the previous
+        // status message in place, so the user believes the settings saved.
+        // The stderr handler may already have set a more specific message.
+        if (Shell.trim(root.lastActionMessage).indexOf("Failed to save hub config") !== 0)
+          root.lastActionMessage = Shell.failureMessage(
+            "Failed to save hub config", code, stderr.text);
       }
       root.pendingConfigRestart = false;
     }

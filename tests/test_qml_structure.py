@@ -1034,3 +1034,42 @@ class TestSshKeySelectionStability:
         assert ".keyData === want" in window, (
             "the derived index must compare keyData to find the selected key"
         )
+
+
+class TestConfigWriteFailureSurfacing:
+    """A failed hub-config write must not look like a successful save.
+
+    configWriteProc only handled a zero exit. On a non-zero exit with empty
+    stderr the previous status message stayed up, so the user believed their
+    settings were saved. A non-zero exit must surface through
+    Shell.failureMessage (the stderr handler may already have set a specific
+    message, so it must not be overwritten).
+    """
+
+    @staticmethod
+    def _proc_block():
+        text = read(REPO / "Panel.qml")
+        id_match = re.search(r"^\s*id:\s*configWriteProc\s*$", text, re.M)
+        assert id_match, "no configWriteProc in Panel.qml"
+        open_idx = text.rfind("{", 0, id_match.start())
+        depth = 0
+        for i in range(open_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[open_idx:i + 1]
+        raise AssertionError("unbalanced braces in configWriteProc")
+
+    def test_nonzero_exit_surfaces_failure(self):
+        block = self._proc_block()
+        assert "failureMessage" in block, (
+            "a non-zero config-write exit must surface through Shell.failureMessage"
+        )
+        # The failure branch must exist inside onExited, not only the stderr handler.
+        exit_idx = block.index("onExited:")
+        exit_body = block[exit_idx:]
+        assert "else" in exit_body, (
+            "onExited must have an else branch for a non-zero exit"
+        )
