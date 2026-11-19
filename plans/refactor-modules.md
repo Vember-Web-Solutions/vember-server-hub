@@ -90,6 +90,18 @@ Work that fell out of the split, done in the same arc:
   sibling temp file and renames it into place, so a crash cannot leave a
   truncated file that parses as corrupt and blanks every setting. The payload
   is passed as its own argument, never interpolated into the shell string.
+- **Install watchdog:** closing the terminal midway used to strand the panel on
+  "running" forever — the log had output, the `tail -F` never ended, and no
+  exit marker was written, while the watchdog bailed out as soon as the log was
+  non-empty. Liveness now comes from the lock file's pid, checked on a
+  repeating timer regardless of log content, and the reattach path starts it
+  too. `InstallLog.watchdogVerdict` / `lockCheckCommand` put the branch decision
+  and the shell check in the model layer, tested by running the command against
+  real lock files. The Omarchy update flow had the identical flaw and now has
+  the same watchdog; its lock stores the pid on line 1 rather than line 2.
+- **Docker pull failures:** the last output line is kept and folded into the
+  result, so a failed pull says why (bad tag, no space, network) instead of only
+  "(code 1)".
 
 ## Done when
 
@@ -98,13 +110,14 @@ plugin warnings in the journal.
 
 ## Result
 
-- 339 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,395 lines. The growth is comments, per-file
+- 356 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,508 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,310) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,888 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,481. The largest file is now
-  `Panel.qml` at 2,481, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,162 lines across 11 files and drives the real modules
+  moved into `model/*.mjs` (1,351) and `ui/` (4,173) was already there.
+- The three monoliths went 7,694 → 2,960 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,553. `Panel.qml` grew by the
+  two install/update watchdogs and their comments; the largest file is now
+  `Panel.qml` at 2,553, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 2,341 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.5.0, build 72 → 75.
+- Version 0.1.0 → 0.6.0, build 72 → 76.
