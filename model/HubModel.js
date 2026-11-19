@@ -449,6 +449,9 @@ function statusLabel(ok, yesText, noText) {
 function devToolCheckCommand() {
   // Outputs lines: name\tinstalled\tpath\tversion
   var script = [
+    // The panel does not inherit a login shell's PATH, so include the usual
+    // per-user install dirs or uv/gh installed there look missing.
+    "PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/pnpm:$PATH\"; export PATH;",
     "check(){ n=\"$1\"; shift; p=\"\"; v=\"\"; for c in \"$@\"; do if command -v \"$c\" >/dev/null 2>&1; then p=$(command -v \"$c\"); break; fi; done;",
     "if [ -n \"$p\" ]; then",
     "  case \"$n\" in",
