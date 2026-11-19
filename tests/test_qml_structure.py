@@ -1284,6 +1284,19 @@ class TestExternalHandOffReachability:
             name + " must only close the hub once the browser opened"
         )
 
+    def test_install_and_update_never_run_together(self):
+        # Both terminals use the `vember-install` window class, which is what
+        # the focus step selects on. With two of them, focus lands on whichever
+        # mapped first and the other one's prompts are missed.
+        install = self._fn("runInstallInTerminal")
+        update = self._fn("runOmarchyUpdateInPanel")
+        assert "omarchyUpdateRunning" in install, (
+            "runInstallInTerminal must refuse while an Omarchy update runs"
+        )
+        assert "installRunning" in update, (
+            "runOmarchyUpdateInPanel must refuse while an install runs"
+        )
+
     def test_reopening_mid_install_keeps_the_status_line(self):
         # The hub closes itself when an install starts, so reopening it while
         # the install runs is the normal path. refreshAll() clears the status

@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.16"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 92
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.17"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 93
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -851,6 +851,14 @@ Item {
       lastActionMessage = "An install is already running: " + (installTitle.length > 0 ? installTitle : installRunningId);
       return;
     }
+    // The install and update terminals share the `vember-install` window class,
+    // which is what the focus step selects on. Two of them at once would make
+    // the focus land on whichever mapped first, so the prompts of the other
+    // would be missed. Only one interactive run at a time.
+    if (omarchyUpdateRunning) {
+      lastActionMessage = "An Omarchy update is running. Let it finish before installing.";
+      return;
+    }
     var command = Shell.trim(cmd);
     if (command.length === 0)
       command = "echo 'No install command configured.'; exit 1";
@@ -988,6 +996,13 @@ Item {
   function runOmarchyUpdateInPanel() {
     if (omarchyUpdateRunning)
       return;
+    // Same reason as runInstallInTerminal: both terminals share the
+    // `vember-install` window class, so only one may run at a time.
+    if (installRunning) {
+      omarchyUpdateStatus = "An install is running. Let it finish before updating Omarchy.";
+      lastActionMessage = omarchyUpdateStatus;
+      return;
+    }
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
     var lockPath = InstallLog.omarchyLockPath(homeDir);
     var termCmd = "printf '%s\\n' \"$$\" > " + Shell.quote(lockPath) +
