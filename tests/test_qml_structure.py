@@ -732,3 +732,27 @@ class TestSteamScanPollSafety:
             "steamVdfView must only be reloaded inside an `if (!keep)` guard, "
             "not on every poll (the reload restarts the manifest scan)"
         )
+
+
+class TestDockerDetailPollSafety:
+    """Selecting a container must not re-query its size on every poll.
+
+    hub.dockerContainers is reassigned to fresh objects by the 15s poll, so the
+    detail panel's `selected` object changes identity every tick. Keying the
+    size query off `onSelectedChanged` therefore re-ran `docker ps -s` and
+    blanked the size to "Querying…" every 15 seconds. It must key off the
+    container *name*, which only changes when the user picks another container.
+    """
+
+    def test_size_query_keyed_off_name_not_object(self):
+        text = read(REPO / "ui" / "tabs" / "ContainersTab.qml")
+        assert "property string selectedName:" in text, (
+            "the detail panel must expose a name-keyed selection property"
+        )
+        assert "onSelectedNameChanged:" in text, (
+            "the size query must fire on name change, not object identity"
+        )
+        assert "onSelectedChanged:" not in text, (
+            "onSelectedChanged fires every poll (dockerContainers is reassigned); "
+            "use onSelectedNameChanged so the size query is not re-run each tick"
+        )

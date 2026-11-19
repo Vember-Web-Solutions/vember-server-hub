@@ -154,13 +154,18 @@ Column {
         spacing: 10
 
         property var selected: (containersTab.selectedContainerIndex >= 0 && containersTab.selectedContainerIndex < hub.dockerContainers.length) ? hub.dockerContainers[containersTab.selectedContainerIndex] : null
+        // Key the size query off the container *name*, not the object. The 15s
+        // poll reassigns hub.dockerContainers to fresh objects, so `selected`
+        // changes identity every tick; onSelectedChanged would then re-run the
+        // size query and blank the size to "Querying…" every 15 seconds.
+        property string selectedName: selected ? (selected.name || "") : ""
         property bool selBusy: selected ? (hub.dockerBusy && hub.dockerBusyName === selected.name) : false
         property bool selPulling: selected ? (hub.dockerPullActive && hub.dockerPullingName === selected.name) : false
         property bool selPullResult: selected ? (!hub.dockerPullActive && hub.dockerPullingName === selected.name && Shell.trim(hub.dockerPullStatus).length > 0) : false
 
-        onSelectedChanged: {
+        onSelectedNameChanged: {
           if (hub && hub.refreshDockerDetailSize)
-            hub.refreshDockerDetailSize(selected ? selected.name : "");
+            hub.refreshDockerDetailSize(selectedName);
         }
 
         Text {
