@@ -358,3 +358,62 @@ class TestManifest:
         assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"]), (
             "version must be MAJOR.MINOR.PATCH, got %s" % manifest["version"]
         )
+
+
+class TestInstallWatchdog:
+    """The install watchdog must end tracking even when the log has output.
+
+    The original bug: a terminal closed midway leaves some output behind and a
+    `tail -F` that never ends. The watchdog used to return early whenever the
+    log was non-empty, so the panel sat on "running" forever. Liveness is the
+    lock file's job, not the log's, so these checks pin that separation.
+    """
+
+    @staticmethod
+    def _timer_block(name):
+        # QML declares timers as `Timer { id: installStallTimer ... }`, so find
+        # the id line and walk back to the opening brace of its block.
+        text = read(REPO / "Panel.qml")
+        id_match = re.search(r"^\s*id:\s*" + name + r"\s*$", text, re.M)
+        assert id_match, "no `id: %s` in Panel.qml" % name
+        open_idx = text.rfind("{", 0, id_match.start())
+        assert open_idx >= 0, "no opening brace before `id: %s`" % name
+        depth = 0
+        for i in range(open_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[open_idx:i + 1]
+        raise AssertionError("unbalanced braces in %s" % name)
+
+    def test_watchdog_repeats(self):
+        block = self._timer_block("installStallTimer")
+        assert re.search(r"\brepeat:\s*true", block), (
+            "the watchdog must repeat; a one-shot timer cannot catch a terminal "
+            "closed long after the install started"
+        )
+
+    def test_watchdog_does_not_bail_on_log_content(self):
+        block = self._timer_block("installStallTimer")
+        assert "installLog" not in block, (
+            "the watchdog must not look at the log: a terminal closed after the "
+            "first line would never be noticed. Check the lock pid instead."
+        )
+
+    def test_watchdog_checks_the_lock_pid(self):
+        block = self._timer_block("installStallTimer")
+        assert re.search(r"kill -0", block), (
+            "liveness is checked with `kill -0 <pid>` on the lock's pid"
+        )
+
+    def test_reattach_starts_the_watchdog(self):
+        # The reattach branch must restart the watchdog, or an install the
+        # panel re-attached to would never be watched for a closed terminal.
+        text = read(REPO / "Panel.qml")
+        reattach = text.index("Reattached to the running install")
+        window = text[reattach:reattach + 900]
+        assert "installStallTimer.restart()" in window, (
+            "the reattach path must restart installStallTimer"
+        )

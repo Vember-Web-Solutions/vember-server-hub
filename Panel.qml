@@ -1636,8 +1636,11 @@ Item {
           installLogProc.command = ["tail", "-n", "+1", "-F", InstallLog.logPath(root.homeDir)];
           installLogProc.running = true;
           // The lock proves the terminal opened, so only nudge for prompts;
-          // the stall timer must not stop a genuinely live install.
+          // the watchdog verifies liveness on its own and must run for a
+          // reattached install too, or a terminal closed after the panel
+          // reloaded would never be noticed.
           installNoOutputTimer.restart();
+          installStallTimer.restart();
           return;
         }
         if (Shell.trim(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
@@ -1691,18 +1694,27 @@ Item {
     }
   }
 
-  // Escalation: silence usually means a password prompt is waiting on the tty,
-  // which never reaches the log. Ask the lock file whether the terminal is
-  // still alive before giving up on it.
+  // Watchdog: the wrapper writes its pid to the lock file before it runs the
+  // install and removes it only after writing the exit marker. So the lock
+  // answers "is the terminal still working?" whether or not the log has output.
+  //
+  // This must NOT depend on the log being empty. A terminal killed midway
+  // leaves output behind and a `tail -F` that never ends, and the panel used
+  // to sit on "running" forever because the old check bailed out as soon as a
+  // single line had arrived. Checking liveness directly means a live install
+  // (including one waiting on a password prompt) is never stopped, while a
+  // dead one is noticed within one interval.
   Timer {
     id: installStallTimer
-    interval: 120000
-    repeat: false
+    interval: 30000
+    repeat: true
     onTriggered: {
-      if (!root.installRunning || Shell.trim(root.installLog).length > 0)
+      if (!root.installRunning)
         return;
       installLockCheckProc.command = ["sh", "-c",
-        "pid=$(sed -n 2p \"$1\" 2>/dev/null); [ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null",
+        "k=\"$1\"; [ -f \"$k\" ] || exit 2; " +
+        "pid=$(sed -n 2p \"$k\" 2>/dev/null); " +
+        "[ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null",
         "sh", InstallLog.lockPath(root.homeDir)];
       installLockCheckProc.running = true;
     }
@@ -1714,14 +1726,27 @@ Item {
       if (!root.installRunning)
         return;
       if (code === 0) {
-        root.extraAppInstallStatus = "Still waiting — the terminal may be asking for a password. Tracking continues.";
+        // Alive. Only nudge about a password prompt when nothing has been
+        // written yet; otherwise leave the streamed output alone.
+        if (Shell.trim(root.installLog).length === 0) {
+          root.extraAppInstallStatus = "Still waiting — the terminal may be asking for a password. Tracking continues.";
+          root.lastActionMessage = root.extraAppInstallStatus;
+        }
+      } else if (code === 2 && Shell.trim(root.installLog).length === 0) {
+        // No lock and no output: the terminal never started. The tail would
+        // otherwise wait on a file that will never be written.
+        root.finishInstall(null);
+        root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
         root.lastActionMessage = root.extraAppInstallStatus;
-        installStallTimer.restart();
-      } else {
+      } else if (code !== 2) {
+        // Lock present, pid gone: the terminal was closed before the exit
+        // marker was written, so tracking would never end on its own.
         root.stopInstall();
-        root.extraAppInstallStatus = "The install terminal is no longer running. Tracking stopped.";
+        root.extraAppInstallStatus = "The install terminal closed before finishing. Tracking stopped.";
         root.lastActionMessage = root.extraAppInstallStatus;
       }
+      // code === 2 with output means the wrapper is mid-teardown; the exit
+      // marker is already in the log and `tail` will finish on its next read.
     }
   }
 
