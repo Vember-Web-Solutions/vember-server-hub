@@ -200,6 +200,12 @@ Work that fell out of the split, done in the same arc:
   `sshSelectedKeyIndex` is a readonly property derived from it, so every read
   site keeps working while removal targets the key the user actually chose.
   `TestSshKeySelectionStability` pins it.
+- **Silent config-write failure:** `configWriteProc` only handled a zero exit.
+  On a non-zero exit with empty stderr the previous status message stayed up, so
+  the user believed their settings saved when the write had failed. The
+  non-zero branch now surfaces through `Shell.failureMessage`, without
+  overwriting the more specific message the stderr handler may already have set.
+  `TestConfigWriteFailureSurfacing` pins it.
 
 ## Done when
 
@@ -208,16 +214,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 389 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,597 lines. The growth is comments, per-file
+- 390 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,604 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,368) and `ui/` (4,190) was already there.
-- The three monoliths went 7,694 → 3,015 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,608. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,615. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,608, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,977 lines across 11 files and drives the real modules
+  largest file is now `Panel.qml` at 2,615, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,016 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.7, build 72 → 83.
+- Version 0.1.0 → 0.6.8, build 72 → 84.
