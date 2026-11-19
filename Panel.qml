@@ -1635,6 +1635,11 @@ Item {
     onExited: function(code) {
       if (root.installRunning) {
         root.installRunning = false;
+        // The stream can end without the exit marker (for example the log file
+        // was removed). Stop the watchdog timers here too, or they keep firing
+        // every 30s for the rest of the session.
+        installNoOutputTimer.stop();
+        installStallTimer.stop();
         if (Shell.trim(root.extraAppInstallStatus).indexOf("Installing") === 0)
           root.extraAppInstallStatus = "Install log stream ended.";
         root.lastActionMessage = root.extraAppInstallStatus;
