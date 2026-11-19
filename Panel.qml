@@ -839,7 +839,8 @@ Item {
     }
     installTerminalProc.running = false;
     installTerminalProc.command = ["sh", "-c",
-      HubModel.installTerminalScript(installTitle, command, logPath, titlePath)];
+      HubModel.installTerminalScript(installTitle, command, logPath, titlePath,
+        HubModel.installLockPath(homeDir), installRunningId)];
     installTerminalProc.running = true;
     installLogProc.running = false;
     installLogProc.command = ["tail", "-n", "+1", "-F", logPath];
@@ -894,8 +895,9 @@ Item {
     extraAppInstallStatus = "";
     installClearProc.running = false;
     installClearProc.command = ["sh", "-c",
-      "rm -f \"$1\" \"$2\"", "sh",
-      HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir)];
+      "rm -f \"$1\" \"$2\" \"$3\"", "sh",
+      HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir),
+      HubModel.installLockPath(homeDir)];
     installClearProc.running = true;
   }
 
@@ -910,8 +912,17 @@ Item {
       return;
     installLogReadProc.running = false;
     installLogReadProc.command = ["sh", "-c",
-      "t=\"$1\"; l=\"$2\"; [ -f \"$t\" ] && cat \"$t\" || true; printf '\\n---VEMBER-LOG---\\n'; [ -f \"$l\" ] && tail -c 12000 \"$l\" || true",
-      "sh", HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir)];
+      "t=\"$1\"; l=\"$2\"; k=\"$3\"; " +
+      "[ -f \"$t\" ] && cat \"$t\" || true; " +
+      "printf '\\n---VEMBER-STATE---\\n'; " +
+      "if [ -f \"$k\" ]; then " +
+      "id=$(sed -n 1p \"$k\"); pid=$(sed -n 2p \"$k\"); " +
+      "if [ -n \"$pid\" ] && kill -0 \"$pid\" 2>/dev/null; then printf 'ALIVE\\n%s\\n' \"$id\"; else printf 'DEAD\\n%s\\n' \"$id\"; fi; " +
+      "else printf 'NONE\\n\\n'; fi; " +
+      "printf -- '---VEMBER-LOG---\\n'; " +
+      "[ -f \"$l\" ] && tail -c 12000 \"$l\" || true",
+      "sh", HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir),
+      HubModel.installLockPath(homeDir)];
     installLogReadProc.running = true;
   }
 
@@ -1614,15 +1625,40 @@ Item {
         if (root.installRunning)
           return;
         var raw = String(text || "");
-        var sep = raw.indexOf("---VEMBER-LOG---");
-        var title = sep >= 0 ? HubModel.trimText(raw.slice(0, sep)) : "";
-        var body = sep >= 0 ? raw.slice(sep + "---VEMBER-LOG---".length) : raw;
+        var stateMark = "---VEMBER-STATE---";
+        var logMark = "---VEMBER-LOG---";
+        var stateIdx = raw.indexOf(stateMark);
+        var logIdx = raw.indexOf(logMark);
+        var title = stateIdx >= 0 ? HubModel.trimText(raw.slice(0, stateIdx)) : HubModel.trimText(raw);
+        var stateBlock = (stateIdx >= 0 && logIdx > stateIdx)
+          ? raw.slice(stateIdx + stateMark.length, logIdx) : "";
+        var body = logIdx >= 0 ? raw.slice(logIdx + logMark.length) : raw;
+        var stateLines = stateBlock.split("\n");
+        var state = HubModel.trimText(stateLines[0] || "");
+        var runningId = HubModel.trimText(stateLines[1] || "");
         var parsed = HubModel.parseInstallLog(body, 12000);
-        if (HubModel.trimText(title).length > 0)
+        if (title.length > 0)
           root.installTitle = title;
         root.installLog = parsed.text;
+        if (state === "ALIVE" && runningId.length > 0) {
+          // The terminal is still working: reattach instead of showing a frozen log
+          root.installRunning = true;
+          root.installRunningId = runningId;
+          if (runningId.indexOf("dev:") === 0) {
+            root.devInstallBusy = true;
+            root.devInstallToolId = runningId.slice(4);
+          }
+          root.extraAppInstallStatus = "Reattached to the running install. Live output below.";
+          root.lastActionMessage = root.extraAppInstallStatus;
+          root.installLogProc.running = false;
+          root.installLogProc.command = ["tail", "-n", "+1", "-F", HubModel.installLogPath(root.homeDir)];
+          root.installLogProc.running = true;
+          root.installNoOutputTimer.restart();
+          root.installStallTimer.restart();
+          return;
+        }
         if (HubModel.trimText(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
-          var label = HubModel.trimText(title).length > 0 ? title.replace(/^Vember Install:\s*/, "") : "Install";
+          var label = title.length > 0 ? title.replace(/^Vember Install:\s*/, "") : "Install";
           if (parsed.finished) {
             if (parsed.exitCode === 0)
               root.extraAppInstallStatus = label + " finished.";

@@ -735,6 +735,12 @@ function installTitlePath(homeDir) {
   return installCacheDir(homeDir) + "/install-title.txt";
 }
 
+// Written by the install terminal itself (line 1: id, line 2: pid) so the
+// panel can reattach to an install that outlived the panel being closed.
+function installLockPath(homeDir) {
+  return installCacheDir(homeDir) + "/install.lock";
+}
+
 // Parses a captured install log. Returns the visible text plus the exit marker
 // state written by the terminal wrapper: [vember-install-exit:<code>]
 function parseInstallLog(text, limit) {
@@ -773,11 +779,17 @@ function shellQuote(value) {
 // Builds the shell script that opens the default terminal, tees output to the
 // log file, records the exit code marker, and tries to focus the new window.
 // Values are single-quoted so the outer shell cannot expand ${PIPESTATUS[...]}.
-function installTerminalScript(title, cmd, logPath, titlePath) {
+function installTerminalScript(title, cmd, logPath, titlePath, lockPath, id) {
   var dir = String(logPath).replace(/\/[^\/]*$/, "");
-  var inner = "( " + String(cmd || "") + " ) 2>&1 | tee " + shellQuote(logPath) +
+  var lock = String(lockPath || "");
+  var lockStart = lock.length > 0
+    ? "printf '%s\\n%s\\n' " + shellQuote(String(id || "")) + " \"$$\" > " + shellQuote(lock) + "; "
+    : "";
+  var lockEnd = lock.length > 0 ? "; rm -f " + shellQuote(lock) : "";
+  var inner = lockStart + "( " + String(cmd || "") + " ) 2>&1 | tee " + shellQuote(logPath) +
     "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi" +
     "; echo \"[vember-install-exit:${code}]\" | tee -a " + shellQuote(logPath) +
+    lockEnd +
     "; echo; echo 'Press Enter to close...'; read -r";
   return "mkdir -p " + shellQuote(dir) +
     " && printf '%s' " + shellQuote(title) + " > " + shellQuote(titlePath) +
