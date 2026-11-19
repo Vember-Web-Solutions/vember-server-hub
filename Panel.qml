@@ -312,7 +312,7 @@ Item {
     lastActionMessage = "";
     refreshTailscale();
     refreshDocker();
-    refreshGames();
+    refreshGames(preserveSelection === true);
     refreshGameMount();
     refreshSsh();
     refreshDev(preserveSelection === true);
@@ -705,17 +705,20 @@ Item {
     if (!dfProc.running) dfProc.running = true;
   }
 
-  function refreshGames() {
-    steamNote = "";
-    bnetNote = "";
+  function refreshGames(preserveSelection) {
+    var keep = preserveSelection === true;
+    if (!keep) {
+      steamNote = "";
+      bnetNote = "";
+      steamInstalled = false;
+      bnetInstalled = false;
+      steamRunning = false;
+      bnetRunning = false;
+      steamGameCount = -1;
+      steamDedicatedServers = [];
+      bnetGameCount = -1;
+    }
     var steamRoot = Gaming.steamRootPath(homeDir);
-    steamInstalled = false;
-    bnetInstalled = false;
-    steamRunning = false;
-    bnetRunning = false;
-    steamGameCount = -1;
-    steamDedicatedServers = [];
-    bnetGameCount = -1;
     if (!steamPgrepProc.running) steamPgrepProc.running = true;
     if (!bnetPgrepProc.running) bnetPgrepProc.running = true;
     steamDirProc.command = ["sh", "-c", "[ -d \"$1\" ] || command -v steam >/dev/null 2>&1", "sh", steamRoot];

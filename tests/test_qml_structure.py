@@ -543,3 +543,29 @@ class TestPollSafety:
             "the extra-apps scan must not be restarted while one is in flight, "
             "or a scan slower than the 15s poll never completes"
         )
+
+    def test_refresh_games_honours_preserve(self):
+        # The games tab has the same flicker as the Dev tab: counts blank to
+        # "—" and the dedicated-server list empties if the poll resets them
+        # every 15 seconds. The resets must sit behind the keep guard.
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshGames\((\w+)\)", text)
+        assert fn, "refreshGames must take a preserve flag"
+        body_start = text.index("{", fn.end())
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshGames")
+        guard = body.index("if (!keep)")
+        for prop in ("steamGameCount = -1", "steamDedicatedServers = []", "bnetGameCount = -1"):
+            idx = body.index(prop)
+            assert idx > guard, (
+                "%s must only be reset when not preserving state" % prop
+            )
