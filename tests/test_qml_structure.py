@@ -273,7 +273,11 @@ class TestRequiredProperties:
         return None
 
     def test_required_properties_are_supplied(self):
-        hub = read(REPO / "HubPanel.qml")
+        # Components can be instantiated from HubPanel.qml or from a tab, so
+        # every QML file that builds one is a candidate site.
+        hosts = [read(REPO / "HubPanel.qml")] + [
+            read(p) for p in sorted((REPO / "ui" / "tabs").glob("*.qml"))
+        ]
         components = [
             p for p in list((REPO / "ui").glob("*.qml"))
             + list((REPO / "ui" / "tabs").glob("*.qml"))
@@ -284,9 +288,13 @@ class TestRequiredProperties:
             required = self._required(path)
             if not required:
                 continue
-            block = self._instantiation(name, hub)
+            block = None
+            for text in hosts:
+                block = self._instantiation(name, text)
+                if block is not None:
+                    break
             if block is None:
-                problems.append("%s is never instantiated in HubPanel.qml" % name)
+                problems.append("%s is never instantiated in any QML file" % name)
                 continue
             for prop in required:
                 if not re.search(r"\b" + prop + r"\s*:", block):
