@@ -465,8 +465,8 @@ Item {
 
     var prep = [
       "set -e",
-      "PASS=\"$1\"",
-      "PORT=\"$2\"",
+      "PASS=\"$VEMBER_CS_PASSWORD\"",
+      "PORT=\"$1\"",
       "echo \"Password received (length: ${#PASS}).\"",
       "if [ -z \"$PASS\" ]; then echo 'Password is empty; aborting.'; exit 1; fi",
       "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/.config/vember-code-server/user-data\" \"$HOME/.config/vember-code-server/bin\" \"$HOME/Projects\"",
@@ -563,10 +563,11 @@ Item {
       "if ! docker info >/dev/null 2>&1; then echo 'Docker is not running or not accessible (try starting docker and ensuring access).'; exit 12; fi",
       "echo 'READY'"
     ].join("\n");
-    codeServerSetupPrepProc.passwordArg = pass;
-    codeServerSetupPrepProc.portArg = String(p);
     codeServerSetupPrepProc.running = false;
-    codeServerSetupPrepProc.command = ["sh", "-c", prep, "sh", pass, String(p)];
+    // Password goes through the environment: /proc/<pid>/cmdline is world-readable,
+    // /proc/<pid>/environ is readable only by the owner.
+    codeServerSetupPrepProc.environment = { VEMBER_CS_PASSWORD: pass };
+    codeServerSetupPrepProc.command = ["sh", "-c", prep, "sh", String(p)];
     codeServerSetupPrepProc.running = true;
   }
 
@@ -2170,8 +2171,6 @@ Item {
 
   Process {
     id: codeServerSetupPrepProc
-    property string passwordArg: ""
-    property string portArg: ""
     stdout: SplitParser {
       onRead: function(line) {
         root._appendCodeServerSetupLog(line);
