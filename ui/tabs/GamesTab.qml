@@ -256,6 +256,7 @@ Column {
                 Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
               }
             }
+            Text { visible: Shell.trim(hub.steamNote).length > 0; textFormat: Text.PlainText; text: hub.steamNote; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
           }
 
           // Battle.net
