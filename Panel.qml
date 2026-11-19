@@ -79,7 +79,6 @@ Item {
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
-  property string extraAppInstallBusyId: ""
   property string extraAppInstallStatus: ""
 
   // Shared install runner (launchers/apps + dev tool terminal installs)
@@ -830,7 +829,6 @@ Item {
     installRunningId = String(id || "");
     installTitle = String(title || "Install");
     installLog = "";
-    extraAppInstallBusyId = installRunningId;
     extraAppInstallStatus = "Installing " + (label || installTitle) + " in the default terminal — answer any prompts there. Live output below.";
     lastActionMessage = extraAppInstallStatus;
     if (installIsDev) {
@@ -855,7 +853,6 @@ Item {
     installNoOutputTimer.stop();
     installStallTimer.stop();
     installRunning = false;
-    extraAppInstallBusyId = "";
     var label = HubModel.trimText(installTitle).length > 0 ? installTitle.replace(/^Vember Install:\s*/, "") : "Install";
     if (code === 0)
       extraAppInstallStatus = label + " finished.";
@@ -879,7 +876,6 @@ Item {
     installNoOutputTimer.stop();
     installStallTimer.stop();
     installRunning = false;
-    extraAppInstallBusyId = "";
     if (installIsDev) {
       devInstallBusy = false;
       devInstallToolId = "";
@@ -1603,7 +1599,6 @@ Item {
     onExited: function(code) {
       if (root.installRunning) {
         root.installRunning = false;
-        root.extraAppInstallBusyId = "";
         if (HubModel.trimText(root.extraAppInstallStatus).indexOf("Installing") === 0)
           root.extraAppInstallStatus = "Install log stream ended.";
         root.lastActionMessage = root.extraAppInstallStatus;
