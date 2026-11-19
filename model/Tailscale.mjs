@@ -74,6 +74,15 @@ export class Tailscale {
   }
   return out;
   }
+  // How many peers are online. Malformed rows are skipped.
+  onlinePeerCount(peers) {
+  var list = peers || [];
+  var n = 0;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].online) n++;
+  }
+  return n;
+  }
 }
 
 const impl = new Tailscale();
@@ -84,3 +93,4 @@ export function statusCommand(...args) { return impl.statusCommand(...args); }
 export function statusJsonCommand(...args) { return impl.statusJsonCommand(...args); }
 export function ipCommand(...args) { return impl.ipCommand(...args); }
 export function parseStatusJson(...args) { return impl.parseStatusJson(...args); }
+export function onlinePeerCount(...args) { return impl.onlinePeerCount(...args); }

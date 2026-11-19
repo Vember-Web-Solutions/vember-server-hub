@@ -58,6 +58,15 @@ export class SystemInfo {
   parsePgrepCount(text) {
   return shell.nonEmptyLines(text).length;
   }
+  // Storage pressure colour: green below 75%, amber from 75%, red from 90%.
+  // A missing or unparseable ratio reads as 0% rather than as an error.
+  storageUseColor(ratio) {
+  var r = Number(ratio || 0);
+  if (!isFinite(r)) r = 0;
+  if (r >= 0.90) return "#ef4444";
+  if (r >= 0.75) return "#eab308";
+  return "#22c55e";
+  }
 }
 
 const impl = new SystemInfo();
@@ -70,3 +79,4 @@ export function parseFindmnt(...args) { return impl.parseFindmnt(...args); }
 export function parseDfBytes(...args) { return impl.parseDfBytes(...args); }
 export function pgrepExactCommand(...args) { return impl.pgrepExactCommand(...args); }
 export function parsePgrepCount(...args) { return impl.parsePgrepCount(...args); }
+export function storageUseColor(...args) { return impl.storageUseColor(...args); }

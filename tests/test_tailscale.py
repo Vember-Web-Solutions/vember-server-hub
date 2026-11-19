@@ -103,3 +103,26 @@ class TestParseStatus:
         )
         assert out["ok"] is True
         assert out["backendState"] == "Stopped"
+
+
+class TestOnlinePeerCount:
+    def test_counts_online_peers(self, js):
+        out = js(
+            "console.log(JSON.stringify(Tailscale.onlinePeerCount("
+            "[{online:true},{online:false},{online:true}])))"
+        )
+        assert out == 2
+
+    def test_empty_and_null_are_zero(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Tailscale.onlinePeerCount([]), Tailscale.onlinePeerCount(null)]))"
+        )
+        assert out == [0, 0]
+
+    def test_malformed_rows_are_skipped(self, js):
+        out = js(
+            "console.log(JSON.stringify(Tailscale.onlinePeerCount("
+            "[null,{online:true},{}])))"
+        )
+        assert out == 1

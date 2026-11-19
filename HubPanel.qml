@@ -6,6 +6,9 @@ import qs.Commons
 import qs.Ui
 import "model/DevTools.mjs" as DevTools
 import "model/Shell.mjs" as Shell
+import "model/Docker.mjs" as Docker
+import "model/SystemInfo.mjs" as SystemInfo
+import "model/Tailscale.mjs" as Tailscale
 import "model/Config.mjs" as Config
 import "ui/tabs"
 import "ui"
@@ -134,42 +137,23 @@ PanelWindow {
   }
 
   function dockerStateTone(state) {
-    var s = Shell.trim(state).toLowerCase()
-    if (s === "running") return "#22c55e"
-    if (s === "restarting" || s === "paused" || s === "created") return "#eab308"
-    if (s === "exited" || s === "dead" || s === "removing") return "#ef4444"
-    return softText(0.5)
+    return Docker.stateTone(state) || softText(0.5)
   }
 
   function dockerStateBg(state) {
-    var s = Shell.trim(state).toLowerCase()
-    if (s === "running") return Qt.rgba(0.13, 0.77, 0.37, 0.18)
-    if (s === "restarting" || s === "paused" || s === "created") return Qt.rgba(0.92, 0.70, 0.03, 0.18)
-    if (s === "exited" || s === "dead" || s === "removing") return Qt.rgba(0.94, 0.27, 0.27, 0.18)
-    return softText(0.08)
+    return Docker.stateBackground(state) || softText(0.08)
   }
 
   function storageUseColor(ratio) {
-    var r = Number(ratio || 0)
-    if (r >= 0.90) return "#ef4444"
-    if (r >= 0.75) return "#eab308"
-    return "#22c55e"
+    return SystemInfo.storageUseColor(ratio)
   }
 
   function runningDockerCount() {
-    var n = 0
-    for (var i = 0; i < hub.dockerContainers.length; i++) {
-      if (hub.dockerContainers[i] && hub.dockerContainers[i].running) n++
-    }
-    return n
+    return Docker.runningCount(hub.dockerContainers)
   }
 
   function onlinePeerCount() {
-    var n = 0
-    for (var i = 0; i < hub.tailscalePeers.length; i++) {
-      if (hub.tailscalePeers[i] && hub.tailscalePeers[i].online) n++
-    }
-    return n
+    return Tailscale.onlinePeerCount(hub.tailscalePeers)
   }
 
   Rectangle {

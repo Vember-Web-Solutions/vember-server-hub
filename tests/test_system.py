@@ -111,3 +111,36 @@ class TestOmarchy:
 
             pytest.skip("not an Omarchy install: " + ", ".join(missing))
         assert not missing
+
+
+class TestStorageUseColor:
+    """Storage pressure thresholds. These are the values that rot silently."""
+
+    def test_comfortable_is_green(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "SystemInfo.storageUseColor(0), SystemInfo.storageUseColor(0.5),"
+            "SystemInfo.storageUseColor(0.749)]))"
+        )
+        assert out == ["#22c55e"] * 3
+
+    def test_seventy_five_percent_is_amber(self, js):
+        assert js("console.log(JSON.stringify(SystemInfo.storageUseColor(0.75)))") == "#eab308"
+
+    def test_eighty_nine_percent_is_still_amber(self, js):
+        assert js("console.log(JSON.stringify(SystemInfo.storageUseColor(0.899)))") == "#eab308"
+
+    def test_ninety_percent_is_red(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "SystemInfo.storageUseColor(0.9), SystemInfo.storageUseColor(1)]))"
+        )
+        assert out == ["#ef4444"] * 2
+
+    def test_missing_ratio_reads_as_empty(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "SystemInfo.storageUseColor(null), SystemInfo.storageUseColor(undefined),"
+            "SystemInfo.storageUseColor('nope')]))"
+        )
+        assert out == ["#22c55e"] * 3

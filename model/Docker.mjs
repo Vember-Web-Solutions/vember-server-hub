@@ -95,6 +95,36 @@ export class Docker {
     progress: total > 0 ? Math.max(0, Math.min(1, done / total)) : 0
   };
   }
+  // Colour for a container state. Null means "no opinion", so the caller can
+  // fall back to the theme's muted colour instead of a hardcoded grey.
+  stateTone(state) {
+  var s = shell.trim(state).toLowerCase();
+  if (s === "running") return "#22c55e";
+  if (s === "restarting" || s === "paused" || s === "created") return "#eab308";
+  if (s === "exited" || s === "dead" || s === "removing") return "#ef4444";
+  return null;
+  }
+
+  // Background tint for the same states, as a CSS colour so it can be built
+  // without a QML engine. The values match the previous Qt.rgba() calls.
+  stateBackground(state) {
+  var s = shell.trim(state).toLowerCase();
+  if (s === "running") return "rgba(33, 196, 94, 0.18)";
+  if (s === "restarting" || s === "paused" || s === "created") return "rgba(235, 179, 8, 0.18)";
+  if (s === "exited" || s === "dead" || s === "removing") return "rgba(240, 69, 69, 0.18)";
+  return null;
+  }
+
+  // How many containers are running. Malformed rows are skipped, not counted
+  // as stopped.
+  runningCount(containers) {
+  var list = containers || [];
+  var n = 0;
+  for (var i = 0; i < list.length; i++) {
+    if (list[i] && list[i].running) n++;
+  }
+  return n;
+  }
 }
 
 const impl = new Docker();
@@ -109,3 +139,6 @@ export function parsePs(...args) { return impl.parsePs(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }
 export function parsePullLine(...args) { return impl.parsePullLine(...args); }
 export function accumulateLayers(...args) { return impl.accumulateLayers(...args); }
+export function stateTone(...args) { return impl.stateTone(...args); }
+export function stateBackground(...args) { return impl.stateBackground(...args); }
+export function runningCount(...args) { return impl.runningCount(...args); }

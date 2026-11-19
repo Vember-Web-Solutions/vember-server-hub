@@ -189,3 +189,80 @@ class TestAccumulateLayers:
     def test_null_is_tolerated(self, js):
         out = js("console.log(JSON.stringify(Docker.accumulateLayers(null)))")
         assert out == {"done": 0, "total": 0, "progress": 0}
+
+
+class TestStateTone:
+    """Container state colours. Null means "use the theme's muted colour"."""
+
+    def test_running_is_green(self, js):
+        assert js('console.log(JSON.stringify(Docker.stateTone("running")))') == "#22c55e"
+
+    def test_transitional_states_are_amber(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            'Docker.stateTone("restarting"), Docker.stateTone("paused"),'
+            'Docker.stateTone("created")]))'
+        )
+        assert out == ["#eab308"] * 3
+
+    def test_stopped_states_are_red(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            'Docker.stateTone("exited"), Docker.stateTone("dead"),'
+            'Docker.stateTone("removing")]))'
+        )
+        assert out == ["#ef4444"] * 3
+
+    def test_unknown_state_has_no_opinion(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            'Docker.stateTone("weird"), Docker.stateTone(""), Docker.stateTone(null)]))'
+        )
+        assert out == [None, None, None]
+
+    def test_case_and_whitespace_are_ignored(self, js):
+        assert js('console.log(JSON.stringify(Docker.stateTone("  RUNNING  ")))') == "#22c55e"
+
+
+class TestStateBackground:
+    def test_running_tint(self, js):
+        assert js('console.log(JSON.stringify(Docker.stateBackground("running")))') == (
+            "rgba(33, 196, 94, 0.18)"
+        )
+
+    def test_unknown_state_has_no_opinion(self, js):
+        assert js('console.log(JSON.stringify(Docker.stateBackground("weird")))') is None
+
+    def test_every_toned_state_has_a_background(self, js):
+        # A state with a colour but no background would render as a bare chip.
+        out = js(
+            "console.log(JSON.stringify("
+            "['running','restarting','paused','created','exited','dead','removing']"
+            ".map(function (s) { return [Docker.stateTone(s), Docker.stateBackground(s)]; })))"
+        )
+        for tone, bg in out:
+            assert tone is not None
+            assert bg is not None
+
+
+class TestRunningCount:
+    def test_counts_running_only(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.runningCount("
+            "[{running:true},{running:false},{running:true}])))"
+        )
+        assert out == 2
+
+    def test_empty_and_null_are_zero(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "Docker.runningCount([]), Docker.runningCount(null)]))"
+        )
+        assert out == [0, 0]
+
+    def test_malformed_rows_are_skipped(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.runningCount("
+            "[null,{running:true},{},{running:false}])))"
+        )
+        assert out == 1
