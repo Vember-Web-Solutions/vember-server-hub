@@ -755,6 +755,60 @@ class TestPollSafety:
         )
 
 
+class TestNoLoginTimeWork:
+    """A keepLoaded panel exists at login, so nothing may start on its own.
+
+    The manifest sets "keepLoaded": true, so the panel is instantiated when the
+    shell starts rather than on first open. That makes every unconditional
+    timer and Process in Panel.qml a login-time cost -- and the plugin update
+    check runs a git fetch against GitHub. Before keepLoaded the panel was only
+    built on open, so the startup check naturally ran 4s after the first open.
+    These checks keep the login quiet.
+    """
+
+    def test_startup_update_check_waits_for_the_hub_to_open(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"id:\s*pluginUpdateStartupCheckTimer", text)
+        assert match, "no pluginUpdateStartupCheckTimer"
+        window = text[match.start():match.start() + 600]
+        assert "running: root.opened" in window, (
+            "the startup update check must be gated on root.opened; with "
+            "keepLoaded it would otherwise git fetch on every login"
+        )
+        assert "running: true" not in window, (
+            "the startup update check must not run unconditionally"
+        )
+
+    def test_no_unconditional_timer_in_the_panel(self):
+        # A Timer with `running: true` in Panel.qml would fire at login, because
+        # the panel is keepLoaded. Per-delegate timers elsewhere (ToastStack)
+        # are scoped to a delegate that only exists while a toast is shown, so
+        # they are not covered by this check.
+        text = read(REPO / "Panel.qml")
+        offenders = []
+        for match in re.finditer(r"Timer\s*\{", text):
+            # Take the block up to the matching close brace.
+            start = match.end() - 1
+            depth = 0
+            for i in range(start, len(text)):
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        block = text[start:i + 1]
+                        break
+            else:
+                continue
+            if re.search(r"^\s*running:\s*true\s*$", block, re.M):
+                id_match = re.search(r"id:\s*(\w+)", block)
+                offenders.append(id_match.group(1) if id_match else "<anonymous>")
+        assert not offenders, (
+            "these Timers run unconditionally, so they fire at login now that "
+            "the panel is keepLoaded: " + ", ".join(offenders)
+        )
+
+
 class TestDevToolsTargetedRefresh:
     """refreshDevTools() must be a targeted refresh, not a full repo rescan.
 

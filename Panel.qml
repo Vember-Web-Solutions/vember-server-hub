@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.25"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 101
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.26"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 102
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2647,7 +2647,13 @@ Item {
     id: pluginUpdateStartupCheckTimer
     interval: 4000
     repeat: false
-    running: true
+    // Gated on opened, not unconditional. The panel is keepLoaded, so it now
+    // exists at login; an unconditional timer would run a git fetch against
+    // GitHub on every shell start for a panel the user may never open. Before
+    // keepLoaded the panel was only instantiated on open, so this timer
+    // naturally fired 4s after the first open. Binding it to opened restores
+    // that: it fires once, 4s after the hub is opened.
+    running: root.opened
     onTriggered: root.checkPluginUpdate(false)
   }
 
