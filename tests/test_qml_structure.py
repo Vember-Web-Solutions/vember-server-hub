@@ -1276,6 +1276,100 @@ class TestNoDeadModelExports:
         assert not re.search(r"\b" + name + r"\b", stripped)
 
 
+class TestModelReferencesResolve:
+    """A QML file may only call model functions that are actually exported.
+
+    The model layer is imported per-file with an alias:
+
+        import "model/Shell.mjs" as Shell
+
+    so `Shell.trim(...)` resolves only if Shell.mjs exports `trim`. A typo, or
+    a rename that missed one caller, fails at runtime in whichever tab renders
+    that line — the panel opens, the tab is blank or throws, and nothing says
+    why. TestNoDeadModelExports checks the other direction (every export has a
+    caller); this checks that every call has an export.
+    """
+
+    # `watchedFiles` is a list of path strings like "model/Shell.mjs", which
+    # would otherwise read as `Shell.mjs` member access.
+    _MEMBER_ALLOWED = {"mjs"}
+
+    @staticmethod
+    def _exports():
+        exports = {}
+        for path in sorted((REPO / "model").glob("*.mjs")):
+            text = read(path)
+            exports[path.stem] = (
+                set(re.findall(r"^export function (\w+)\(", text, re.M))
+                | set(re.findall(r"^export const (\w+) =", text, re.M))
+                | set(re.findall(r"^export class (\w+)", text, re.M))
+            )
+        return exports
+
+    @staticmethod
+    def _scannable(text):
+        """Drop imports, comments and the watchedFiles path list."""
+        text = re.sub(r"/\*.*?\*/", "", text, flags=re.S)
+        kept = []
+        in_watched = False
+        for line in text.splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("import ") or stripped.startswith("//"):
+                continue
+            if "watchedFiles:" in line:
+                in_watched = True
+            if in_watched:
+                if "]" in line:
+                    in_watched = False
+                continue
+            kept.append(re.sub(r"//.*$", "", line))
+        return "\n".join(kept)
+
+    def _bad_references(self, text, exports):
+        aliases = {
+            match.group(2): Path(match.group(1)).stem
+            for match in re.finditer(r'import\s+"([^"]+\.mjs)"\s+as\s+(\w+)', text)
+        }
+        body = self._scannable(text)
+        problems = []
+        for alias, stem in aliases.items():
+            available = exports.get(stem, set())
+            for match in re.finditer(r"\b" + re.escape(alias) + r"\.(\w+)", body):
+                member = match.group(1)
+                if member in self._MEMBER_ALLOWED:
+                    continue
+                if member not in available:
+                    problems.append("%s.%s (not exported by %s.mjs)" % (alias, member, stem))
+        return sorted(set(problems))
+
+    def test_every_model_call_has_an_export(self):
+        exports = self._exports()
+        problems = []
+        for path in QML_FILES:
+            for problem in self._bad_references(read(path), exports):
+                problems.append(relative(path) + ": " + problem)
+        assert not problems, (
+            "QML calls a model member that does not exist. It will fail when "
+            "that tab renders:\n  " + "\n  ".join(problems)
+        )
+
+    def test_the_guard_would_catch_a_bad_call(self):
+        # Mutation check in memory: a plausible-looking call to a member that
+        # is not exported must be reported.
+        exports = self._exports()
+        sample = (
+            'import "model/Shell.mjs" as Shell\n'
+            "Item { property string x: Shell.trimOrPanic('a') }\n"
+        )
+        problems = self._bad_references(sample, exports)
+        assert any("trimOrPanic" in problem for problem in problems), (
+            "the detector did not flag a call to a non-existent model member"
+        )
+        # And a real call must not be flagged.
+        good = 'import "model/Shell.mjs" as Shell\nItem { property string x: Shell.trim("a") }\n'
+        assert not self._bad_references(good, exports)
+
+
 class TestExternalHandOffReachability:
     """The hub must get out of the way of anything it launches.
 
