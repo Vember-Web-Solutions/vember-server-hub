@@ -68,6 +68,7 @@ Item {
   property string dockerPullingImage: ""
   property string dockerPullStatus: ""
   property real dockerPullPercent: -1
+  property var _dockerPullLayers: ({})
   property string dockerPullResult: ""
   property bool dockerPruneBusy: false
   property string dockerDetailSizeName: ""
@@ -1033,6 +1034,7 @@ Item {
     dockerPullingImage = image;
     dockerPullStatus = "Pulling " + image + "…";
     dockerPullPercent = -1;
+    _dockerPullLayers = ({});
     dockerPullResult = "";
     dockerPullProc.actionName = "pull";
     dockerPullProc.containerName = name;
@@ -1422,12 +1424,27 @@ Item {
         return;
       lastLine = t;
       root.dockerPullStatus = t;
-      var m = /(\d{1,3})%/.exec(t);
-      if (m) {
-        var p = Number(m[1]);
-        if (isFinite(p))
-          root.dockerPullPercent = Math.max(0, Math.min(100, p)) / 100.0;
+      // Docker's non-TTY pull output reports bytes per layer, not a "NN%"
+      // string, so the old percent regex rarely fired. Accumulate the layer
+      // events through the same tested parser the code-server pull uses.
+      var ev = Docker.parsePullLine(t);
+      if (!ev)
+        return;
+      var layers = root._dockerPullLayers || {};
+      if (ev.phase === "complete") {
+        if (layers[ev.id] && isFinite(layers[ev.id].total))
+          layers[ev.id].current = layers[ev.id].total;
+        else
+          return;
+      } else if (isFinite(ev.current) && isFinite(ev.total) && ev.total > 0) {
+        layers[ev.id] = { current: ev.current, total: ev.total };
+      } else {
+        return;
       }
+      root._dockerPullLayers = layers;
+      var agg = Docker.accumulateLayers(layers);
+      if (agg.total > 0)
+        root.dockerPullPercent = agg.progress;
     }
     stdout: SplitParser { onRead: function(line) { dockerPullProc.handleLine(line) } }
     stderr: SplitParser { onRead: function(line) { dockerPullProc.handleLine(line) } }
