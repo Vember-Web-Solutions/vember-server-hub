@@ -53,6 +53,17 @@ it is the next candidate, not part of this node.
   report a false failure — the same bug class the rest of this work guards
   against — and the hang path could not be exercised end to end here without
   pulling the full image and running real provisioning.
+- **Live verification needs exactly one shell.** `omarchy-launch-shell` is a
+  supervisor: it relaunches `quickshell` after a non-zero exit and only stops
+  when the wrapper itself gets TERM. Killing `quickshell` alone leaves the
+  wrapper to respawn it, so rapid or overlapping `omarchy restart shell` calls
+  can accumulate several shells. Each orphan keeps whatever it was drawing —
+  including the hub overlay — so a layer count taken with more than one shell
+  running reads high and looks like a regression. Check `pgrep -x quickshell |
+  wc -l` is 1 before trusting `hyprctl layers`. This bit during this work: a
+  stale 3/4/3 layer count turned out to be five orphaned shells, and the same
+  measurement with one shell was a clean 0/1/0. It is an Omarchy restart race,
+  not this plugin, but it makes the plugin's live check unreliable if ignored.
 
 ## Follow-on hardening
 
