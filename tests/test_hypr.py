@@ -32,7 +32,18 @@ class TestFocusScript:
     def test_missing_hyprctl_is_not_an_error(self, js):
         script = js('console.log(JSON.stringify(Hypr.focusScript(["class:foo"])))')
         assert "command -v hyprctl" in script
-        assert script.rstrip().endswith("|| true; }")
+        # The whole snippet must succeed even when hyprctl is absent. The
+        # launcher script's exit status is the focus snippet's, and the panel
+        # used to read a non-zero exit as "the terminal never opened" and stop
+        # tracking a real install.
+        assert script.rstrip().endswith("|| true")
+        result = subprocess.run(
+            ["/bin/sh", "-c", script],
+            capture_output=True,
+            text=True,
+            env={"PATH": "/nonexistent"},
+        )
+        assert result.returncode == 0, result.stderr
 
     def test_script_is_valid_shell(self, js):
         script = js('console.log(JSON.stringify(Hypr.focusScript(["class:foo"])))')

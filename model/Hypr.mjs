@@ -43,7 +43,7 @@ export class Hypr {
       "}"
     ].join(" ");
     return "command -v hyprctl >/dev/null 2>&1 && { " + fn + "; " +
-      calls.join(" || ") + " || true; }";
+      calls.join(" || ") + " || true; } || true";
   }
 
   // Class first, then the anchored title, then the bare title: the window may

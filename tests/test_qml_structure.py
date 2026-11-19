@@ -1389,3 +1389,14 @@ class TestWatchdogFailuresAreVisible:
             name + " has " + str(found) + " notify call(s), expected " + str(expected) +
             "; each message that lands in the closed panel must notify"
         )
+
+    def test_launcher_exit_does_not_stop_tracking(self):
+        # The launcher process finishes as soon as the detached terminal is
+        # spawned, and its exit status is the focus snippet's. Treating a
+        # non-zero exit as "the terminal never opened" killed tracking of a
+        # real install; the watchdog owns that verdict.
+        body = self._block("Process", "installTerminalProc")
+        assert "finishInstall" not in body, (
+            "installTerminalProc must not stop tracking; the watchdog decides"
+        )
+        assert "stopInstall" not in body

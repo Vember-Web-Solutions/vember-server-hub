@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.14"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 90
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.15"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 91
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1745,18 +1745,15 @@ Item {
     }
   }
 
-  // Launches the interactive install terminal (its own exit is not the install result)
+  // Launches the interactive install terminal. Its exit is not the install
+  // result: the terminal is detached, so this process finishes as soon as the
+  // launcher returns. It must not treat a non-zero exit as "the terminal never
+  // opened" and stop tracking — the watchdog owns that verdict, because only
+  // the lock file and the log can tell a missing terminal from a slow one.
   Process {
     id: installTerminalProc
     stdout: StdioCollector {}
     stderr: StdioCollector {}
-    onExited: function(code) {
-      if (code !== 0 && root.installRunning && Shell.trim(root.installLog).length === 0) {
-        root.finishInstall(null);
-        root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
-        root.lastActionMessage = root.extraAppInstallStatus;
-      }
-    }
   }
 
   // Streams the install log file written by the terminal wrapper
