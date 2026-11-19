@@ -41,7 +41,7 @@ Reload the shell if needed (the plugin UI hot-reloads in many cases, but backend
 
 ### From Git (recommended for users)
 
-Once the repository is hosted publicly, install with Omarchy’s plugin tooling:
+Install with Omarchy’s plugin tooling:
 
 ```bash
 omarchy plugin add https://github.com/Vember-Web-Solutions/vember-server-hub.git
@@ -69,7 +69,7 @@ omarchy plugin validate /path/to/vember-server
 - **Model:** `model/*.mjs` holds the pure helpers as ES classes (`Shell`, `Docker`, `Gaming`, `DevTools`, `InstallLog`, `Config`, ...). QML imports the namespace and calls `Shell.trim(...)`; tests instantiate the class directly.
 - **Tests:** `./tests/run.sh` — creates a venv outside the plugin folder (Omarchy rejects symlinks inside plugins) and drives the real ES modules through node, so the suite exercises the same code QML loads.
 - **Manifest:** tracks `version` and `build` in `manifest.json`
-- QML/JS edits often hot-reload; backend/process logic changes may require reloading the Omarchy shell/hub.
+- QML/JS edits hot-reload: every plugin file is watched, so saving any of them restarts the shell and reopens the hub. Backend/process logic changes are covered the same way.
 - After cloning/customizing, you can rescan plugins with `omarchy-shell shell rescanPlugins` if changes don’t appear.
 
 ## Publishing to Omarchy
