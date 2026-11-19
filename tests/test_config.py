@@ -391,3 +391,68 @@ class TestParseManifest:
         assert isinstance(out, dict)
         assert isinstance(out.get("version"), str) and out["version"]
         assert isinstance(out.get("build"), int)
+
+
+class TestConfigRead:
+    """A config read must tell "no file" apart from "could not read".
+
+    The old command was `[ -f "$1" ] && cat "$1"`, so a read failure produced
+    empty output, which parsed as "empty" and opened the first-run wizard. At
+    startup configReady is false, so that wizard has no Cancel button, and Save
+    would overwrite a good config with the hostname.
+    """
+
+    @staticmethod
+    def _command(js, path):
+        return js("console.log(JSON.stringify(Config.readCommand(%s)))" % json.dumps(str(path)))
+
+    @staticmethod
+    def _outcome(js, raw):
+        return js("console.log(JSON.stringify(Config.readOutcome(%s)))" % json.dumps(raw))
+
+    def test_outcome_of_the_missing_marker(self, js):
+        assert self._outcome(js, "VEMBER-CONFIG-MISSING") == "missing"
+
+    def test_outcome_of_the_unreadable_marker(self, js):
+        assert self._outcome(js, "VEMBER-CONFIG-UNREADABLE") == "unreadable"
+
+    def test_outcome_of_real_content(self, js):
+        assert self._outcome(js, '{"serverName":"Vember OS"}') == "content"
+
+    def test_outcome_of_an_empty_file(self, js):
+        # A zero-byte file is content (empty), not a missing file; the parser
+        # still treats it as first use.
+        assert self._outcome(js, "") == "content"
+
+    def test_a_missing_file_is_reported_missing(self, js, tmp_path):
+        cmd = self._command(js, tmp_path / "absent.json")
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout == "VEMBER-CONFIG-MISSING"
+
+    def test_an_unreadable_file_is_reported_unreadable(self, js, tmp_path):
+        import os
+
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            import pytest
+
+            pytest.skip("running as root: file permissions are not enforced")
+        path = tmp_path / "config.json"
+        path.write_text('{"serverName":"Vember OS"}')
+        path.chmod(0o000)
+        try:
+            cmd = self._command(js, path)
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+        finally:
+            path.chmod(0o644)
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout == "VEMBER-CONFIG-UNREADABLE"
+
+    def test_a_readable_file_returns_its_content(self, js, tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text('{"serverName":"Vember OS"}')
+        cmd = self._command(js, path)
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        assert proc.stdout == '{"serverName":"Vember OS"}'
+        assert self._outcome(js, proc.stdout) == "content"

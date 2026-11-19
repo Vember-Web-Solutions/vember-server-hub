@@ -368,6 +368,17 @@ Work that fell out of the split, done in the same arc:
   runs from `onVisibleChanged` when the panel hides and clears the three
   confirm flags, the password, the settings menu and the arrange-tabs dialog.
   `TestTransientStateIsClearedOnClose` pins the hook and each property.
+- **A config read failure looked like a first run and trapped the user.** The
+  read command was `[ -f "$1" ] && cat "$1"`, so a file that exists but could
+  not be read produced empty output. That parsed as "empty" and opened the
+  first-run wizard — and at startup `configReady` is false, so that wizard has
+  no Cancel button, leaving Save as the only way out, which would overwrite a
+  good config with the hostname. `Config.readCommand()` now emits a marker for
+  a missing or unreadable file and `Config.readOutcome()` classifies it; an
+  unreadable file keeps the current state and notifies instead of opening the
+  wizard. `TestConfigRead` runs the real command against a missing, an
+  unreadable and a readable file; `TestConfigReadFailureIsVisible` pins the
+  handler.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -387,16 +398,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 463 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,788 lines. The growth is comments, per-file
+- 472 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,824 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,183 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,759. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,194 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,770. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,759, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,999 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,770, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 4,113 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.27, build 72 → 103.
+- Version 0.1.0 → 0.6.28, build 72 → 104.

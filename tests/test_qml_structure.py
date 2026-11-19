@@ -1271,6 +1271,55 @@ class TestConfigWriteFailureSurfacing:
         )
 
 
+class TestConfigReadFailureIsVisible:
+    """A config read failure must not be mistaken for a first run.
+
+    configReadProc used `[ -f "$1" ] && cat "$1"`, so a file that exists but
+    could not be read produced empty output. That parsed as "empty" and opened
+    the first-run wizard. At startup configReady is false, so the wizard has no
+    Cancel button and Save would overwrite a good config with the hostname.
+    The command now emits a marker and the handler returns before the wizard.
+    """
+
+    def _handler(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"id:\s*configReadProc", text)
+        assert match, "no configReadProc"
+        # The stdout handler runs to the next `stderr:` at the same depth.
+        end = text.find("stderr:", match.start())
+        assert end > match.start(), "configReadProc has no stderr block"
+        return text[match.start():end]
+
+    def test_read_uses_the_classifier(self):
+        handler = self._handler()
+        assert "Config.readOutcome(" in handler, (
+            "configReadProc must classify the read with Config.readOutcome"
+        )
+        assert "Config.readCommand(" in handler, (
+            "configReadProc must use Config.readCommand, which reports a "
+            "read failure instead of returning empty output"
+        )
+
+    def test_unreadable_returns_before_the_wizard(self):
+        handler = self._handler()
+        assert 'outcome === "unreadable"' in handler, (
+            "the handler must branch on an unreadable config"
+        )
+        unreadable = handler.index('outcome === "unreadable"')
+        # The branch must return before openWizard is reached.
+        wizard = handler.find("openWizard")
+        assert wizard == -1 or unreadable < wizard, (
+            "an unreadable config must be handled before openWizard"
+        )
+        window = handler[unreadable:wizard if wizard != -1 else len(handler)]
+        assert "return" in window, (
+            "the unreadable branch must return so the wizard is not opened"
+        )
+        assert "notifyIfClosed" in window, (
+            "a read failure must be visible even when the panel is closed"
+        )
+
+
 class TestSshAddKeyValidation:
     """A pasted key must be validated before addAuthorizedKey writes it.
 

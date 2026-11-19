@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.27"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 103
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.28"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 104
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2109,13 +2109,24 @@ Item {
 
   Process {
     id: configReadProc
-    command: ["sh", "-c", "if [ -f \"$1\" ]; then cat \"$1\"; fi", "sh", root.configPath]
+    command: Config.readCommand(root.configPath)
     stdout: StdioCollector {
       onStreamFinished: {
+        // A read failure must not be mistaken for a first run. At startup
+        // configReady is false, so the wizard that an "empty" read opens has no
+        // Cancel button, and Save would overwrite a good config with the
+        // hostname. Keep the current state and say what happened.
+        var outcome = Config.readOutcome(text);
+        if (outcome === "unreadable") {
+          root.lastActionMessage = "Could not read config.json — keeping current settings.";
+          root.notifyIfClosed(root.lastActionMessage);
+          return;
+        }
+
         // The four-state parse lives in Config.mjs and is covered by tests;
         // this handler only maps each state onto panel state. Keeping the
         // branching here duplicated it and left the tested parser unused.
-        var cfg = Config.parseHubConfig(text);
+        var cfg = Config.parseHubConfig(outcome === "missing" ? "" : text);
 
         if (cfg.state === "empty") {
           // No file yet: keep the editor, tab order and port we already have.

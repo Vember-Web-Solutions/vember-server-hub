@@ -165,6 +165,29 @@ export class Config {
     "mkdir -p \"$(dirname \"$2\")\" && { printf '%s' \"$1\" > \"$3\" && mv -f \"$3\" \"$2\"; }",
     "sh", String(payload), String(path), tmp];
   }
+
+  // Reading config.json must distinguish "no file yet" from "file exists but
+  // could not be read". The old command was `[ -f "$1" ] && cat "$1"`, so a
+  // read failure produced empty output, which parsed as "empty" and opened the
+  // first-run wizard. At startup configReady is false, so that wizard has no
+  // Cancel button and Save would overwrite a perfectly good config with the
+  // hostname. Emit a marker instead, so the caller can tell the two apart.
+  readCommand(path) {
+  return ["sh", "-c",
+    'f="$1"; ' +
+    'if [ ! -e "$f" ]; then printf "%s" "VEMBER-CONFIG-MISSING"; ' +
+    'elif [ ! -r "$f" ]; then printf "%s" "VEMBER-CONFIG-UNREADABLE"; ' +
+    'else cat "$f"; fi',
+    "sh", String(path)];
+  }
+
+  // Classify readCommand's output: "missing", "unreadable" or "content".
+  readOutcome(raw) {
+  var t = shell.trim(raw);
+  if (t === "VEMBER-CONFIG-MISSING") return "missing";
+  if (t === "VEMBER-CONFIG-UNREADABLE") return "unreadable";
+  return "content";
+  }
 }
 
 const impl = new Config();
@@ -179,3 +202,5 @@ export function tabDef(...args) { return impl.tabDef(...args); }
 export function orderedTabs(...args) { return impl.orderedTabs(...args); }
 export function moveTab(...args) { return impl.moveTab(...args); }
 export function writeCommand(...args) { return impl.writeCommand(...args); }
+export function readCommand(...args) { return impl.readCommand(...args); }
+export function readOutcome(...args) { return impl.readOutcome(...args); }
