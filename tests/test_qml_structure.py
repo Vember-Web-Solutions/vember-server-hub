@@ -109,3 +109,86 @@ class TestNoStaleModelReferences:
     def test_hubmodel_is_gone(self, path):
         text = read(path)
         assert "HubModel." not in text, relative(path) + " still calls the removed HubModel"
+
+
+class TestVersionConsistency:
+    """The version shown in the panel must match manifest.json.
+
+    The panel reads manifest.json at load, but falls back to a literal while
+    that read is in flight. A stale literal showed "v0.1.0" on a 0.4.0 build,
+    so the two records are pinned together here.
+    """
+
+    @staticmethod
+    def _manifest():
+        import json
+
+        return json.loads((REPO / "manifest.json").read_text())
+
+    def test_manifest_has_version_and_build(self):
+        manifest = self._manifest()
+        assert isinstance(manifest.get("version"), str) and manifest["version"]
+        assert isinstance(manifest.get("build"), int)
+
+    def test_panel_fallback_matches_manifest(self):
+        import re
+
+        manifest = self._manifest()
+        text = read(REPO / "Panel.qml")
+
+        version = re.search(r'pluginVersion:.*?:\s*"([^"]+)"', text)
+        build = re.search(r"pluginBuild:.*?:\s*(\d+)", text)
+        assert version, "no pluginVersion fallback literal in Panel.qml"
+        assert build, "no pluginBuild fallback literal in Panel.qml"
+        assert version.group(1) == manifest["version"], (
+            "Panel.qml falls back to %s but manifest.json says %s"
+            % (version.group(1), manifest["version"])
+        )
+        assert int(build.group(1)) == manifest["build"]
+
+    @pytest.mark.parametrize("path", QML_FILES, ids=relative)
+    def test_no_hardcoded_version_strings(self, path):
+        import re
+
+        # A bare 0.x.y literal in QML means someone hardcoded a version that
+        # will go stale. The one allowed literal is the declared fallback in
+        # Panel.qml, which test_panel_fallback_matches_manifest pins to the
+        # manifest; anywhere else is drift waiting to happen.
+        offenders = []
+        for number, line in enumerate(read(path).splitlines(), 1):
+            if re.search(r'"[0-9]+\.[0-9]+\.[0-9]+"', line) and "pluginVersion:" not in line:
+                offenders.append("line %d: %s" % (number, line.strip()))
+        assert not offenders, "%s hardcodes a version:\n  %s" % (
+            relative(path),
+            "\n  ".join(offenders),
+        )
+
+
+class TestHotReloadCoverage:
+    """Every plugin file should be watched, or edits silently do nothing."""
+
+    def test_all_plugin_files_are_watched(self):
+        import re
+
+        text = read(REPO / "Panel.qml")
+        block = re.search(r"readonly property var watchedFiles: \[(.*?)\]", text, re.S)
+        assert block, "no watchedFiles list in Panel.qml"
+        watched = set(re.findall(r'"([^"]+)"', block.group(1)))
+
+        present = set()
+        for path in QML_FILES:
+            present.add(relative(path))
+        for path in (REPO / "model").glob("*.mjs"):
+            present.add(relative(path))
+
+        missing = sorted(present - watched)
+        assert not missing, "not watched for hot reload:\n  " + "\n  ".join(missing)
+
+    def test_watched_files_exist(self):
+        import re
+
+        text = read(REPO / "Panel.qml")
+        block = re.search(r"readonly property var watchedFiles: \[(.*?)\]", text, re.S)
+        watched = re.findall(r'"([^"]+)"', block.group(1))
+        missing = [w for w in watched if not (REPO / w).exists()]
+        assert not missing, "watchedFiles names missing files: " + ", ".join(missing)

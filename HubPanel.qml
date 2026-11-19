@@ -372,7 +372,7 @@ PanelWindow {
 
           Text {
             textFormat: Text.PlainText
-            text: "Vember Server Hub v" + (hub.pluginVersion || "0.1.0")
+            text: "Vember Server Hub v" + hub.pluginVersion
             color: softText(0.7)
             font.family: Style.font.family
             font.pixelSize: Style.font.caption

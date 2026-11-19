@@ -1,4 +1,5 @@
 import QtQuick
+import QtQml.Models
 import Quickshell
 import Quickshell.Io
 import "model/DevTools.mjs" as DevTools
@@ -25,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: "0.1.0"
-  property int pluginBuild: 1
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.4.0"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 74
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2298,101 +2299,31 @@ Item {
     }
   }
 
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/manifest.json"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/Panel.qml"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/HubPanel.qml"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Config.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Config.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
+  // --- Hot reload watchers ---
+  // Every file that makes up the plugin. Saving any of them restarts the shell
+  // and reopens the hub, so a change is one save away from being live.
+  readonly property var watchedFiles: [
+    "manifest.json", "Panel.qml", "HubPanel.qml", "BarWidget.qml",
+    "model/Config.mjs", "model/DevTools.mjs", "model/Docker.mjs",
+    "model/Gaming.mjs", "model/InstallLog.mjs", "model/Omarchy.mjs",
+    "model/Shell.mjs", "model/Ssh.mjs", "model/Systemd.mjs",
+    "model/SystemInfo.mjs", "model/Tailscale.mjs",
+    "ui/ArrangeTabsDialog.qml", "ui/CodeServerRemoveDialog.qml",
+    "ui/CodeServerSetupDialog.qml", "ui/PruneConfirmDialog.qml",
+    "ui/ServerNameWizard.qml", "ui/SettingsMenu.qml",
+    "ui/SshKeyConfirmDialog.qml", "ui/ToastStack.qml", "ui/UpdateDialog.qml",
+    "ui/tabs/AccessTab.qml", "ui/tabs/ContainersTab.qml", "ui/tabs/DevTab.qml",
+    "ui/tabs/GamesTab.qml", "ui/tabs/OverviewTab.qml"
+  ]
 
-  // Hot reload when model/Docker.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Docker.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/DevTools.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/DevTools.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Gaming.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Gaming.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/InstallLog.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/InstallLog.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Omarchy.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Omarchy.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Shell.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Shell.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Ssh.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Ssh.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Systemd.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Systemd.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/SystemInfo.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/SystemInfo.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
-  }
-  // Hot reload when model/Tailscale.mjs changes.
-  FileView {
-    path: Quickshell.env("HOME") + "/.config/omarchy/plugins/elena.vember-server-hub/model/Tailscale.mjs"
-    printErrors: false
-    watchChanges: true
-    onFileChanged: root.scheduleHotReload()
+  Instantiator {
+    model: root.watchedFiles
+    delegate: FileView {
+      path: root.homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/" + modelData
+      printErrors: false
+      watchChanges: true
+      onFileChanged: root.scheduleHotReload()
+    }
   }
 
   // --- Plugin self-update processes/timers ---
