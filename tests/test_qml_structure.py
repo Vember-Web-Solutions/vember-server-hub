@@ -809,6 +809,55 @@ class TestNoLoginTimeWork:
         )
 
 
+class TestTransientStateIsClearedOnClose:
+    """A keepLoaded panel survives a close, so its transient state must reset.
+
+    Before keepLoaded, closing the hub destroyed the panel and every property
+    with it. Now the panel is unloaded-but-alive, so a dialog left open or a
+    password typed and abandoned would persist across a close/open cycle. The
+    password is the one that matters: it is only cleared after a successful
+    submit, so without this reset it would sit in memory for the rest of the
+    session and be redisplayed on the next open.
+    """
+
+    RESET = (
+        "confirmPrune",
+        "confirmRemoveSshKey",
+        "confirmRemoveCodeServer",
+        "codeServerSetupPassword",
+        "settingsMenuOpen",
+        "arrangeTabsOpen",
+    )
+
+    def test_reset_runs_when_the_panel_hides(self):
+        text = read(REPO / "HubPanel.qml")
+        assert re.search(r"onVisibleChanged:\s*if \(!visible\) resetTransientState\(\)", text), (
+            "HubPanel must reset transient state when it hides; the panel is "
+            "keepLoaded, so state otherwise survives a close"
+        )
+
+    @pytest.mark.parametrize("prop", RESET)
+    def test_reset_clears_each_transient_property(self, prop):
+        text = read(REPO / "HubPanel.qml")
+        match = re.search(r"function resetTransientState\(\)\s*\{", text)
+        assert match, "no resetTransientState() in HubPanel.qml"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[start : i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced resetTransientState")
+        assert re.search(r"panel\." + prop + r"\s*=", body), (
+            "resetTransientState must clear panel.%s" % prop
+        )
+
+
 class TestDevToolsTargetedRefresh:
     """refreshDevTools() must be a targeted refresh, not a full repo rescan.
 

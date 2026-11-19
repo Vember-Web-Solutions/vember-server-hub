@@ -102,6 +102,23 @@ PanelWindow {
     panel.arrangeTabsOpen = false;
   }
 
+  // The panel is keepLoaded, so it survives a close instead of being destroyed
+  // and rebuilt. Anything the user typed or opened would otherwise stay in
+  // memory across a close/open cycle and reappear on the next open. A typed
+  // Code Server password is the one that matters: it is only cleared after a
+  // successful submit, so a password typed and then abandoned would sit in
+  // memory for the rest of the session and be redisplayed on the next open.
+  function resetTransientState() {
+    panel.confirmPrune = false;
+    panel.confirmRemoveSshKey = false;
+    panel.confirmRemoveCodeServer = false;
+    panel.codeServerSetupPassword = "";
+    panel.settingsMenuOpen = false;
+    panel.arrangeTabsOpen = false;
+  }
+
+  onVisibleChanged: if (!visible) resetTransientState()
+
   visible: hub.opened
   screen: hub.targetScreen ? hub.targetScreen : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null)
   color: "transparent"

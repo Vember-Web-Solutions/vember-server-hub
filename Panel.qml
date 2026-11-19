@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.26"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 102
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.27"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 103
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""

@@ -358,6 +358,16 @@ Work that fell out of the split, done in the same arc:
   fired 4s after opening. It is now gated on `root.opened`, restoring the
   original behaviour. `TestNoLoginTimeWork` pins it and also fails on any
   unconditional `Timer` in `Panel.qml`.
+- **keepLoaded let transient dialog state survive a close.** Before, closing
+  the hub destroyed the panel and every property with it. Now the panel is
+  unloaded-but-alive, so a confirm dialog left open, the settings menu, or a
+  typed Code Server password persisted across a close/open cycle. The password
+  is the one that matters: it is cleared only after a successful submit, so a
+  password typed and then abandoned would sit in memory for the rest of the
+  session and be redisplayed on the next open. `HubPanel.resetTransientState()`
+  runs from `onVisibleChanged` when the panel hides and clears the three
+  confirm flags, the password, the settings menu and the arrange-tabs dialog.
+  `TestTransientStateIsClearedOnClose` pins the hook and each property.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -377,16 +387,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 456 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,771 lines. The growth is comments, per-file
+- 463 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,788 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,166 lines: `HubPanel.qml` 4,376 → 407,
+- The three monoliths went 7,694 → 3,183 lines: `HubPanel.qml` 4,376 → 424,
   `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,759. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,759, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,950 lines across 12 files and drives the real modules
+- The test suite is 3,999 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.26, build 72 → 102.
+- Version 0.1.0 → 0.6.27, build 72 → 103.
