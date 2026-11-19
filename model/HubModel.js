@@ -722,3 +722,92 @@ function extraAppDefById(id) {
   }
   return null;
 }
+
+// --- Install runner helpers -------------------------------------------------
+// Shared by launcher/app installs and dev-tool terminal installs.
+
+function stripAnsi(text) {
+  var t = String(text === undefined || text === null ? "" : text).replace(/\r/g, "");
+  t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
+  t = t.replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, "");
+  t = t.replace(/\x1B\[\?[0-9;]*[a-zA-Z]/g, "");
+  return t;
+}
+
+function installCacheDir(homeDir) {
+  return String(homeDir || "") + "/.cache/vember-server-hub";
+}
+
+function installLogPath(homeDir) {
+  return installCacheDir(homeDir) + "/install.log";
+}
+
+function installTitlePath(homeDir) {
+  return installCacheDir(homeDir) + "/install-title.txt";
+}
+
+// Parses a captured install log. Returns the visible text plus the exit marker
+// state written by the terminal wrapper: [vember-install-exit:<code>]
+function parseInstallLog(text, limit) {
+  var t = stripAnsi(text);
+  var rows = t.split("\n");
+  var out = [];
+  var finished = false;
+  var exitCode = null;
+  for (var i = 0; i < rows.length; i++) {
+    var line = rows[i];
+    var m = line.match(/\[vember-install-exit:(-?\d*)\]/);
+    if (m) {
+      finished = true;
+      exitCode = (trimText(m[1]).length === 0 ? null : Number(m[1]));
+      continue;
+    }
+    out.push(line);
+  }
+  while (out.length > 0 && trimText(out[0]).length === 0)
+    out.shift();
+  while (out.length > 0 && trimText(out[out.length - 1]).length === 0)
+    out.pop();
+  var joined = out.join("\n");
+  var max = Number(limit || 12000);
+  if (max > 0 && joined.length > max)
+    joined = joined.slice(joined.length - max);
+  return { text: joined, finished: finished, exitCode: exitCode };
+}
+
+// Builds the shell script that opens the default terminal, tees output to the
+// log file, records the exit code marker, and tries to focus the new window.
+function shellQuote(value) {
+  return "'" + String(value === undefined || value === null ? "" : value).replace(/'/g, "'\\''") + "'";
+}
+
+// Builds the shell script that opens the default terminal, tees output to the
+// log file, records the exit code marker, and tries to focus the new window.
+// Values are single-quoted so the outer shell cannot expand ${PIPESTATUS[...]}.
+function installTerminalScript(title, cmd, logPath, titlePath) {
+  var dir = String(logPath).replace(/\/[^\/]*$/, "");
+  var inner = "( " + String(cmd || "") + " ) 2>&1 | tee " + shellQuote(logPath) +
+    "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi" +
+    "; echo \"[vember-install-exit:${code}]\" | tee -a " + shellQuote(logPath) +
+    "; echo; echo 'Press Enter to close...'; read -r";
+  return "mkdir -p " + shellQuote(dir) +
+    " && printf '%s' " + shellQuote(title) + " > " + shellQuote(titlePath) +
+    " && : > " + shellQuote(logPath) +
+    " && xdg-terminal-exec --app-id=vember-install --title=" + shellQuote(title) +
+    " bash -lc " + shellQuote(inner) +
+    " </dev/null >/dev/null 2>&1 & " +
+    "sleep 0.7; hyprctl dispatch focuswindow " + shellQuote("class:^(vember-install)$") +
+    " >/dev/null 2>&1 || hyprctl dispatch focuswindow " + shellQuote("title:^(" + title + ")$") +
+    " >/dev/null 2>&1 || hyprctl dispatch focuswindow " + shellQuote("title:" + title) +
+    " >/dev/null 2>&1 || true";
+}
+
+function steamInstallCommand() {
+  return "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm steam; " +
+    "elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.valvesoftware.Steam; " +
+    "else echo 'No supported installer found for Steam.'; exit 1; fi";
+}
+
+function battlenetSetupUrl() {
+  return "https://lutris.net/games/battlenet/";
+}

@@ -1993,6 +1993,60 @@ PanelWindow {
               Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
               Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
 
+              // Live install log (shared runner)
+              Rectangle {
+                visible: hub.installRunning || HubModel.trimText(hub.installLog).length > 0
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.04)
+                border.color: hub.installRunning ? accentSoft(0.30) : softText(0.10)
+                border.width: 1
+                implicitHeight: installLogColL.implicitHeight + 20
+                Column {
+                  id: installLogColL
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12
+                  spacing: 8
+                  RowLayout {
+                    width: parent.width
+                    spacing: 8
+                    Text { textFormat: Text.PlainText; text: "󰏔"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    Text { Layout.fillWidth: true; textFormat: Text.PlainText; text: (HubModel.trimText(hub.installTitle).length > 0 ? hub.installTitle : "Install") + (hub.installRunning ? " • running" : " • log"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight }
+                    Button { visible: hub.installRunning; iconText: "󰓛"; text: "Stop"; tooltipText: "Stop tracking this install"; onClicked: hub.stopInstall() }
+                    Button { enabled: !hub.installRunning; iconText: "󰆴"; text: "Clear"; tooltipText: "Clear the install log"; onClicked: hub.clearInstallLog() }
+                  }
+                  Rectangle {
+                    width: parent.width
+                    height: 200
+                    radius: 8
+                    color: Qt.rgba(0, 0, 0, 0.18)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    clip: true
+                    Flickable {
+                      id: installLogFlickL
+                      anchors.fill: parent
+                      anchors.margins: 8
+                      contentWidth: width
+                      contentHeight: installLogTextL.implicitHeight
+                      clip: true
+                      boundsBehavior: Flickable.StopAtBounds
+                      Text {
+                        id: installLogTextL
+                        width: installLogFlickL.width
+                        textFormat: Text.PlainText
+                        text: HubModel.trimText(hub.installLog).length > 0 ? hub.installLog : "Waiting for output…"
+                        color: HubModel.trimText(hub.installLog).length > 0 ? softText(0.92) : softText(0.55)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WrapAnywhere
+                      }
+                      onContentHeightChanged: contentY = Math.max(0, contentHeight - height)
+                    }
+                  }
+                }
+              }
+
               // Game library summary (total + per-launcher breakdown)
               Rectangle {
                 width: parent.width
@@ -2188,13 +2242,13 @@ PanelWindow {
                           spacing: 8
                           Button {
                             iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
-                            text: (modelData.kind === "extra" && hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : (modelData.id === "minecraft-launcher" ? "Add" : "Install")
-                            tooltipText: modelData.kind === "steam" ? "Install Steam (use your package manager / Omarchy tools)" : (modelData.kind === "bnet" ? "Install Battle.net (see setup instructions)" : (modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)))
-                            enabled: !(modelData.kind === "extra" && HubModel.trimText(hub.extraAppInstallBusyId).length > 0)
+                            text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : (modelData.kind === "bnet" ? "Set up" : (modelData.id === "minecraft-launcher" ? "Add" : "Install"))
+                            tooltipText: modelData.kind === "steam" ? "Install Steam in the default terminal (answer the sudo prompt there)" : (modelData.kind === "bnet" ? "Open the Lutris Battle.net install page" : (modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)))
+                            enabled: !hub.installRunning
                             onClicked: {
                               if (modelData.kind === "extra") hub.installExtraApp(modelData.id);
-                              else if (modelData.kind === "steam") hub.lastActionMessage = "Install Steam via your system package manager or Omarchy app install.";
-                              else if (modelData.kind === "bnet") hub.lastActionMessage = "Battle.net setup is manual/best-effort; install a launcher or configure your prefix.";
+                              else if (modelData.kind === "steam") hub.installSteam();
+                              else if (modelData.kind === "bnet") hub.openBattlenetSetup();
                             }
                           }
                         }
@@ -2213,6 +2267,60 @@ PanelWindow {
 
               Text { visible: hub.extraAppsScanBusy; textFormat: Text.PlainText; text: "Scanning launchers and apps…"; color: softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
               Text { visible: HubModel.trimText(hub.extraAppInstallStatus).length > 0; textFormat: Text.PlainText; text: hub.extraAppInstallStatus; color: softText(0.8); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+
+              // Live install log (shared runner)
+              Rectangle {
+                visible: hub.installRunning || HubModel.trimText(hub.installLog).length > 0
+                width: parent.width
+                radius: Style.cornerRadius
+                color: softText(0.04)
+                border.color: hub.installRunning ? accentSoft(0.30) : softText(0.10)
+                border.width: 1
+                implicitHeight: installLogColA.implicitHeight + 20
+                Column {
+                  id: installLogColA
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12
+                  spacing: 8
+                  RowLayout {
+                    width: parent.width
+                    spacing: 8
+                    Text { textFormat: Text.PlainText; text: "󰏔"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    Text { Layout.fillWidth: true; textFormat: Text.PlainText; text: (HubModel.trimText(hub.installTitle).length > 0 ? hub.installTitle : "Install") + (hub.installRunning ? " • running" : " • log"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight }
+                    Button { visible: hub.installRunning; iconText: "󰓛"; text: "Stop"; tooltipText: "Stop tracking this install"; onClicked: hub.stopInstall() }
+                    Button { enabled: !hub.installRunning; iconText: "󰆴"; text: "Clear"; tooltipText: "Clear the install log"; onClicked: hub.clearInstallLog() }
+                  }
+                  Rectangle {
+                    width: parent.width
+                    height: 200
+                    radius: 8
+                    color: Qt.rgba(0, 0, 0, 0.18)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    clip: true
+                    Flickable {
+                      id: installLogFlickA
+                      anchors.fill: parent
+                      anchors.margins: 8
+                      contentWidth: width
+                      contentHeight: installLogTextA.implicitHeight
+                      clip: true
+                      boundsBehavior: Flickable.StopAtBounds
+                      Text {
+                        id: installLogTextA
+                        width: installLogFlickA.width
+                        textFormat: Text.PlainText
+                        text: HubModel.trimText(hub.installLog).length > 0 ? hub.installLog : "Waiting for output…"
+                        color: HubModel.trimText(hub.installLog).length > 0 ? softText(0.92) : softText(0.55)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WrapAnywhere
+                      }
+                      onContentHeightChanged: contentY = Math.max(0, contentHeight - height)
+                    }
+                  }
+                }
+              }
 
               // Installed apps
               Column {
@@ -2328,8 +2436,9 @@ PanelWindow {
                           spacing: 8
                           Button {
                             iconText: "󰏔"
-                            text: (hub.extraAppInstallBusyId === modelData.id) ? "Opening…" : "Install"
-                            enabled: HubModel.trimText(hub.extraAppInstallBusyId).length === 0
+                            text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : "Install"
+                            tooltipText: "Install " + (modelData.name || modelData.id) + " in the default terminal"
+                            enabled: !hub.installRunning
                             onClicked: hub.installExtraApp(modelData.id)
                           }
                         }
@@ -2815,6 +2924,60 @@ PanelWindow {
               width: parent.width
               spacing: Style.spacing.md
 
+              // Live install log for terminal tool installs
+              Rectangle {
+                visible: hub.installRunningId.indexOf("dev:") === 0 && (hub.installRunning || HubModel.trimText(hub.installLog).length > 0)
+                width: Math.min(parent.width, 720)
+                radius: Style.cornerRadius
+                color: softText(0.04)
+                border.color: hub.installRunning ? accentSoft(0.30) : softText(0.10)
+                border.width: 1
+                implicitHeight: devInstallLogCol.implicitHeight + 20
+                Column {
+                  id: devInstallLogCol
+                  anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                  anchors.margins: 12
+                  spacing: 8
+                  RowLayout {
+                    width: parent.width
+                    spacing: 8
+                    Text { textFormat: Text.PlainText; text: "󰏔"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+                    Text { Layout.fillWidth: true; textFormat: Text.PlainText; text: (HubModel.trimText(hub.installTitle).length > 0 ? hub.installTitle : "Install") + (hub.installRunning ? " • running" : " • log"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight }
+                    Button { visible: hub.installRunning; iconText: "󰓛"; text: "Stop"; tooltipText: "Stop tracking this install"; onClicked: hub.stopInstall() }
+                    Button { enabled: !hub.installRunning; iconText: "󰆴"; text: "Clear"; tooltipText: "Clear the install log"; onClicked: hub.clearInstallLog() }
+                  }
+                  Rectangle {
+                    width: parent.width
+                    height: 180
+                    radius: 8
+                    color: Qt.rgba(0, 0, 0, 0.18)
+                    border.color: softText(0.08)
+                    border.width: 1
+                    clip: true
+                    Flickable {
+                      id: devInstallLogFlick
+                      anchors.fill: parent
+                      anchors.margins: 8
+                      contentWidth: width
+                      contentHeight: devInstallLogText.implicitHeight
+                      clip: true
+                      boundsBehavior: Flickable.StopAtBounds
+                      Text {
+                        id: devInstallLogText
+                        width: devInstallLogFlick.width
+                        textFormat: Text.PlainText
+                        text: HubModel.trimText(hub.installLog).length > 0 ? hub.installLog : "Waiting for output…"
+                        color: HubModel.trimText(hub.installLog).length > 0 ? softText(0.92) : softText(0.55)
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WrapAnywhere
+                      }
+                      onContentHeightChanged: contentY = Math.max(0, contentHeight - height)
+                    }
+                  }
+                }
+              }
+
               Rectangle {
                 width: Math.min(parent.width, 720)
                 radius: Style.cornerRadius
@@ -2907,8 +3070,8 @@ PanelWindow {
                             }
                             Button {
                               iconText: "󰆍"
-                              text: "Terminal"
-                              tooltipText: "Open terminal to install " + HubModel.devToolLabel(modelData.id)
+                              text: (hub.installRunning && hub.installRunningId === ("dev:" + modelData.id)) ? "Installing…" : "Terminal"
+                              tooltipText: "Open the default terminal to install " + HubModel.devToolLabel(modelData.id)
                               enabled: !hub.devInstallBusy
                               onClicked: hub.openDevInstallTerminal(modelData.id)
                             }

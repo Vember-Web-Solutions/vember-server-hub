@@ -82,6 +82,12 @@ Item {
   property string extraAppInstallBusyId: ""
   property string extraAppInstallStatus: ""
 
+  // Shared install runner (launchers/apps + dev tool terminal installs)
+  property bool installRunning: false
+  property string installRunningId: ""
+  property string installTitle: ""
+  property string installLog: ""
+
   property bool gameMountPresent: false
   property string gameMountSummary: ""
   property string gameMountError: ""
@@ -605,7 +611,7 @@ Item {
   }
 
   function runDevInstallSilent(toolId) {
-    if (devInstallBusy) return;
+    if (devInstallBusy || installRunning) return;
     var label = HubModel.devToolLabel(toolId);
     var cmd = "";
     if (toolId === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";
@@ -628,18 +634,13 @@ Item {
     var label = HubModel.devToolLabel(toolId);
     var cmd = "";
     if (toolId === "uv") cmd = "curl -LsSf https://astral.sh/uv/install.sh | sh";
-    else if (toolId === "python") cmd = "sudo pacman -S --needed python python-pip";
-    else if (toolId === "gh") cmd = "sudo pacman -S --needed github-cli";
-    else if (toolId === "zed") cmd = "if command -v yay >/dev/null 2>&1; then yay -S --needed zed-preview-bin || yay -S --needed zed; else sudo pacman -S --needed zed; fi";
-    else if (toolId === "vscode") cmd = "if command -v yay >/dev/null 2>&1; then yay -S --needed visual-studio-code-bin; else sudo pacman -S --needed code; fi";
-    else cmd = "echo 'No install command configured for " + String(toolId) + "'";
+    else if (toolId === "python") cmd = "sudo pacman -S --needed --noconfirm python python-pip";
+    else if (toolId === "gh") cmd = "sudo pacman -S --needed --noconfirm github-cli";
+    else if (toolId === "zed") cmd = "if command -v yay >/dev/null 2>&1; then yay -S --needed --noconfirm zed-preview-bin || yay -S --needed --noconfirm zed; else sudo pacman -S --needed --noconfirm zed; fi";
+    else if (toolId === "vscode") cmd = "if command -v yay >/dev/null 2>&1; then yay -S --needed --noconfirm visual-studio-code-bin; else sudo pacman -S --needed --noconfirm code; fi";
+    else cmd = "echo 'No install command configured for " + String(toolId) + "'; exit 1";
 
-    devInstallStatus = "Opening terminal to install " + label + "…";
-    devStatus = devInstallStatus;
-    devInstallProc.running = false;
-    devInstallProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(cmd + "; echo; echo '---'; echo 'Press Enter to close...'; read -r") + " </dev/null >/dev/null 2>&1 &"];
-    devInstallProc.running = true;
+    runInstallInTerminal("dev:" + toolId, "Vember Install: " + label, cmd, label);
   }
 
   function refreshSsh() {
@@ -760,7 +761,7 @@ Item {
     bnetGameCount = -1;
     if (!steamPgrepProc.running) steamPgrepProc.running = true;
     if (!bnetPgrepProc.running) bnetPgrepProc.running = true;
-    steamDirProc.command = ["test", "-d", steamRoot];
+    steamDirProc.command = ["sh", "-c", "[ -d \"$1\" ] || command -v steam >/dev/null 2>&1", "sh", steamRoot];
     if (!steamDirProc.running) steamDirProc.running = true;
     bnetDirProc.command = ["test", "-d", HubModel.battlenetPrefixPath(homeDir)];
     if (!bnetDirProc.running) bnetDirProc.running = true;
@@ -800,17 +801,114 @@ Item {
       lastActionMessage = "Unknown app: " + appId;
       return;
     }
-    extraAppInstallBusyId = appId;
-    extraAppInstallStatus = "Opening terminal to install " + (def.name || appId) + "…";
+    var name = def.name || appId;
+    runInstallInTerminal(appId, "Vember Install: " + name, String(def.installCmd || ""), name);
+  }
+
+  function installSteam() {
+    runInstallInTerminal("steam", "Vember Install: Steam", HubModel.steamInstallCommand(), "Steam");
+  }
+
+  function openBattlenetSetup() {
+    installTitle = "Battle.net";
+    extraAppInstallStatus = "Battle.net installs through Lutris or a Wine prefix. Opening the Lutris Battle.net page…";
     lastActionMessage = extraAppInstallStatus;
-    var cmd = String(def.installCmd || "");
-    if (cmd.length === 0) cmd = "echo 'No install command configured.'";
-    extraAppInstallProc.appId = appId;
-    extraAppInstallProc.appName = def.name || appId;
-    extraAppInstallProc.running = false;
-    extraAppInstallProc.command = ["sh", "-c",
-      "/usr/share/omarchy/bin/omarchy-launch-floating-terminal-with-presentation bash -lc " + JSON.stringify(cmd + "; echo; echo '---'; echo 'Press Enter to close...'; read -r") + " </dev/null >/dev/null 2>&1 &"];
-    extraAppInstallProc.running = true;
+    Qt.openUrlExternally(HubModel.battlenetSetupUrl());
+  }
+
+  function runInstallInTerminal(id, title, cmd, label) {
+    if (installRunning) {
+      lastActionMessage = "An install is already running: " + (installTitle.length > 0 ? installTitle : installRunningId);
+      return;
+    }
+    var command = HubModel.trimText(cmd);
+    if (command.length === 0)
+      command = "echo 'No install command configured.'; exit 1";
+    var logPath = HubModel.installLogPath(homeDir);
+    var titlePath = HubModel.installTitlePath(homeDir);
+    installRunning = true;
+    installRunningId = String(id || "");
+    installTitle = String(title || "Install");
+    installLog = "";
+    extraAppInstallBusyId = installRunningId;
+    extraAppInstallStatus = "Installing " + (label || installTitle) + " in the default terminal — answer any prompts there. Live output below.";
+    lastActionMessage = extraAppInstallStatus;
+    if (installRunningId.indexOf("dev:") === 0) {
+      devInstallBusy = true;
+      devInstallToolId = installRunningId.slice(4);
+      devInstallStatus = extraAppInstallStatus;
+      devStatus = devInstallStatus;
+    }
+    installTerminalProc.running = false;
+    installTerminalProc.command = ["sh", "-c",
+      HubModel.installTerminalScript(installTitle, command, logPath, titlePath)];
+    installTerminalProc.running = true;
+    installLogProc.running = false;
+    installLogProc.command = ["tail", "-n", "+1", "-F", logPath];
+    installLogProc.running = true;
+    installNoOutputTimer.restart();
+  }
+
+  function finishInstall(code) {
+    installLogProc.running = false;
+    installNoOutputTimer.stop();
+    installRunning = false;
+    extraAppInstallBusyId = "";
+    var label = HubModel.trimText(installTitle).length > 0 ? installTitle.replace(/^Vember Install:\s*/, "") : "Install";
+    if (code === 0)
+      extraAppInstallStatus = label + " finished.";
+    else if (code === null || isNaN(code))
+      extraAppInstallStatus = label + " finished (exit code unknown).";
+    else
+      extraAppInstallStatus = label + " failed (exit code " + code + ").";
+    if (installRunningId.indexOf("dev:") === 0) {
+      devInstallBusy = false;
+      devInstallToolId = "";
+      devInstallStatus = extraAppInstallStatus;
+      devStatus = devInstallStatus;
+    }
+    lastActionMessage = extraAppInstallStatus;
+    installRefreshTimer.restart();
+    installRefreshTimer2.restart();
+  }
+
+  function stopInstall() {
+    installLogProc.running = false;
+    installNoOutputTimer.stop();
+    installRunning = false;
+    extraAppInstallBusyId = "";
+    if (installRunningId.indexOf("dev:") === 0) {
+      devInstallBusy = false;
+      devInstallToolId = "";
+      devInstallStatus = "Install tracking stopped (the terminal may still be running).";
+      devStatus = devInstallStatus;
+    }
+    extraAppInstallStatus = "Install tracking stopped (the terminal may still be running).";
+    lastActionMessage = extraAppInstallStatus;
+  }
+
+  function clearInstallLog() {
+    if (installRunning)
+      return;
+    installLog = "";
+    installTitle = "";
+    extraAppInstallStatus = "";
+  }
+
+  function refreshAfterInstall() {
+    refreshGames();
+    if (installRunningId.indexOf("dev:") === 0)
+      refreshDevTools();
+  }
+
+  function loadInstallLog() {
+    if (installRunning)
+      return;
+    installLogReadProc.running = false;
+    installLogReadProc.command = ["sh", "-c",
+      "t=\"$1\"; l=\"$2\"; [ -f \"$t\" ] && cat \"$t\" || true; printf '\\n---VEMBER-LOG---\\n'; [ -f \"$l\" ] && tail -c 12000 \"$l\" || true",
+      "sh", HubModel.installTitlePath(homeDir), HubModel.installLogPath(homeDir)];
+    installLogReadProc.running = true;
   }
 
   function runTailscaleAction(action) {
@@ -844,7 +942,10 @@ Item {
     if (omarchyUpdateRunning)
       return;
     var logPath = homeDir + "/.cache/vember-server-hub/omarchy-update.log";
-    var termCmd = "/usr/share/omarchy/bin/omarchy-update 2>&1 | tee " + JSON.stringify(logPath) + "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi; echo \"[vember-update-exit:${code}]\" | tee -a " + JSON.stringify(logPath) + "; echo; echo 'Press Enter to close...'; read -r";
+    var termCmd = "( /usr/share/omarchy/bin/omarchy-update ) 2>&1 | tee " + HubModel.shellQuote(logPath) +
+      "; code=${PIPESTATUS[0]}; if [ -z \"$code\" ]; then code=1; fi" +
+      "; echo \"[vember-update-exit:${code}]\" | tee -a " + HubModel.shellQuote(logPath) +
+      "; echo; echo 'Press Enter to close...'; read -r";
     omarchyUpdateLog = "";
     omarchyUpdateStatus = "Running Omarchy update in default terminal (interactive)… streaming live log below.";
     lastActionMessage = "Running Omarchy update in default terminal.";
@@ -852,12 +953,13 @@ Item {
     omarchyUpdateLogProc.running = false;
     omarchyUpdateTerminalProc.running = false;
     omarchyUpdateTerminalProc.command = ["sh", "-c",
-      "mkdir -p \"$HOME/.cache/vember-server-hub\" && : > \"$1\" && " +
-      "xdg-terminal-exec --title=\"Vember Omarchy Update\" bash -lc " + JSON.stringify(termCmd) + " </dev/null >/dev/null 2>&1 & " +
-      "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true",
-      "sh", logPath];
+      "mkdir -p " + HubModel.shellQuote(homeDir + "/.cache/vember-server-hub") +
+      " && : > " + HubModel.shellQuote(logPath) +
+      " && xdg-terminal-exec --title=" + HubModel.shellQuote("Vember Omarchy Update") +
+      " bash -lc " + HubModel.shellQuote(termCmd) + " </dev/null >/dev/null 2>&1 & " +
+      "sleep 0.5; hyprctl dispatch focuswindow 'title:^(Vember Omarchy Update)$' >/dev/null 2>&1 || hyprctl dispatch focuswindow 'title:Vember Omarchy Update' >/dev/null 2>&1 || true"];
     omarchyUpdateTerminalProc.running = true;
-    omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-f", logPath];
+    omarchyUpdateLogProc.command = ["tail", "-n", "+1", "-F", logPath];
     omarchyUpdateLogProc.running = true;
   }
 
@@ -1478,30 +1580,108 @@ Item {
     }
   }
 
+  // Launches the interactive install terminal (its own exit is not the install result)
   Process {
-    id: extraAppInstallProc
-    property string appId: ""
-    property string appName: ""
+    id: installTerminalProc
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
-      root.extraAppInstallBusyId = "";
-      if (code === 0) {
-        root.extraAppInstallStatus = "Install terminal opened for " + (appName || appId) + ". Refreshing after install…";
-      } else {
-        root.extraAppInstallStatus = "Could not open install terminal for " + (appName || appId) + " (code " + code + ").";
+      if (code !== 0 && root.installRunning && HubModel.trimText(root.installLog).length === 0) {
+        root.finishInstall(null);
+        root.extraAppInstallStatus = "Could not open the install terminal. Check that xdg-terminal-exec works.";
+        root.lastActionMessage = root.extraAppInstallStatus;
       }
-      root.lastActionMessage = root.extraAppInstallStatus;
-      // refresh later to pick up installs done in terminal
-      extraAppInstallRefreshTimer.restart();
     }
   }
 
+  // Streams the install log file written by the terminal wrapper
+  Process {
+    id: installLogProc
+    function appendLine(line) {
+      var t = HubModel.stripAnsi(line);
+      var m = t.match(/\[vember-install-exit:(-?\d*)\]/);
+      if (m) {
+        var codeStr = HubModel.trimText(m[1]);
+        root.finishInstall(codeStr.length === 0 ? null : Number(codeStr));
+        return;
+      }
+      if (HubModel.trimText(t).length === 0)
+        return;
+      var next = (root.installLog.length > 0 ? (root.installLog + "\n") : "") + t;
+      if (next.length > 12000)
+        next = next.slice(next.length - 12000);
+      root.installLog = next;
+    }
+    stdout: SplitParser { onRead: function(line) { installLogProc.appendLine(line) } }
+    stderr: SplitParser { onRead: function(line) { installLogProc.appendLine(line) } }
+    onExited: function(code) {
+      if (root.installRunning) {
+        root.installRunning = false;
+        root.extraAppInstallBusyId = "";
+        if (HubModel.trimText(root.extraAppInstallStatus).indexOf("Installing") === 0)
+          root.extraAppInstallStatus = "Install log stream ended.";
+        root.lastActionMessage = root.extraAppInstallStatus;
+      }
+    }
+  }
+
+  // Reads the previous install title + log so it survives panel close/reload
+  Process {
+    id: installLogReadProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        if (root.installRunning)
+          return;
+        var raw = String(text || "");
+        var sep = raw.indexOf("---VEMBER-LOG---");
+        var title = sep >= 0 ? HubModel.trimText(raw.slice(0, sep)) : "";
+        var body = sep >= 0 ? raw.slice(sep + "---VEMBER-LOG---".length) : raw;
+        var parsed = HubModel.parseInstallLog(body, 12000);
+        if (HubModel.trimText(title).length > 0)
+          root.installTitle = title;
+        root.installLog = parsed.text;
+        if (HubModel.trimText(root.extraAppInstallStatus).length === 0 && parsed.text.length > 0) {
+          var label = HubModel.trimText(title).length > 0 ? title.replace(/^Vember Install:\s*/, "") : "Install";
+          if (parsed.finished) {
+            if (parsed.exitCode === 0)
+              root.extraAppInstallStatus = label + " finished.";
+            else if (parsed.exitCode === null || isNaN(parsed.exitCode))
+              root.extraAppInstallStatus = label + " finished (exit code unknown).";
+            else
+              root.extraAppInstallStatus = label + " failed (exit code " + parsed.exitCode + ").";
+          } else {
+            root.extraAppInstallStatus = "Previous install log loaded.";
+          }
+        }
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
   Timer {
-    id: extraAppInstallRefreshTimer
-    interval: 6000
+    id: installRefreshTimer
+    interval: 2500
     repeat: false
-    onTriggered: root.refreshGames()
+    onTriggered: root.refreshAfterInstall()
+  }
+
+  Timer {
+    id: installRefreshTimer2
+    interval: 9000
+    repeat: false
+    onTriggered: root.refreshAfterInstall()
+  }
+
+  Timer {
+    id: installNoOutputTimer
+    interval: 5000
+    repeat: false
+    onTriggered: {
+      if (!root.installRunning || HubModel.trimText(root.installLog).length > 0)
+        return;
+      root.extraAppInstallStatus = "No output yet — check the terminal window for a password or y/n prompt.";
+      root.lastActionMessage = root.extraAppInstallStatus;
+    }
   }
 
   // --- Processes: Game mount ---
@@ -1565,6 +1745,7 @@ Item {
     loadManifestInfo();
     loadHubConfig();
     loadOmarchyUpdateLog();
+    loadInstallLog();
   }
 
   Process {
@@ -1761,11 +1942,6 @@ Item {
         root.devStatus = root.devInstallStatus + " VS Code Server: " + (root.codeServerPresent ? root.codeServerState : "not set up") + ".";
       root.codeServerBusy = false;
     }
-  }
-  Process {
-    id: devInstallProc
-    stdout: StdioCollector {}
-    stderr: StdioCollector {}
   }
   Process {
     id: devInstallSilentProc
