@@ -45,25 +45,30 @@ it is the next candidate, not part of this node.
 - A component cannot see the enclosing file's `id`s: anything referenced across
   the boundary must become a property (`panel`, `cardRadius`).
 - QML ids are not properties of the root — never write `root.<id>`.
-- **Known limitation (not fixed):** `codeServerSetupProvisionProc` has no
-  timeout, and both `setupCodeServerTerminal` and `uninstallCodeServer` return
-  early while `codeServerBusy`. A genuinely hung `docker exec` would leave the
-  Code Server UI busy until a shell restart. Not fixed because a stall timer
-  that fired during a legitimately slow image pull or provisioning run would
-  report a false failure — the same bug class the rest of this work guards
-  against — and the hang path could not be exercised end to end here without
-  pulling the full image and running real provisioning.
-- **Live verification needs exactly one shell.** `omarchy-launch-shell` is a
-  supervisor: it relaunches `quickshell` after a non-zero exit and only stops
-  when the wrapper itself gets TERM. Killing `quickshell` alone leaves the
-  wrapper to respawn it, so rapid or overlapping `omarchy restart shell` calls
-  can accumulate several shells. Each orphan keeps whatever it was drawing —
-  including the hub overlay — so a layer count taken with more than one shell
-  running reads high and looks like a regression. Check `pgrep -x quickshell |
-  wc -l` is 1 before trusting `hyprctl layers`. This bit during this work: a
-  stale 3/4/3 layer count turned out to be five orphaned shells, and the same
-  measurement with one shell was a clean 0/1/0. It is an Omarchy restart race,
-  not this plugin, but it makes the plugin's live check unreliable if ignored.
+- **A hung Code Server setup is escaped, not timed out.** The setup chain has
+  no timeout and start, stop, uninstall and set-up-again are all disabled while
+  `codeServerBusy`, so a genuinely hung `docker exec` used to lock the tab until
+  a shell restart. A stall timer was rejected: firing during a legitimately slow
+  image pull would report a false failure, the bug class the rest of this work
+  guards against. `cancelCodeServerSetup()` is the user's own decision instead —
+  it stops every process in the chain and the poll timer, clears the busy flag,
+  and says the container may be half-configured so a retry recreates it.
+- **Live verification needs exactly one shell.** Two independent mechanisms
+  multiply shells. First, `omarchy-launch-shell` is a supervisor: it relaunches
+  `quickshell` after a non-zero exit and only stops when the wrapper itself gets
+  TERM, so killing the child alone lets the wrapper respawn it. Second, every
+  Hyprland config load re-runs the `hyprland.start` handler in
+  `default/hypr/autostart.lua`, which execs `omarchy-launch-shell` again — so
+  each `omarchy restart shell` can add a wrapper, and a burst of them grows the
+  count (1 → 2 → 4 → 8 was observed). Each orphan keeps whatever it was drawing,
+  including the hub overlay, so a layer count taken with more than one shell
+  reads high and looks like a regression. A stale 3/4/3 count during this work
+  was sixteen orphaned shells; the same measurement with one shell was a clean
+  0/1/0. Before trusting `hyprctl layers`, check `pgrep -x quickshell | wc -l`
+  is 1. To recover, kill the wrappers (not just the children) with the anchored
+  pattern `^/bin/bash /usr/share/omarchy/bin/omarchy-launch-shell$`, launch one
+  shell, and confirm the count is still 1 after a minute. It is an Omarchy
+  restart race, not this plugin.
 
 ## Follow-on hardening
 
