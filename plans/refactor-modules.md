@@ -45,6 +45,14 @@ it is the next candidate, not part of this node.
 - A component cannot see the enclosing file's `id`s: anything referenced across
   the boundary must become a property (`panel`, `cardRadius`).
 - QML ids are not properties of the root — never write `root.<id>`.
+- **Known limitation (not fixed):** `codeServerSetupProvisionProc` has no
+  timeout, and both `setupCodeServerTerminal` and `uninstallCodeServer` return
+  early while `codeServerBusy`. A genuinely hung `docker exec` would leave the
+  Code Server UI busy until a shell restart. Not fixed because a stall timer
+  that fired during a legitimately slow image pull or provisioning run would
+  report a false failure — the same bug class the rest of this work guards
+  against — and the hang path could not be exercised end to end here without
+  pulling the full image and running real provisioning.
 
 ## Follow-on hardening
 
