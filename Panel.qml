@@ -1385,12 +1385,26 @@ Item {
     command: ["steam"]
     stdout: StdioCollector {}
     stderr: StdioCollector {}
+    // A launcher stays in the foreground until the app closes, so a zero exit
+    // is not a useful success signal (and "steam" exits 0 immediately when it
+    // is already running). Only a non-zero exit is a real launch failure.
+    onExited: function(code) {
+      if (code !== 0)
+        root.lastActionMessage = Shell.failureMessage("Could not launch Steam", code, stderr.text);
+    }
   }
   Process {
     id: bnetLaunchProc
     command: ["omarchy-launch-battlenet"]
     stdout: StdioCollector {}
     stderr: StdioCollector {}
+    // omarchy-launch-battlenet exits 1 with a message when Battle.net is not
+    // installed or umu-launcher fails; surface that instead of leaving the
+    // "Launching…" message up forever.
+    onExited: function(code) {
+      if (code !== 0)
+        root.lastActionMessage = Shell.failureMessage("Could not launch Battle.net", code, stderr.text);
+    }
   }
   Process {
     id: hotReloadProc

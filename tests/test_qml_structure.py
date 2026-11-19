@@ -950,3 +950,49 @@ class TestContainerSelectionStability:
         assert ".name === want" in window or ".name === " in window, (
             "the lookup must compare container names"
         )
+
+
+class TestLauncherFailureSurfacing:
+    """Launchers must report a failed launch, not claim success forever.
+
+    steamLaunchProc and bnetLaunchProc used to set "Launching …" and never
+    inspect the exit code. omarchy-launch-battlenet exits 1 with a message when
+    Battle.net is not installed, and a missing/failed binary is equally silent,
+    so the user was left looking at "Launching Battle.net…" with nothing
+    happening. Each launcher must have an onExited handler that surfaces a
+    non-zero exit through Shell.failureMessage.
+    """
+
+    @staticmethod
+    def _proc_block(name):
+        text = read(REPO / "Panel.qml")
+        id_match = re.search(r"^\s*id:\s*" + re.escape(name) + r"\s*$", text, re.M)
+        assert id_match, "no " + name + " in Panel.qml"
+        open_idx = text.rfind("{", 0, id_match.start())
+        depth = 0
+        for i in range(open_idx, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[open_idx:i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    def test_steam_launcher_checks_exit(self):
+        block = self._proc_block("steamLaunchProc")
+        assert "onExited:" in block, (
+            "steamLaunchProc must handle onExited so a failed launch is reported"
+        )
+        assert "failureMessage" in block, (
+            "a non-zero exit must surface through Shell.failureMessage"
+        )
+
+    def test_battlenet_launcher_checks_exit(self):
+        block = self._proc_block("bnetLaunchProc")
+        assert "onExited:" in block, (
+            "bnetLaunchProc must handle onExited so a failed launch is reported"
+        )
+        assert "failureMessage" in block, (
+            "a non-zero exit must surface through Shell.failureMessage"
+        )
