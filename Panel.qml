@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.33"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 109
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.34"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 110
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -2232,7 +2232,16 @@ Item {
     interval: 350
     repeat: false
     onTriggered: {
-      root.open();
+      // Reopen through the shell, not root.open() directly. requestClose() went
+      // through shell.hide(), which drops this plugin from the shell's
+      // openPanelIds; calling open() here would put the layer back on screen
+      // while the shell still believes the panel is closed. summon() re-adds
+      // the id and delivers open() itself, so the two agree. It only looks
+      // harmless today because keepLoaded keeps the Loader mounted.
+      if (shell && typeof shell.summon === "function")
+        shell.summon(pluginId, "");
+      else
+        root.open();
     }
   }
 

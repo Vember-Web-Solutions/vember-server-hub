@@ -250,6 +250,47 @@ class TestNoSelfRestartingFileWatcher:
         )
 
 
+class TestPanelReopenGoesThroughShell:
+    """Reopening the panel must go through the shell's own state.
+
+    requestClose() closes through shell.hide(), which drops the plugin from the
+    shell's openPanelIds. Reopening with root.open() puts the layer back on
+    screen while the shell still believes the panel is closed, so isPluginOpen(),
+    toggle() and the next hide() disagree with what the user sees. It only looks
+    harmless because keepLoaded keeps the Loader mounted, and that is a property
+    of the manifest rather than of this code path.
+    """
+
+    @staticmethod
+    def _without_comments(text):
+        # Good enough for a scan: drop everything from a // to end of line. A
+        # URL in a string would be truncated too, which only ever hides a match
+        # we are not looking for.
+        return "\n".join(line.split("//", 1)[0] for line in text.splitlines())
+
+    def test_root_open_is_only_the_shell_less_fallback(self):
+        text = self._without_comments(read(REPO / "Panel.qml"))
+        calls = list(re.finditer(r"root\.open\s*\(", text))
+        assert len(calls) <= 1, (
+            "root.open() should exist only as the fallback for when the shell is "
+            "unavailable; found %d calls" % len(calls)
+        )
+        for m in calls:
+            window = text[max(0, m.start() - 400):m.start()]
+            assert "shell.summon(pluginId" in window, (
+                "root.open() may only follow a failed shell.summon(): reopening "
+                "directly leaves the shell believing the panel is closed"
+            )
+
+    def test_reopen_timer_uses_summon(self):
+        text = read(REPO / "Panel.qml")
+        block = re.search(r"id:\s*serverNameReopenTimer(.*?)\n  \}", text, re.S)
+        assert block, "serverNameReopenTimer not found in Panel.qml"
+        assert "shell.summon(pluginId" in block.group(1), (
+            "serverNameReopenTimer must reopen through shell.summon(pluginId, ...)"
+        )
+
+
 class TestBackendReferences:
     """Cross-file references must resolve to something that exists.
 
