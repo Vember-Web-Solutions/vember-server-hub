@@ -534,6 +534,34 @@ class TestPollSafety:
                 "%s must only be reset when not preserving the selection" % prop
             )
 
+    def test_refresh_dev_does_not_restart_the_chain_mid_flight(self):
+        # refreshDev runs on the 15s poll and drives the devTools -> devRepos ->
+        # codeServer chain. Restarting devToolsProc unconditionally killed a
+        # slow repo scan before it finished, leaving devRepos stale forever. The
+        # poll path must start the chain only when none of it is in flight.
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshDev\((\w+)\)", text)
+        assert fn, "refreshDev must take a preserve flag"
+        body_start = text.index("{", fn.end())
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshDev")
+        assert (
+            "if (devToolsProc.running || devReposProc.running || codeServerProc.running)"
+            in body
+        ), (
+            "the poll path of refreshDev must not restart the dev chain while "
+            "any part of it is in flight"
+        )
+
     def test_extra_apps_scan_is_not_restarted_mid_flight(self):
         text = read(REPO / "Panel.qml")
         idx = text.index("extraAppsScanProc.command = Gaming.scanCommand()")

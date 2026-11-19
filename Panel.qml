@@ -321,9 +321,8 @@ Item {
   function refreshDev(preserveSelection) {
     var keep = preserveSelection === true;
     devError = "";
-    devBusy = true;
-    devToolsOnlyRefresh = false;
     if (!keep) {
+      // Opening the panel: full reset and a fresh scan.
       devStatus = "Scanning development tools and repositories…";
       devTools = [];
       devRepos = [];
@@ -336,7 +335,21 @@ Item {
       codeServerState = "unknown";
       codeServerStatusText = "";
       codeServerImage = "";
+      devBusy = true;
+      devToolsOnlyRefresh = false;
+      devToolsProc.running = false;
+      devToolsProc.running = true;
+      return;
     }
+    // Poll: start the devTools -> devRepos -> codeServer chain only when none of
+    // it is in flight. Restarting devToolsProc unconditionally killed a slow
+    // repo scan before it finished, leaving devRepos stale forever. Do not touch
+    // devToolsOnlyRefresh here: a tools-only refresh from an install may be
+    // running and owns that flag until codeServerProc clears it.
+    if (devToolsProc.running || devReposProc.running || codeServerProc.running)
+      return;
+    devBusy = true;
+    devToolsOnlyRefresh = false;
     devToolsProc.running = false;
     devToolsProc.running = true;
   }
