@@ -130,6 +130,26 @@ Work that fell out of the split, done in the same arc:
   non-TTY output does not emit, so the bar sat at zero. It now accumulates
   layer bytes through the same `Docker.parsePullLine` / `accumulateLayers` path
   the code-server pull uses.
+- **Poll safety, round two:** more of the same class. `refreshGames()` restarted
+  the Steam manifest scan and force-reloaded the library VDF every tick (the
+  VDF reload restarted the scan again), so a slow scan never settled; the scan
+  now starts only when idle and the VDF is reloaded only on a full refresh.
+  `refreshDev()` restarted `devToolsProc` unconditionally, killing the
+  `devTools → devRepos → codeServer` chain mid-flight — a slow repo `find`
+  never finished and `devRepos` stayed stale. The poll path now starts the
+  chain only when none of it is in flight. `TestSteamScanPollSafety` and the
+  `refreshDev` chain guard pin both, mutation-verified.
+- **Container size flicker:** `hub.dockerContainers` is reassigned to fresh
+  objects every poll, so the detail panel's `selected` object changed identity
+  each tick and `onSelectedChanged` re-ran `docker ps -s`, blanking the size to
+  "Querying…" every 15 seconds. The query now keys off the container name.
+  `TestDockerDetailPollSafety` pins it.
+- **Dead targeted-refresh flag:** `devToolsOnlyRefresh` was declared and read
+  but never set, so `refreshDevTools()` silently did a full repo rescan after
+  every tool install, and the flag was cleared before the status message could
+  read it. It now sets the flag, leaves it for `codeServerProc` to read and
+  clear at the end of the chain, and the install handler no longer restarts
+  `codeServerProc` by hand. `TestDevToolsTargetedRefresh` pins it.
 
 ## Done when
 
@@ -138,16 +158,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 370 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,532 lines. The growth is comments, per-file
+- 378 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,572 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,368) and `ui/` (4,173) was already there.
-- The three monoliths went 7,694 → 2,967 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,560. `Panel.qml` grew by the
+  moved into `model/*.mjs` (1,368) and `ui/` (4,178) was already there.
+- The three monoliths went 7,694 → 3,002 lines: `HubPanel.qml` 4,376 → 407,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,595. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
-  wired to the tested parser; the largest file is now `Panel.qml` at 2,560,
+  wired to the tested parser; the largest file is now `Panel.qml` at 2,595,
   then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 2,544 lines across 11 files and drives the real modules
+- The test suite is 2,727 lines across 11 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.2, build 72 → 78.
+- Version 0.1.0 → 0.6.3, build 72 → 79.
