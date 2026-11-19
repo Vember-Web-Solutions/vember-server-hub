@@ -260,6 +260,15 @@ Work that fell out of the split, done in the same arc:
   cleared the status line on open, which would blank the only sign of a running
   install now that opening the hub is what a user does to check on it. The
   clear is skipped while an install or update is running.
+- **Closing the hub made launch failures silent.** The status line a failed
+  launch writes was the only report, and it now lands in a panel nobody is
+  looking at — so a launch that failed would look exactly like a button that
+  does nothing. The five hand-off paths whose failure the user must know about
+  (Steam, Battle.net, extra app launchers, opening a repo in an editor, the
+  authorized_keys editor) now also raise a desktop notification through
+  `Shell.notifyCommand`, which builds argv for `omarchy-notification-send` at
+  normal urgency so it respects the desktop's silencing. `TestNotifyCommand`
+  and `TestLaunchFailureIsVisible` pin the shape and the wiring.
 
 ## Done when
 
@@ -268,16 +277,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 415 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,641 lines. The growth is comments, per-file
+- 428 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,678 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
-  moved into `model/*.mjs` (1,374) and `ui/` (4,190) was already there.
+  moved into `model/*.mjs` (1,389) and `ui/` (4,190) was already there.
 - The three monoliths went 7,694 → 3,022 lines: `HubPanel.qml` 4,376 → 407,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,646. `Panel.qml` grew by the
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,668. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,646, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 3,300 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,668, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 3,403 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.12, build 72 → 88.
+- Version 0.1.0 → 0.6.13, build 72 → 89.

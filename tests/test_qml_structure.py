@@ -1286,3 +1286,59 @@ class TestExternalHandOffReachability:
         assert "omarchyUpdateRunning" in guard, (
             "refreshAll must not clear the status line while an update runs"
         )
+
+
+class TestLaunchFailureIsVisible:
+    """A failed hand-off must reach the user, not just a closed panel.
+
+    Every launch path closes the hub, so the status message a failed launch
+    writes lands in a panel nobody is looking at. Without a notification, a
+    launch that failed looks exactly like a button that does nothing.
+    """
+
+    PROCESSES = [
+        "steamLaunchProc",
+        "bnetLaunchProc",
+        "extraAppLaunchProc",
+        "devOpenRepoProc",
+        "sshAuthorizedKeysEditorProc",
+    ]
+
+    def _panel(self):
+        return read(REPO / "Panel.qml")
+
+    def _process(self, name):
+        text = self._panel()
+        match = re.search(r"^\s*id:\s*" + name + r"\s*$", text, re.M)
+        assert match, name + " not found in Panel.qml"
+        start = text.rfind("Process {", 0, match.start())
+        assert start >= 0, "no Process block for " + name
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    @pytest.mark.parametrize("name", PROCESSES)
+    def test_failure_notifies(self, name):
+        body = self._process(name)
+        assert "root.notify(" in body, (
+            name + " must notify on failure; the hub is closed by then, so a "
+            "status message alone is invisible"
+        )
+
+    def test_notify_uses_the_model_helper(self):
+        text = self._panel()
+        body = text[text.index("function notify(text)") :]
+        body = body[: body.index("\n  }")]
+        assert "Shell.notifyCommand" in body
+
+    def test_notify_ignores_empty_text(self):
+        text = self._panel()
+        body = text[text.index("function notify(text)") :]
+        body = body[: body.index("\n  }")]
+        assert "length === 0" in body, "an empty message must not raise a notification"

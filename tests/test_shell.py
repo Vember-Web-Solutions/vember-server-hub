@@ -129,3 +129,50 @@ class TestFailureMessage:
         # Callers only use this on failure, but the code must not be swallowed.
         out = js("console.log(JSON.stringify(Shell.failureMessage('Thing failed', 0, '')))")
         assert out == "Thing failed (code 0)."
+
+
+class TestNotifyCommand:
+    """A launch failure is reported into a panel the hub has already closed.
+
+    Every launch path closes the hub (it is a full-screen overlay), so the
+    status message a failed launch writes is invisible. The notification is
+    the only thing the user will see, which makes its shape worth pinning.
+    """
+
+    def test_uses_the_omarchy_notification_wrapper(self, js):
+        out = js(
+            "console.log(JSON.stringify(Shell.notifyCommand('Vember Server Hub', 'boom')))"
+        )
+        assert out[0] == "omarchy-notification-send"
+        assert out[1:3] == ["--app-name", "Vember Server Hub"]
+
+    def test_headline_and_description_are_positional(self, js):
+        out = js(
+            "console.log(JSON.stringify(Shell.notifyCommand('Vember Server Hub', 'Could not launch Steam (code 1).')))"
+        )
+        assert out[-2] == "Vember Server Hub"
+        assert out[-1] == "Could not launch Steam (code 1)."
+
+    def test_empty_description_is_dropped(self, js):
+        out = js("console.log(JSON.stringify(Shell.notifyCommand('Vember Server Hub', '')))")
+        assert out[-1] == "Vember Server Hub"
+        assert out.count("Vember Server Hub") == 2
+
+    def test_empty_headline_falls_back(self, js):
+        out = js("console.log(JSON.stringify(Shell.notifyCommand('', 'boom')))")
+        assert out[-2] == "Vember Server Hub"
+        assert out[-1] == "boom"
+
+    def test_urgency_is_normal_not_critical(self, js):
+        # A failed launch is worth a notification, not an alarm: -u critical
+        # would bypass the desktop's silencing rules.
+        out = js("console.log(JSON.stringify(Shell.notifyCommand('H', 'b')))")
+        assert out[out.index("-u") + 1] == "normal"
+
+    def test_no_shell_quoting_is_needed(self, js):
+        # argv, not a shell string: a title with quotes or a dollar sign must
+        # reach the notification intact.
+        out = js(
+            "console.log(JSON.stringify(Shell.notifyCommand('H', 'Elena\\'s $HOME \\\"x\\\"')))"
+        )
+        assert out[-1] == "Elena's $HOME \"x\""

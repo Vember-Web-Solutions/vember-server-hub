@@ -54,6 +54,20 @@ export class Shell {
   var first = nonEmptyLines(detail)[0] || detail;
   return base + ": " + trim(first) + ".";
   }
+
+  // A desktop notification command, as argv. A failure of something the hub
+  // launched is reported into a panel that is closed by then — the hub closes
+  // itself on hand-off — so the failure would look like a dead button. The
+  // Omarchy wrapper is used rather than a bare notify-send so the notification
+  // follows the desktop's styling and silencing rules.
+  notifyCommand(headline, description) {
+  var head = trim(headline);
+  if (head.length === 0) head = "Vember Server Hub";
+  var body = trim(description);
+  var cmd = ["omarchy-notification-send", "--app-name", "Vember Server Hub", "-u", "normal", head];
+  if (body.length > 0) cmd.push(body);
+  return cmd;
+  }
 }
 
 const impl = new Shell();
@@ -67,3 +81,4 @@ export function stripAnsi(...args) { return impl.stripAnsi(...args); }
 export function quote(...args) { return impl.quote(...args); }
 export function humanBytes(...args) { return impl.humanBytes(...args); }
 export function failureMessage(...args) { return impl.failureMessage(...args); }
+export function notifyCommand(...args) { return impl.notifyCommand(...args); }

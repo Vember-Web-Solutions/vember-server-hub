@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.12"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 88
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.13"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 89
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1224,6 +1224,7 @@ Item {
         root.sshAuthorizedKeysStatus = Shell.failureMessage(
           "Could not open authorized_keys in an editor", code, err) +
           " Try editing ~/.ssh/authorized_keys directly.";
+        root.notify(root.sshAuthorizedKeysStatus);
       }
     }
   }
@@ -1423,6 +1424,11 @@ Item {
 
   // --- Processes: Launchers ---
   Process {
+    id: notifyProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+  }
+  Process {
     id: steamLaunchProc
     command: ["steam"]
     stdout: StdioCollector {}
@@ -1431,8 +1437,10 @@ Item {
     // is not a useful success signal (and "steam" exits 0 immediately when it
     // is already running). Only a non-zero exit is a real launch failure.
     onExited: function(code) {
-      if (code !== 0)
+      if (code !== 0) {
         root.lastActionMessage = Shell.failureMessage("Could not launch Steam", code, stderr.text);
+        root.notify(root.lastActionMessage);
+      }
     }
   }
   Process {
@@ -1444,8 +1452,10 @@ Item {
     // installed or umu-launcher fails; surface that instead of leaving the
     // "Launching…" message up forever.
     onExited: function(code) {
-      if (code !== 0)
+      if (code !== 0) {
         root.lastActionMessage = Shell.failureMessage("Could not launch Battle.net", code, stderr.text);
+        root.notify(root.lastActionMessage);
+      }
     }
   }
   Process {
@@ -1456,6 +1466,16 @@ Item {
   }
 
   // --- Launchers ---
+  // A launch failure happens after the hub has closed itself, so the message
+  // it writes into the panel is invisible. Notify, so a failed launch does not
+  // look like a dead button.
+  function notify(text) {
+    var msg = Shell.trim(text);
+    if (msg.length === 0) return;
+    notifyProc.command = Shell.notifyCommand("Vember Server Hub", msg);
+    notifyProc.running = true;
+  }
+
   function launchSteam() {
     steamLaunchProc.running = false;
     steamLaunchProc.running = true;
@@ -1716,6 +1736,7 @@ Item {
       } else {
         var err = Shell.trim(stderr.text || "");
         root.lastActionMessage = "Failed to launch " + (appName || appId) + (err.length > 0 ? (": " + err) : (" (code " + code + ")."));
+        root.notify(root.lastActionMessage);
       }
       root.refreshGames();
     }
@@ -2221,6 +2242,7 @@ Item {
         var msg = err.length > 0 ? err : ("Failed to open in " + label + " (code " + code + ").");
         root.devStatus = msg;
         root.lastActionMessage = msg;
+        root.notify(msg);
       }
     }
   }
