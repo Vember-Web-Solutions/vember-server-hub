@@ -474,3 +474,72 @@ class TestInstallWatchdog:
         assert "omarchyUpdateStallTimer.restart()" in window, (
             "the Omarchy update reattach path must restart its watchdog"
         )
+
+
+class TestPollSafety:
+    """The 15s poll must not destroy state the user is looking at.
+
+    `refreshAll()` runs on the poll timer while the panel is open. The old
+    version reset the Dev tab's selected repository, its detail panel and the
+    extra-apps list on every tick, so a repository being inspected was
+    deselected every 15 seconds and a slow app scan was killed before it could
+    finish. The poll now passes `preserveSelection`, and the scan is only
+    started when none is in flight.
+    """
+
+    def test_poll_preserves_selection(self):
+        text = read(REPO / "Panel.qml")
+        # Find the poll timer's onTriggered and require it to preserve.
+        id_match = re.search(r"^\s*id:\s*pollTimer\s*$", text, re.M)
+        assert id_match, "no pollTimer in Panel.qml"
+        window = text[id_match.start():id_match.start() + 400]
+        assert "refreshAll(true)" in window, (
+            "the poll timer must call refreshAll(true) so it preserves the "
+            "user's selected repository"
+        )
+
+    def test_open_does_a_full_reset(self):
+        text = read(REPO / "Panel.qml")
+        # The open path keeps the full reset (no argument).
+        open_match = re.search(r"function open\(payloadJson\)", text)
+        assert open_match, "no open() in Panel.qml"
+        window = text[open_match.start():open_match.start() + 500]
+        assert "refreshAll()" in window and "refreshAll(true)" not in window, (
+            "opening the panel should do a full refresh, not a preserving one"
+        )
+
+    def test_refresh_dev_honours_preserve(self):
+        text = read(REPO / "Panel.qml")
+        fn = re.search(r"function refreshDev\((\w+)\)", text)
+        assert fn, "refreshDev must take a preserve flag"
+        param = fn.group(1)
+        body_start = text.index("{", fn.end())
+        # walk to matching brace
+        depth = 0
+        for i in range(body_start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[body_start:i + 1]
+                    break
+        else:
+            raise AssertionError("unbalanced braces in refreshDev")
+        # The destructive resets must sit behind the keep guard.
+        guard = body.index("if (!keep)")
+        for prop in ("devSelectedRepoPath", "devRepoDetail", "devRepos = []"):
+            idx = body.index(prop)
+            assert idx > guard, (
+                "%s must only be reset when not preserving the selection" % prop
+            )
+
+    def test_extra_apps_scan_is_not_restarted_mid_flight(self):
+        text = read(REPO / "Panel.qml")
+        idx = text.index("extraAppsScanProc.command = Gaming.scanCommand()")
+        # The start must be guarded by a running check just above it.
+        window = text[max(0, idx - 400):idx]
+        assert "if (!extraAppsScanProc.running)" in window, (
+            "the extra-apps scan must not be restarted while one is in flight, "
+            "or a scan slower than the 15s poll never completes"
+        )

@@ -303,32 +303,40 @@ Item {
   }
 
   // --- Refresh entry points ---
-  function refreshAll() {
+  //
+  // `preserveSelection` is true for the 15s poll and false when the panel
+  // opens. The poll must not wipe state the user is looking at: the old
+  // unconditional reset deselected the repository being inspected every 15
+  // seconds and blanked its detail panel.
+  function refreshAll(preserveSelection) {
     lastActionMessage = "";
     refreshTailscale();
     refreshDocker();
     refreshGames();
     refreshGameMount();
     refreshSsh();
-    refreshDev();
+    refreshDev(preserveSelection === true);
   }
 
-  function refreshDev() {
+  function refreshDev(preserveSelection) {
+    var keep = preserveSelection === true;
     devError = "";
-    devStatus = "Scanning development tools and repositories…";
     devBusy = true;
     devToolsOnlyRefresh = false;
-    devTools = [];
-    devRepos = [];
-    devSelectedRepoPath = "";
-    devRepoDetail = ({});
-    devRepoDetailBusy = false;
-    devRepoDetailProc.running = false;
-    codeServerPresent = false;
-    codeServerRunning = false;
-    codeServerState = "unknown";
-    codeServerStatusText = "";
-    codeServerImage = "";
+    if (!keep) {
+      devStatus = "Scanning development tools and repositories…";
+      devTools = [];
+      devRepos = [];
+      devSelectedRepoPath = "";
+      devRepoDetail = ({});
+      devRepoDetailBusy = false;
+      devRepoDetailProc.running = false;
+      codeServerPresent = false;
+      codeServerRunning = false;
+      codeServerState = "unknown";
+      codeServerStatusText = "";
+      codeServerImage = "";
+    }
     devToolsProc.running = false;
     devToolsProc.running = true;
   }
@@ -724,10 +732,15 @@ Item {
     bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
     if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
 
-    extraAppsScanBusy = true;
-    extraAppsScanProc.running = false;
-    extraAppsScanProc.command = Gaming.scanCommand();
-    extraAppsScanProc.running = true;
+    // Only start a scan when none is in flight. refreshGames runs on the 15s
+    // poll, and the scan shells out to flatpak info for each catalog entry;
+    // restarting it unconditionally would kill a slow scan before it finished
+    // and leave the app list stale forever.
+    if (!extraAppsScanProc.running) {
+      extraAppsScanBusy = true;
+      extraAppsScanProc.command = Gaming.scanCommand();
+      extraAppsScanProc.running = true;
+    }
   }
 
   function launchExtraApp(appId) {
@@ -1869,7 +1882,7 @@ Item {
     interval: 15000
     repeat: true
     running: root.opened
-    onTriggered: root.refreshAll()
+    onTriggered: root.refreshAll(true)
   }
 
   Timer {
