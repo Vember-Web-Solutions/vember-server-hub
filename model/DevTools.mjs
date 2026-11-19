@@ -130,12 +130,21 @@ export class DevTools {
   return String(id || "");
   }
 
+  // The container and the config directory share one name. Renaming the
+  // container without renaming the directory would strand the user's settings,
+  // so every caller builds from this one value.
   codeServerContainer() {
   return "vember-code-server";
   }
 
+  // The config directory as a shell fragment, for the setup script.
+  codeServerConfigDir() {
+  return "$HOME/.config/" + this.codeServerContainer();
+  }
+
   codeServerPsCommand() {
-  return ["sh", "-c", "docker ps -a --filter name=^/vember-code-server$ --format '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}' 2>/dev/null || true"];
+  return ["sh", "-c", "docker ps -a --filter name=^/" + this.codeServerContainer()
+    + "$ --format '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}' 2>/dev/null || true"];
   }
 
   parseCodeServerStatus(text) {
@@ -167,4 +176,5 @@ export function parseRepoDetail(...args) { return impl.parseRepoDetail(...args);
 export function label(...args) { return impl.label(...args); }
 export function codeServerContainer(...args) { return impl.codeServerContainer(...args); }
 export function codeServerPsCommand(...args) { return impl.codeServerPsCommand(...args); }
+export function codeServerConfigDir(...args) { return impl.codeServerConfigDir(...args); }
 export function parseCodeServerStatus(...args) { return impl.parseCodeServerStatus(...args); }

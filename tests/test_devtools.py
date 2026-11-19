@@ -144,3 +144,37 @@ class TestCodeServer:
             "status": "",
             "image": "",
         }
+
+
+class TestCodeServerNaming:
+    """The container and its config directory share one name.
+
+    Panel.qml builds the setup script, the docker run arguments and the status
+    query from these helpers. If the two ever disagreed, setup would write
+    settings into a directory the container never mounts.
+    """
+
+    def test_container_name(self, js):
+        assert js("console.log(JSON.stringify(DevTools.codeServerContainer()))") == (
+            "vember-code-server"
+        )
+
+    def test_config_dir_matches_the_container_name(self, js):
+        out = js(
+            "console.log(JSON.stringify(["
+            "DevTools.codeServerConfigDir(), DevTools.codeServerContainer()]))"
+        )
+        directory, name = out
+        assert directory == "$HOME/.config/" + name
+
+    def test_status_query_uses_the_same_name(self, js):
+        out = js("console.log(JSON.stringify(DevTools.codeServerPsCommand()))")
+        name = js("console.log(JSON.stringify(DevTools.codeServerContainer()))")
+        assert name in out[2]
+
+    def test_status_query_is_an_anchored_exact_match(self, js):
+        # A prefix match would also report a container called
+        # vember-code-server-2 as the one this plugin manages.
+        out = js("console.log(JSON.stringify(DevTools.codeServerPsCommand()))")
+        name = js("console.log(JSON.stringify(DevTools.codeServerContainer()))")
+        assert "name=^/" + name + "$" in out[2]

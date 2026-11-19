@@ -403,16 +403,18 @@ Item {
 
     _appendCodeServerSetupLog("Starting setup for port " + p + "…");
 
+    var csDir = DevTools.codeServerConfigDir();
+    var csName = DevTools.codeServerContainer();
     var prep = [
       "set -e",
       "PASS=\"$VEMBER_CS_PASSWORD\"",
       "PORT=\"$1\"",
       "echo \"Password received (length: ${#PASS}).\"",
       "if [ -z \"$PASS\" ]; then echo 'Password is empty; aborting.'; exit 1; fi",
-      "mkdir -p \"$HOME/.config/vember-code-server/code-server\" \"$HOME/.config/vember-code-server/user-data\" \"$HOME/.config/vember-code-server/bin\" \"$HOME/Projects\"",
+      "mkdir -p \"" + csDir + "/code-server\" \"" + csDir + "/user-data\" \"" + csDir + "/bin\" \"$HOME/Projects\"",
       "umask 077",
-      "printf 'PASSWORD=%s\\n' \"$PASS\" > \"$HOME/.config/vember-code-server/code-server.env\"",
-      "{ echo 'bind-addr: 0.0.0.0:8080'; echo 'auth: password'; echo 'cert: false'; } > \"$HOME/.config/vember-code-server/code-server/config.yaml\"",
+      "printf 'PASSWORD=%s\\n' \"$PASS\" > \"" + csDir + "/code-server.env\"",
+      "{ echo 'bind-addr: 0.0.0.0:8080'; echo 'auth: password'; echo 'cert: false'; } > \"" + csDir + "/code-server/config.yaml\"",
       "umask 022",
       "if [ ! -f \"$HOME/Projects/vember-python.code-workspace\" ]; then cat > \"$HOME/Projects/vember-python.code-workspace\" <<'JSON'",
       "{",
@@ -478,10 +480,10 @@ Item {
       "else",
       "  echo 'Workspace settings already exist: ~/Projects/.vscode/settings.json'",
       "fi",
-      "mkdir -p \"$HOME/.config/vember-code-server/user-data/User\"",
+      "mkdir -p \"" + csDir + "/user-data/User\"",
       "python3 - <<'PY'",
       "import json, os",
-      "path = os.path.expanduser('~/.config/vember-code-server/user-data/User/settings.json')",
+      "path = os.path.expanduser('~/.config/" + csName + "/user-data/User/settings.json')",
       "os.makedirs(os.path.dirname(path), exist_ok=True)",
       "data = {}",
       "if os.path.exists(path):",
@@ -498,7 +500,7 @@ Item {
       "    f.write('\\n')",
       "PY",
       "echo 'Set Code Server terminal default cwd to /home/coder/home/Projects'",
-      "if docker ps -a --format '{{.Names}}' | grep -qx 'vember-code-server'; then echo 'EXISTS'; exit 10; fi",
+      "if docker ps -a --format '{{.Names}}' | grep -qx '" + csName + "'; then echo 'EXISTS'; exit 10; fi",
       "if ! command -v docker >/dev/null 2>&1; then echo 'Docker is not installed or not in PATH.'; exit 11; fi",
       "if ! docker info >/dev/null 2>&1; then echo 'Docker is not running or not accessible (try starting docker and ensuring access).'; exit 12; fi",
       "echo 'READY'"
@@ -515,7 +517,7 @@ Item {
     if (codeServerBusy) return;
     codeServerBusy = true;
     codeServerActionProc.actionName = "start";
-    codeServerActionProc.command = ["docker", "start", "vember-code-server"];
+    codeServerActionProc.command = ["docker", "start", DevTools.codeServerContainer()];
     codeServerActionProc.running = true;
   }
 
@@ -523,7 +525,7 @@ Item {
     if (codeServerBusy) return;
     codeServerBusy = true;
     codeServerActionProc.actionName = "stop";
-    codeServerActionProc.command = ["docker", "stop", "vember-code-server"];
+    codeServerActionProc.command = ["docker", "stop", DevTools.codeServerContainer()];
     codeServerActionProc.running = true;
   }
 
@@ -538,7 +540,7 @@ Item {
     codeServerSetupPollTimer.stop();
     codeServerSetupProvisionProc.running = false;
     codeServerActionProc.actionName = "uninstall";
-    codeServerActionProc.command = ["docker", "rm", "-f", "vember-code-server"];
+    codeServerActionProc.command = ["docker", "rm", "-f", DevTools.codeServerContainer()];
     codeServerActionProc.running = true;
   }
 
@@ -2142,7 +2144,7 @@ Item {
             "echo 'Provisioning complete.'"
           ].join("\n");
           codeServerSetupProvisionProc.running = false;
-          codeServerSetupProvisionProc.command = ["docker", "exec", "vember-code-server", "bash", "-lc", prov];
+          codeServerSetupProvisionProc.command = ["docker", "exec", DevTools.codeServerContainer(), "bash", "-lc", prov];
           codeServerSetupProvisionProc.running = true;
         } else {
           root.codeServerBusy = false;
@@ -2227,15 +2229,16 @@ Item {
         root.codeServerStatusText = root.codeServerSetupDetail;
         root._appendCodeServerSetupLog("Image pull complete. Creating container…");
         var p = root.codeServerPort;
+        var csConf = root.homeDir + "/.config/" + DevTools.codeServerContainer();
         codeServerSetupRunProc.command = ["docker", "run", "-d",
-          "--name", "vember-code-server",
+          "--name", DevTools.codeServerContainer(),
           "-p", String(p) + ":8080",
-          "-v", root.homeDir + "/.config/vember-code-server:/home/coder/.config",
-          "-v", root.homeDir + "/.config/vember-code-server/user-data:/home/coder/.local/share/code-server",
-          "-v", root.homeDir + "/.config/vember-code-server/bin:/home/coder/.local/bin",
+          "-v", csConf + ":/home/coder/.config",
+          "-v", csConf + "/user-data:/home/coder/.local/share/code-server",
+          "-v", csConf + "/bin:/home/coder/.local/bin",
           "-v", root.homeDir + ":/home/coder/home",
           "-e", "PATH=/home/coder/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-          "--env-file", root.homeDir + "/.config/vember-code-server/code-server.env",
+          "--env-file", csConf + "/code-server.env",
           "--restart", "unless-stopped",
           "codercom/code-server:latest"];
         root.codeServerSetupProvisionAfterStart = true;
