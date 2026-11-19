@@ -2152,7 +2152,10 @@ Item {
       if (code === 0) {
         root.devRepoDetail = DevTools.parseRepoDetail(stdout.text || "");
       } else {
-        root.devRepoDetail = { error: "Failed to load repo details (code " + code + ")." };
+        // Include git's own reason: a permissions problem and a missing
+        // repository look identical as "code 1".
+        root.devRepoDetail = { error: Shell.failureMessage(
+          "Failed to load repo details", code, devRepoDetailProc.stderr.text) };
       }
     }
   }
