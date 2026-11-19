@@ -996,3 +996,41 @@ class TestLauncherFailureSurfacing:
         assert "failureMessage" in block, (
             "a non-zero exit must surface through Shell.failureMessage"
         )
+
+
+class TestSshKeySelectionStability:
+    """SSH key removal must target the key the user selected, not its slot.
+
+    hub.sshAuthorizedKeys is re-read every 15s and a key added above — or an
+    external edit — shifts every index. An index-based selection would then
+    point removeSelectedAuthorizedKey at a different key's lineNo and delete the
+    wrong line from authorized_keys: data loss, not just a wrong detail panel.
+    Selection must be keyed by the unique keyData blob, with the index derived.
+    """
+
+    def test_selection_is_keyed_by_keydata(self):
+        text = read(REPO / "Panel.qml")
+        assert 'property string sshSelectedKeyData' in text, (
+            "the SSH key selection must hold the keyData identity"
+        )
+        # The index must be derived (readonly), not a writable slot.
+        assert "readonly property int sshSelectedKeyIndex" in text, (
+            "sshSelectedKeyIndex must be derived from sshSelectedKeyData so it "
+            "cannot drift when the list is re-read"
+        )
+
+    def test_no_writable_index_assignment(self):
+        text = read(REPO / "Panel.qml") + read(REPO / "ui" / "tabs" / "AccessTab.qml")
+        # An assignment would be `sshSelectedKeyIndex =` not followed by `=`.
+        assert not re.search(r"sshSelectedKeyIndex\s*=(?!=)", text), (
+            "nothing may assign sshSelectedKeyIndex; set sshSelectedKeyData instead"
+        )
+
+    def test_derived_index_looks_up_keydata(self):
+        text = read(REPO / "Panel.qml")
+        m = re.search(r"readonly property int sshSelectedKeyIndex:\s*\{", text)
+        assert m, "no derived sshSelectedKeyIndex"
+        window = text[m.start():m.start() + 400]
+        assert ".keyData === want" in window, (
+            "the derived index must compare keyData to find the selected key"
+        )

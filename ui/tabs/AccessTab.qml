@@ -405,7 +405,7 @@ Column {
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                onClicked: hub.sshSelectedKeyIndex = (hub.sshSelectedKeyIndex === index ? -1 : index)
+                onClicked: hub.sshSelectedKeyData = (hub.sshSelectedKeyData === modelData.keyData ? "" : modelData.keyData)
               }
               Column {
                 id: keyItemCol

@@ -113,7 +113,19 @@ Item {
   property string sshHostName: ""
 
   property var sshAuthorizedKeys: []
-  property int sshSelectedKeyIndex: -1
+  // Selection is keyed by the public-key blob (keyData), not the list index:
+  // the 15s poll re-reads authorized_keys and a key added above — or an
+  // external edit — shifts every index, which would make removal delete the
+  // wrong line. The index is derived from the stable identity instead.
+  property string sshSelectedKeyData: ""
+  readonly property int sshSelectedKeyIndex: {
+    var want = sshSelectedKeyData;
+    if (!want) return -1;
+    var list = sshAuthorizedKeys || [];
+    for (var i = 0; i < list.length; i++)
+      if (list[i] && list[i].keyData === want) return i;
+    return -1;
+  }
   property string sshNewKeyText: ""
   property string sshAuthorizedKeysStatus: ""
   property string sshAuthorizedKeysEditorError: ""
@@ -1163,8 +1175,9 @@ Item {
     stdout: StdioCollector {
       onStreamFinished: {
         root.sshAuthorizedKeys = Ssh.parseAuthorizedKeys(text);
-        if (root.sshSelectedKeyIndex >= root.sshAuthorizedKeys.length)
-          root.sshSelectedKeyIndex = root.sshAuthorizedKeys.length > 0 ? 0 : -1;
+        // sshSelectedKeyIndex is derived from sshSelectedKeyData, so a key that
+        // disappeared from the file simply resolves to -1 on its own; no clamp
+        // (and no jumping to key 0, which would silently retarget a removal).
       }
     }
   }
@@ -1207,7 +1220,7 @@ Item {
     onExited: function(code) {
       if (code === 0) {
         root.sshAuthorizedKeysStatus = "Key removed.";
-        root.sshSelectedKeyIndex = -1;
+        root.sshSelectedKeyData = "";
         root.refreshAuthorizedKeys();
       } else {
         var err = Shell.trim(sshAuthorizedKeysRemoveProc.stderr.text || "");
