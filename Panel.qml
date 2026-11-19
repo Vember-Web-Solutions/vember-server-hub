@@ -154,6 +154,7 @@ Item {
   property var _codeServerPullLayers: ({})
   property bool codeServerSetupProvisionAfterStart: false
 
+  // --- Panel lifecycle and IPC ---
   function open(payloadJson) {
     if (Quickshell.screens && Quickshell.screens.length > 0)
       root.targetScreen = Quickshell.screens[0];
@@ -186,6 +187,7 @@ Item {
     });
   }
 
+  // --- Configuration, naming and the first-run wizard ---
   function defaultServerName() {
     return Shell.trim(Quickshell.env("HOSTNAME") || "vemberos") || "vemberos";
   }
@@ -224,19 +226,6 @@ Item {
     });
     configWriteProc.command = ["sh", "-c", "mkdir -p \"$(dirname \"$2\")\"; printf '%s' \"$1\" > \"$2\"", "sh", payload, root.configPath];
     configWriteProc.running = true;
-  }
-
-  function moveTab(tabId, delta) {
-    var order = normalizedTabOrder(tabOrder);
-    var idx = order.indexOf(tabId);
-    var nextIdx = idx + delta;
-    if (idx < 0 || nextIdx < 0 || nextIdx >= order.length) return;
-    var tmp = order[idx];
-    order[idx] = order[nextIdx];
-    order[nextIdx] = tmp;
-    tabOrder = order;
-    if (configReady || Shell.trim(serverName).length > 0)
-      writeHubConfig(false);
   }
 
   function saveServerName(name) {
@@ -312,6 +301,7 @@ Item {
     devRepoDetailProc.running = true;
   }
 
+  // --- Refresh entry points ---
   function refreshAll() {
     lastActionMessage = "";
     refreshTailscale();
@@ -347,6 +337,7 @@ Item {
     codeServerProc.running = true;
   }
 
+  // --- Code Server (Docker) ---
   function _appendCodeServerSetupLog(line) {
     var t = String(line || "").replace(/\r/g, "");
     t = t.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, "");
@@ -354,10 +345,6 @@ Item {
     var next = (root.codeServerSetupLog.length > 0 ? (root.codeServerSetupLog + "\n") : "") + t;
     if (next.length > 12000) next = next.slice(next.length - 12000);
     root.codeServerSetupLog = next;
-  }
-
-  function _parseDockerSize(s) {
-    return Docker.parseSize(s);
   }
 
   function _updateCodeServerPullProgressFromLine(line) {
@@ -559,6 +546,7 @@ Item {
     Qt.openUrlExternally("http://localhost:" + codeServerPort);
   }
 
+  // --- Developer tools and repos ---
   function refreshDevTools() {
     devToolsProc.running = false;
     devToolsProc.running = true;
@@ -597,6 +585,7 @@ Item {
     runInstallInTerminal("dev:" + toolId, "Vember Install: " + label, cmd, label);
   }
 
+  // --- SSH keys ---
   function refreshSsh() {
     sshHostName = Quickshell.env("HOSTNAME") || "vemberos";
     if (!sshActiveProc.running) sshActiveProc.running = true;
@@ -666,6 +655,7 @@ Item {
     sshGenerateKeyProc.running = true;
   }
 
+  // --- Tailscale and Docker status ---
   function refreshTailscale() {
     tailscaleNote = "";
     if (!tsActiveProc.running) tsActiveProc.running = true;
@@ -769,6 +759,7 @@ Item {
     Qt.openUrlExternally(Gaming.battlenetSetupUrl());
   }
 
+  // --- Terminal installs: log, lock and reattach ---
   function runInstallInTerminal(id, title, cmd, label) {
     if (installRunning) {
       lastActionMessage = "An install is already running: " + (installTitle.length > 0 ? installTitle : installRunningId);
@@ -880,6 +871,7 @@ Item {
     installLogReadProc.running = true;
   }
 
+  // --- Tailscale actions ---
   function runTailscaleAction(action) {
     if (tailscaleBusy)
       return;
@@ -896,6 +888,7 @@ Item {
     tailscaleNote = "Opened terminal for: sudo systemctl " + action + " tailscaled";
   }
 
+  // --- Omarchy system update ---
   function runOmarchyUpdateInPanel() {
     if (omarchyUpdateRunning)
       return;
@@ -1008,6 +1001,7 @@ Item {
     pluginUpdateFetchProc.running = true;
   }
 
+  // --- Docker actions ---
   function runDockerAction(action, name) {
     if (dockerBusy)
       return;
@@ -1311,6 +1305,7 @@ Item {
     stderr: StdioCollector {}
   }
 
+  // --- Launchers ---
   function launchSteam() {
     steamLaunchProc.running = false;
     steamLaunchProc.running = true;
@@ -1323,6 +1318,7 @@ Item {
     lastActionMessage = "Launching Battle.net…";
   }
 
+  // --- Hot reload ---
   function hotReloadHub() {
     lastActionMessage = "Hot reloading: restarting shell and reopening hub…";
     hotReloadProc.running = false;
