@@ -919,6 +919,92 @@ class TestCodeServerSetupHasAnEscapeHatch:
         )
 
 
+class TestDockerPullHasAnEscapeHatch:
+    """A stalled image pull must not disable the container forever.
+
+    `docker pull` has no timeout and every action on the container is disabled
+    while it runs. A dropped network or a hung registry leaves dockerPullActive
+    true indefinitely. Stopping is safe — Docker keeps the layers it already
+    fetched — so the escape hatch is user-driven, like the Code Server one.
+
+    The subtle part: stopping the process makes onExited fire with a signal
+    code, and the failure branch would then report "Pull failed (code 143)"
+    over the message the user caused. The cancelled flag must be set before the
+    process is stopped, and checked before the failure message.
+    """
+
+    def _cancel_body(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"function cancelDockerPull\(\)\s*\{", text)
+        assert match, "no cancelDockerPull() in Panel.qml"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced cancelDockerPull")
+
+    def _pull_block(self):
+        text = read(REPO / "Panel.qml")
+        start = text.index("id: dockerPullProc")
+        return text[start : text.index("Process {", start)]
+
+    def test_cancel_stops_the_pull_and_clears_busy(self):
+        body = self._cancel_body()
+        assert "dockerPullProc.running = false" in body, (
+            "cancelDockerPull must stop the pull process"
+        )
+        assert re.search(r"dockerPullActive\s*=\s*false", body), (
+            "cancelDockerPull must clear dockerPullActive"
+        )
+        assert re.search(r"dockerBusy\s*=\s*false", body), (
+            "cancelDockerPull must clear dockerBusy or the actions stay disabled"
+        )
+
+    def test_the_cancel_flag_is_set_before_stopping(self):
+        body = self._cancel_body()
+        flag = body.find("dockerPullProc.cancelled = true")
+        stop = body.find("dockerPullProc.running = false")
+        assert flag != -1, "cancelDockerPull must set the cancelled flag"
+        assert stop != -1
+        assert flag < stop, (
+            "the cancelled flag must be set before the process is stopped, or "
+            "onExited can run first and report a failure the user did not cause"
+        )
+
+    def test_the_exit_handler_does_not_report_a_cancel_as_a_failure(self):
+        block = self._pull_block()
+        guard = block.find("if (cancelled)")
+        failure = block.find("Pull failed")
+        assert guard != -1, (
+            "dockerPullProc.onExited must check the cancelled flag"
+        )
+        assert failure != -1, "the failure branch is missing entirely"
+        assert guard < failure, (
+            "the cancelled guard must come before the failure message, or a "
+            "stopped pull is reported as a failure"
+        )
+        window = block[guard:failure]
+        assert "return" in window, (
+            "the cancelled branch must return before the failure handling"
+        )
+
+    def test_the_cancel_is_reachable_from_the_ui(self):
+        text = read(REPO / "ui" / "tabs" / "ContainersTab.qml")
+        assert "hub.cancelDockerPull()" in text, (
+            "the Containers tab must offer the cancel, or it is unreachable"
+        )
+        at = text.index("hub.cancelDockerPull()")
+        window = text[max(0, at - 500):at]
+        assert "visible: containerDetails.selPulling" in window, (
+            "the cancel button must be visible while that container is pulling"
+        )
+
+
 class TestDevToolsTargetedRefresh:
     """refreshDevTools() must be a targeted refresh, not a full repo rescan.
 

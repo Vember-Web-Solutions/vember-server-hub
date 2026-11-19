@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.31"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 107
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.32"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 108
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1204,6 +1204,32 @@ Item {
     dockerPullProc.running = true;
   }
 
+  // A pull that stalls — a dropped network, a hung registry — leaves
+  // dockerPullActive true with no timer to end it, and every action on the
+  // container is disabled while it runs. Docker emits no failure until the
+  // connection gives up, which can take minutes. Stopping is safe: the layers
+  // already fetched stay in the local cache and pulling again resumes from
+  // them. So the escape hatch is the user's decision, not a stall timer that
+  // would false-fail a legitimately slow layer.
+  function cancelDockerPull() {
+    if (!dockerPullActive)
+      return;
+    // The stop terminates the process, so onExited will fire with a signal
+    // code. Flag it first, or the handler reports "Pull failed (code 143)" and
+    // overwrites the message the user actually caused.
+    dockerPullProc.cancelled = true;
+    dockerPullProc.running = false;
+    dockerPullActive = false;
+    dockerBusy = false;
+    dockerBusyName = "";
+    dockerPullPercent = -1;
+    dockerPullStatus = "Pull stopped by request.";
+    dockerPullResult = "Pull stopped for " + (dockerPullingName || "the image") + ". Pull again to resume from the layers already downloaded.";
+    lastActionMessage = "Image pull stopped.";
+    notifyIfClosed(lastActionMessage);
+    refreshDocker();
+  }
+
   // --- Processes: Tailscale ---
   Process {
     id: tsActiveProc
@@ -1647,6 +1673,9 @@ Item {
     property string containerName: ""
     property string imageName: ""
     property string lastLine: ""
+    // Set by cancelDockerPull() so the exit it causes is not reported as a
+    // failure the user did not have.
+    property bool cancelled: false
     function handleLine(line) {
       var t = Shell.trim(line);
       if (t.length === 0)
@@ -1681,6 +1710,13 @@ Item {
       root.dockerBusy = false;
       root.dockerBusyName = "";
       root.dockerPullActive = false;
+      if (cancelled) {
+        // The user stopped this pull. The non-zero code is just the signal we
+        // sent; cancelDockerPull() already set the message and the result.
+        cancelled = false;
+        root.refreshDocker();
+        return;
+      }
       var image = imageName;
       if (code === 0) {
         root.dockerPullStatus = "Pull complete";

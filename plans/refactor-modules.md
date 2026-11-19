@@ -424,6 +424,16 @@ Work that fell out of the split, done in the same arc:
   `TestModelReferencesResolve`, one layer up. It strips comments and string
   literals first: `"https://hub.docker.com"` was a real false positive when the
   guard was written, and both that and the comment case are pinned by tests.
+- **A stalled image pull disabled the container with no way out.** `docker pull`
+  has no timeout and every action on the container is disabled while it runs, so
+  a dropped network left `dockerPullActive` true indefinitely. Stopping is safe —
+  Docker keeps the layers already fetched and a new pull resumes from them — so
+  `cancelDockerPull()` is user-driven, like the Code Server escape hatch. The
+  subtle part: stopping the process makes `onExited` fire with a signal code,
+  and the failure branch would have reported "Pull failed (code 143)" over the
+  message the user caused. The `cancelled` flag is set before the stop and
+  checked before the failure message, and `TestDockerPullHasAnEscapeHatch` pins
+  that order as well as the UI path.
 - **Install and update could run at once, and focus could land on the wrong
   one.** Both terminals use the `vember-install` window class — that class is
   what the focus step selects on — and neither entry point checked the other.
@@ -443,16 +453,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 486 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,871 lines. The growth is comments, per-file
+- 490 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,917 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,230 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,806. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,266 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,842. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,806, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,262 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,842, then `ui/tabs/GamesTab.qml` at 803.
+- The test suite is 4,348 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.31, build 72 → 107.
+- Version 0.1.0 → 0.6.32, build 72 → 108.

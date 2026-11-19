@@ -367,6 +367,16 @@ Column {
               tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
               onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
             }
+            Button {
+              // A stalled pull has no timeout and disables every action on the
+              // container. Docker keeps the layers it already fetched, so
+              // stopping and pulling again resumes rather than restarts.
+              visible: containerDetails.selPulling
+              iconText: "󰅖"
+              text: "Stop pull"
+              tooltipText: "Stop waiting for this image pull; the layers already downloaded are kept"
+              onClicked: hub.cancelDockerPull()
+            }
           }
         }
       }
