@@ -784,3 +784,53 @@ class TestDockerDetailPollSafety:
             "onSelectedChanged fires every poll (dockerContainers is reassigned); "
             "use onSelectedNameChanged so the size query is not re-run each tick"
         )
+
+
+class TestNoDeadProperties:
+    """Every property Panel.qml declares must be read somewhere.
+
+    Dead state is easy to leave behind and hard to notice: `sshHostKeys`,
+    `tailscaleStatusText`, `gameMountSummary`, `dockerPullingImage`, `bnetNote`,
+    `restartingForServerName` and `targetLineNo` were all assigned but never
+    read. Two of them were fed by processes that ran real shell-outs on every
+    15s poll, so the cost was not only clutter but wasted work every tick.
+
+    This guard scans every QML file for a read of each declared property. A
+    "read" is any occurrence of the bare name that is not the declaration and
+    not a plain assignment (`name = ...`). It is intentionally lenient — a
+    property used only as a JS object key or in a string still counts — because
+    a false negative (missing a dead property) is cheaper than a false positive
+    (failing on a live one).
+    """
+
+    QML_ALL = QML_FILES
+
+    def _declared(self):
+        text = read(REPO / "Panel.qml")
+        names = re.findall(r"^\s*(?:readonly\s+)?property\s+\w+\s+(\w+)", text, re.M)
+        return sorted(set(names))
+
+    def _is_read_in(self, name, text):
+        decl = re.compile(r"^\s*(?:readonly\s+)?property\s+\w+\s+" + re.escape(name) + r"\b")
+        for m in re.finditer(r"\b" + re.escape(name) + r"\b", text):
+            line_start = text.rfind("\n", 0, m.start()) + 1
+            line_end = text.find("\n", m.end())
+            line = text[line_start:line_end if line_end != -1 else len(text)]
+            if decl.match(line):
+                continue  # the declaration itself
+            rest = text[m.end():m.end() + 4].lstrip()
+            if rest.startswith("=") and not rest.startswith("=="):
+                continue  # a plain assignment, not a read
+            return True
+        return False
+
+    def test_no_property_is_assigned_but_never_read(self):
+        texts = [(p, read(p)) for p in self.QML_ALL]
+        dead = []
+        for name in self._declared():
+            if not any(self._is_read_in(name, t) for _, t in texts):
+                dead.append(name)
+        assert not dead, (
+            "these properties are declared but never read (dead state): "
+            + ", ".join(dead)
+        )
