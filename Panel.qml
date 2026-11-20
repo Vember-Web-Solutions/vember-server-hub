@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.40"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 116
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.41"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 117
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -835,6 +835,50 @@ Item {
     if (!dfProc.running) dfProc.running = true;
   }
 
+  // A full refresh resets every gaming value to its "unknown" state, so it
+  // must also guarantee a fresh scan for each one. The `if (!proc.running)`
+  // guard is still right for the 15s poll — a large Steam library scan can
+  // take longer than that, and restarting it would starve it forever — but a
+  // Process left flagged `running` from an earlier open never delivers its
+  // result into the freshly reset counters. That is the dash Elena saw until
+  // Reload recreated the processes. Force a clean start on full refresh only;
+  // polls keep the guard.
+  function restartGamingProc(proc, command, keep) {
+    if (!keep) proc.running = false;
+    if (command) proc.command = command;
+    if (!proc.running) proc.running = true;
+  }
+
+  // Every parser returns >= 0 for any input, so -1 means "this scan never
+  // produced a value". If a process has exited but its collector did not
+  // deliver, the row would show a dash until the next Reload. Re-request only
+  // that case: a count still at -1 with no process in flight. A scan that is
+  // genuinely slow is left alone because its `running` flag is still true.
+  function recoverStalledCounts() {
+    if (steamGameCount === -1 && !steamManifestProc.running) {
+      var steamRoot = Gaming.steamRootPath(homeDir);
+      steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(
+        [steamRoot + "/steamapps", "/mnt/games/SteamLibrary/steamapps"]);
+      steamManifestProc.running = true;
+    }
+    if (bnetGameCount === -1 && !bnetGameCountProc.running) {
+      bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
+      bnetGameCountProc.running = true;
+    }
+    if (prismInstanceCount === -1 && !prismInstanceCountProc.running) {
+      prismInstanceCountProc.command = Gaming.prismInstanceCountCommand(homeDir);
+      prismInstanceCountProc.running = true;
+    }
+    if (minecraftVersionCount === -1 && !minecraftVersionCountProc.running) {
+      minecraftVersionCountProc.command = Gaming.minecraftVersionCountCommand(homeDir);
+      minecraftVersionCountProc.running = true;
+    }
+    if (heroicGameCount === -1 && !heroicGameCountProc.running) {
+      heroicGameCountProc.command = Gaming.heroicGameCountCommand(homeDir);
+      heroicGameCountProc.running = true;
+    }
+  }
+
   function refreshGames(preserveSelection) {
     var keep = preserveSelection === true;
     if (!keep) {
@@ -851,20 +895,17 @@ Item {
       heroicGameCount = -1;
     }
     var steamRoot = Gaming.steamRootPath(homeDir);
-    if (!steamPgrepProc.running) steamPgrepProc.running = true;
-    if (!bnetPgrepProc.running) bnetPgrepProc.running = true;
-    steamDirProc.command = ["sh", "-c", "[ -d \"$1\" ] || command -v steam >/dev/null 2>&1", "sh", steamRoot];
-    if (!steamDirProc.running) steamDirProc.running = true;
-    bnetDirProc.command = ["test", "-d", Gaming.battlenetPrefixPath(homeDir)];
-    if (!bnetDirProc.running) bnetDirProc.running = true;
-    // Baseline count: default + common external library; vdf load will refine to all libraries.
-    // Only restart the scan when none is in flight: a slow library scan on a
-    // large disk would otherwise be killed by the 15s poll before it finishes.
+    restartGamingProc(steamPgrepProc, null, keep);
+    restartGamingProc(bnetPgrepProc, null, keep);
+    restartGamingProc(steamDirProc,
+      ["sh", "-c", "[ -d \"$1\" ] || command -v steam >/dev/null 2>&1", "sh", steamRoot], keep);
+    restartGamingProc(bnetDirProc, ["test", "-d", Gaming.battlenetPrefixPath(homeDir)], keep);
+    // Baseline count: default + common external library; vdf load will refine
+    // to all libraries. On a full refresh this is a guaranteed fresh scan; on
+    // the poll the guard keeps a slow library scan from being killed.
     var baselineDirs = [steamRoot + "/steamapps", "/mnt/games/SteamLibrary/steamapps"];
-    if (!steamManifestProc.running) {
-      steamManifestProc.command = Gaming.steamManifestCountCommandForDirs(baselineDirs);
-      steamManifestProc.running = true;
-    }
+    restartGamingProc(steamManifestProc,
+      Gaming.steamManifestCountCommandForDirs(baselineDirs), keep);
     // Reload the library VDF only on a full refresh. Forcing it every poll
     // re-read the file and restarted the manifest scan every 15 seconds, and
     // the counts only change when a game is installed (which does a full
@@ -873,16 +914,12 @@ Item {
       steamVdfView.path = "";
       steamVdfView.path = Gaming.steamLibraryVdfPath(homeDir);
     }
-    bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
-    if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
+    restartGamingProc(bnetGameCountProc, Gaming.battlenetGameCountCommand(homeDir), keep);
     // Instance folders only change when a modpack is added or removed, but the
     // 15s poll is cheap and the guard keeps a slow find from being restarted.
-    prismInstanceCountProc.command = Gaming.prismInstanceCountCommand(homeDir);
-    if (!prismInstanceCountProc.running) prismInstanceCountProc.running = true;
-    minecraftVersionCountProc.command = Gaming.minecraftVersionCountCommand(homeDir);
-    if (!minecraftVersionCountProc.running) minecraftVersionCountProc.running = true;
-    heroicGameCountProc.command = Gaming.heroicGameCountCommand(homeDir);
-    if (!heroicGameCountProc.running) heroicGameCountProc.running = true;
+    restartGamingProc(prismInstanceCountProc, Gaming.prismInstanceCountCommand(homeDir), keep);
+    restartGamingProc(minecraftVersionCountProc, Gaming.minecraftVersionCountCommand(homeDir), keep);
+    restartGamingProc(heroicGameCountProc, Gaming.heroicGameCountCommand(homeDir), keep);
 
     // Only start a scan when none is in flight. refreshGames runs on the 15s
     // poll, and the scan shells out to flatpak info for each catalog entry;
@@ -893,6 +930,7 @@ Item {
       extraAppsScanProc.command = Gaming.scanCommand();
       extraAppsScanProc.running = true;
     }
+    recoverStalledCounts();
   }
 
   function launchExtraApp(appId) {

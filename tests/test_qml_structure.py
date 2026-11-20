@@ -29,6 +29,22 @@ def read(path):
     return path.read_text()
 
 
+def _refresh_games_body(text):
+    """Return the source of refreshGames(), balanced braces and all."""
+    fn = re.search(r"function refreshGames\((\w+)\)", text)
+    assert fn, "no refreshGames() in Panel.qml"
+    start = text.index("{", fn.end())
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    raise AssertionError("unbalanced braces in refreshGames")
+
+
 def relative(path):
     return str(path.relative_to(REPO))
 
@@ -303,9 +319,9 @@ class TestPrismInstanceCountIsWired:
 
     def test_panel_starts_the_scan_with_a_poll_guard(self):
         text = read(REPO / "Panel.qml")
-        assert "prismInstanceCountProc.command = Gaming.prismInstanceCountCommand(homeDir);" in text
-        assert "if (!prismInstanceCountProc.running) prismInstanceCountProc.running = true;" in text, (
-            "the 15s poll must not restart a find still in flight"
+        assert "restartGamingProc(prismInstanceCountProc, Gaming.prismInstanceCountCommand(homeDir), keep);" in text, (
+            "the scan must go through the helper: full refresh restarts it, "
+            "the 15s poll keeps the running guard so a slow find can finish"
         )
 
     def test_the_process_writes_the_property(self):
@@ -337,9 +353,9 @@ class TestMinecraftVersionCountIsWired:
 
     def test_panel_starts_the_scan_with_a_poll_guard(self):
         text = read(REPO / "Panel.qml")
-        assert "minecraftVersionCountProc.command = Gaming.minecraftVersionCountCommand(homeDir);" in text
-        assert "if (!minecraftVersionCountProc.running) minecraftVersionCountProc.running = true;" in text, (
-            "the 15s poll must not restart a find still in flight"
+        assert "restartGamingProc(minecraftVersionCountProc, Gaming.minecraftVersionCountCommand(homeDir), keep);" in text, (
+            "the scan must go through the helper: full refresh restarts it, "
+            "the 15s poll keeps the running guard so a slow find can finish"
         )
 
     def test_the_process_writes_the_property(self):
@@ -386,8 +402,7 @@ class TestHeroicGameCountIsWired:
 
     def test_panel_starts_the_scan_with_a_poll_guard(self):
         text = read(REPO / "Panel.qml")
-        assert "heroicGameCountProc.command = Gaming.heroicGameCountCommand(homeDir);" in text
-        assert "if (!heroicGameCountProc.running) heroicGameCountProc.running = true;" in text
+        assert "restartGamingProc(heroicGameCountProc, Gaming.heroicGameCountCommand(homeDir), keep);" in text
 
     def test_the_process_writes_the_property(self):
         text = read(REPO / "Panel.qml")
@@ -1360,50 +1375,32 @@ class TestSteamScanPollSafety:
     refreshGames() used to restart steamManifestProc unconditionally and force a
     steamVdfView reload on every tick. The VDF reload in turn restarted the
     manifest scan again, so a library scan on a large disk could be killed
-    before it finished and the counts would never settle. The scan is now only
-    started when none is in flight, and the VDF is only reloaded on a full
-    refresh (the counts change on install, which does a full refresh).
+    before it finished and the counts would never settle. The 15s poll now goes
+    through restartGamingProc(..., keep=true), which keeps the running guard;
+    a full refresh (open/install) intentionally forces a fresh scan, and the
+    VDF is only reloaded there (the counts change on install).
     """
 
-    def test_manifest_scan_guarded_against_restart(self):
+    def test_manifest_scan_guarded_against_restart_on_poll(self):
         text = read(REPO / "Panel.qml")
-        fn = re.search(r"function refreshGames\((\w+)\)", text)
-        assert fn, "no refreshGames() in Panel.qml"
-        body_start = text.index("{", fn.end())
-        depth = 0
-        for i in range(body_start, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    body = text[body_start:i + 1]
-                    break
-        else:
-            raise AssertionError("unbalanced braces in refreshGames")
-        # The manifest start must sit behind a running guard.
-        idx = body.index("steamManifestProc.command = Gaming.steamManifestCountCommandForDirs")
-        window = body[max(0, idx - 200):idx]
-        assert "if (!steamManifestProc.running)" in window, (
-            "the Steam manifest scan must not be restarted while one is in "
-            "flight, or a slow scan never finishes"
+        body = _refresh_games_body(text)
+        assert "restartGamingProc(steamManifestProc," in body, (
+            "the Steam manifest scan must be started through the helper, which "
+            "keeps the running guard on the 15s poll"
+        )
+        helper = re.search(
+            r"function restartGamingProc\(proc, command, keep\) \{(.*?)\n  \}",
+            text, re.S
+        )
+        assert helper, "restartGamingProc helper is missing"
+        assert "if (!proc.running) proc.running = true;" in helper.group(1), (
+            "the helper must keep the running guard so a slow scan is not "
+            "killed by the 15s poll"
         )
 
     def test_vdf_reload_only_on_full_refresh(self):
         text = read(REPO / "Panel.qml")
-        fn = re.search(r"function refreshGames\((\w+)\)", text)
-        body_start = text.index("{", fn.end())
-        depth = 0
-        for i in range(body_start, len(text)):
-            if text[i] == "{":
-                depth += 1
-            elif text[i] == "}":
-                depth -= 1
-                if depth == 0:
-                    body = text[body_start:i + 1]
-                    break
-        else:
-            raise AssertionError("unbalanced braces in refreshGames")
+        body = _refresh_games_body(text)
         # The VDF path reset must sit inside its own `if (!keep)` guard, not
         # merely somewhere after the top reset block. Look in a tight window
         # before the reset for the guard.
@@ -1412,6 +1409,91 @@ class TestSteamScanPollSafety:
         assert "if (!keep) {" in window, (
             "steamVdfView must only be reloaded inside an `if (!keep)` guard, "
             "not on every poll (the reload restarts the manifest scan)"
+        )
+
+
+class TestGamingCountsRecoverOnFullRefresh:
+    """A dash must never be the last word on a game count.
+
+    On a full refresh (open, install, config save) refreshGames resets every
+    count to -1. A Process still flagged `running` from an earlier session
+    would never deliver into those reset counters, so the row stayed at "—"
+    until the user hit Reload — which recreates the process objects. A plain
+    open must now do what Reload did: force a fresh scan. The 15s poll keeps
+    its guard, and additionally re-requests a count that has exited without
+    producing a value.
+    """
+
+    COUNT_PROCS = (
+        "steamManifestProc", "bnetGameCountProc", "prismInstanceCountProc",
+        "minecraftVersionCountProc", "heroicGameCountProc",
+    )
+
+    def _helper(self, text):
+        match = re.search(
+            r"function restartGamingProc\(proc, command, keep\) \{(.*?)\n  \}",
+            text, re.S
+        )
+        assert match, "restartGamingProc helper is missing"
+        return match.group(1)
+
+    def test_full_refresh_force_restarts(self):
+        text = read(REPO / "Panel.qml")
+        helper = self._helper(text)
+        assert "if (!keep) proc.running = false;" in helper, (
+            "a full refresh must clear the running flag so a fresh scan is "
+            "guaranteed, the way Reload recreates the processes"
+        )
+
+    def test_poll_keeps_the_running_guard(self):
+        text = read(REPO / "Panel.qml")
+        helper = self._helper(text)
+        assert "if (!proc.running) proc.running = true;" in helper, (
+            "the 15s poll must not restart a slow scan already in flight"
+        )
+        assert helper.index("if (!keep)") < helper.index("if (!proc.running)"), (
+            "the full-refresh restart must come before the poll guard"
+        )
+
+    def test_all_count_scans_go_through_the_helper(self):
+        body = _refresh_games_body(read(REPO / "Panel.qml"))
+        for proc in self.COUNT_PROCS:
+            assert "restartGamingProc(" + proc + "," in body, (
+                proc + " bypasses the full-refresh restart"
+            )
+
+    def test_full_refresh_still_resets_counts_to_minus_one(self):
+        body = _refresh_games_body(read(REPO / "Panel.qml"))
+        for prop in ("steamGameCount", "bnetGameCount", "prismInstanceCount",
+                     "minecraftVersionCount", "heroicGameCount"):
+            assert prop + " = -1;" in body, (
+                prop + " is no longer reset, so recovery cannot tell it is unknown"
+            )
+
+    def test_recovery_targets_unresolved_counts_only(self):
+        text = read(REPO / "Panel.qml")
+        match = re.search(r"function recoverStalledCounts\(\) \{(.*?)\n  \}", text, re.S)
+        assert match, "recoverStalledCounts() is missing"
+        fn = match.group(1)
+        for prop, proc in (
+            ("steamGameCount", "steamManifestProc"),
+            ("bnetGameCount", "bnetGameCountProc"),
+            ("prismInstanceCount", "prismInstanceCountProc"),
+            ("minecraftVersionCount", "minecraftVersionCountProc"),
+            ("heroicGameCount", "heroicGameCountProc"),
+        ):
+            assert prop + " === -1 && !" + proc + ".running" in fn, (
+                prop + " has no unresolved-and-idle recovery guard"
+            )
+            assert proc + ".running = true;" in fn, (
+                proc + " is never re-requested after a silent exit"
+            )
+
+    def test_recovery_runs_on_open_and_poll(self):
+        body = _refresh_games_body(read(REPO / "Panel.qml"))
+        assert "recoverStalledCounts();" in body, (
+            "recovery must run from refreshGames so both open (full refresh) "
+            "and the 15s poll get it"
         )
 
 

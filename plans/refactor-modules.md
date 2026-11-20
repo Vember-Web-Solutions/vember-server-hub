@@ -494,6 +494,16 @@ Work that fell out of the split, done in the same arc:
   cached layers in place. Guards: TestMinecraftServerCommands and
   TestMinecraftServerIsWired; four mutations were caught. A real Paper 26.3
   server was created and verified healthy on LAN 25565.
+- **Game counts recover on open instead of needing a Reload.** Elena saw dashes
+  for Steam and Battle.net until she clicked Reload, which restarts the whole
+  shell. A full refresh reset every count to -1 but only started its scan behind
+  an `if (!proc.running)` guard, so a Process left flagged `running` from an
+  earlier session never delivered into the reset counters. `restartGamingProc`
+  now forces a clean start on full refresh while the 15s poll keeps the guard,
+  and `recoverStalledCounts` re-requests a count still at -1 with no process in
+  flight (every parser returns >= 0, so -1 is unambiguous). Guards:
+  TestGamingCountsRecoverOnFullRefresh and the updated TestSteamScanPollSafety;
+  four mutations were caught. Verified live through two 15s poll cycles.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -518,8 +528,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 539 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 9,645 lines. The growth is comments, per-file
+- 545 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 9,683 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
 - The three monoliths went 7,694 → 3,271 lines: `HubPanel.qml` 4,376 → 424,
@@ -528,6 +538,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,847, then `ui/tabs/GamesTab.qml` at 1,169.
-- The test suite is 4,934 lines across 12 files and drives the real modules
+- The test suite is 5,016 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.40, build 72 → 116.
+- Version 0.1.0 → 0.6.41, build 72 → 117.
