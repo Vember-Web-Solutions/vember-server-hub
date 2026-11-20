@@ -2686,12 +2686,20 @@ class TestGameServersLayoutAndBlueSlice:
         text = read(REPO / "ui/tabs/GamesTab.qml")
         return text[text.index('visible: panel.gamesSubTab === "storage"'):]
 
-    def test_wizard_defaults_worlds_to_the_games_mount(self):
+    def test_wizard_derives_one_data_dir_per_server_name(self):
         docker = read(REPO / "model/Docker.mjs")
         panel = read(REPO / "Panel.qml")
-        assert "/mnt/games/GameServers/Minecraft" in docker
-        assert 'mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"' in panel
-        assert panel.count('defaultDataDir: gameMount + "/GameServers/Minecraft"') == 2
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        assert "/mnt/games/GameServers" in docker
+        assert 'minecraftDataDir(name, baseDir)' in docker
+        assert 'mcServerDataDirDraft: gameMount + "/GameServers/vember-minecraft-data"' in panel
+        assert 'mcServerDataDirAutoName: "vember-minecraft"' in panel
+        assert "function mcWizardNameChanged(name)" in panel
+        assert panel.count('defaultDataDir: gameMount + "/GameServers"') == 2
+        assert "onTextChanged: panel.hub.mcWizardNameChanged(text)" in wizard
+        assert "onTextEdited:" in wizard
+        # Each server must bind its own /data; a fixed shared path is the bug.
+        assert '"/GameServers/Minecraft"' not in panel
         assert "minecraft-servers" not in panel
         assert "/var/minecraft-servers" not in docker
 

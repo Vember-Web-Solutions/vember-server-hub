@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.52"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 128
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.53"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 129
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -105,7 +105,10 @@ Item {
   property string mcServerLaunchInstanceDir: ""
   property string mcServerLaunchStatus: ""
   property bool mcServerLaunchBusy: false
-  property string mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"
+  property string mcServerDataDirDraft: gameMount + "/GameServers/vember-minecraft-data"
+  // Name the data dir was auto-derived from. If the field still matches that
+  // derivation, a name edit follows it; a hand-edited path is left alone.
+  property string mcServerDataDirAutoName: "vember-minecraft"
   // Guided Minecraft server wizard: client → runtime → options → review.
   property bool mcWizardOpen: false
   property int mcWizardStep: 1
@@ -1561,6 +1564,7 @@ Item {
     mcWizardModpackOptions = [];
     mcWizardModsDir = "";
     mcWizardWorldDir = "";
+    mcWizardNameChanged(mcServerNameDraft);
     var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
     mcWizardJoinAddress = host + ":" + mcServerPortDraft;
 
@@ -1691,6 +1695,19 @@ Item {
     recomputeMinecraftPorts();
   }
 
+  // Called as the operator types the server name. The data dir follows the
+  // name until they edit the path by hand, which keeps each server on its own
+  // /data bind and avoids the shared world lock that kills the second server.
+  function mcWizardNameChanged(name) {
+    var clean = Shell.trim(String(name || ""));
+    mcServerNameDraft = clean;
+    var previous = Docker.minecraftDataDir(mcServerDataDirAutoName, gameMount + "/GameServers");
+    if (mcServerDataDirDraft === previous) {
+      mcServerDataDirDraft = Docker.minecraftDataDir(clean, gameMount + "/GameServers");
+      mcServerDataDirAutoName = clean;
+    }
+  }
+
   function mcWizardSetPort(port) {
     var chosen = parseInt(port, 10);
     if (!isFinite(chosen) || chosen < 1 || chosen > 65535)
@@ -1706,7 +1723,7 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: gameMount + "/GameServers/Minecraft",
+      defaultDataDir: gameMount + "/GameServers",
       modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     }).join(" ");
   }
@@ -1736,7 +1753,7 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: gameMount + "/GameServers/Minecraft",
+      defaultDataDir: gameMount + "/GameServers",
       modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     };
     // Reflect the normalised values back into the form so the operator sees

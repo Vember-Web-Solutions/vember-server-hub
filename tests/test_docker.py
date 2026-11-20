@@ -256,7 +256,7 @@ class TestMinecraftServerCommands:
         assert opts == {
             "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
             "memory": "4G", "difficulty": "NORMAL",
-            "dataDir": "/mnt/games/GameServers/Minecraft", "port": 25565,
+            "dataDir": "/mnt/games/GameServers/vember-minecraft-data", "port": 25565,
             "modsDir": "", "worldDir": "",
         }
         cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
@@ -264,7 +264,7 @@ class TestMinecraftServerCommands:
         assert cmd[cmd.index("--name") + 1] == "vember-minecraft"
         assert cmd[cmd.index("--restart") + 1] == "unless-stopped"
         assert "25565:25565" in cmd
-        assert "/mnt/games/GameServers/Minecraft:/data" in cmd
+        assert "/mnt/games/GameServers/vember-minecraft-data:/data" in cmd
         for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G",
                     "DIFFICULTY=NORMAL"):
             assert env in cmd
@@ -292,7 +292,7 @@ class TestMinecraftServerCommands:
         assert opts["version"] == "LATEST"
         assert opts["memory"] == "4G"
         assert opts["difficulty"] == "NORMAL"
-        assert opts["dataDir"] == "/mnt/games/GameServers/Minecraft"
+        assert opts["dataDir"] == "/mnt/games/GameServers/vember-minecraft-data"
         assert opts["port"] == 25565
         cmd = js(
             "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
@@ -320,7 +320,7 @@ class TestMinecraftServerCommands:
             "})))"
         )
         assert opts["difficulty"] == "PEACEFUL"
-        assert opts["dataDir"] == "/home/someone/minecraft-servers"
+        assert opts["dataDir"] == "/home/someone/minecraft-servers/vember-minecraft-data"
         cmd = js(
             "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
             'difficulty:"hard", dataDir:"/srv/mc", port:25566'
@@ -328,6 +328,33 @@ class TestMinecraftServerCommands:
         )
         assert "DIFFICULTY=HARD" in cmd
         assert "25566:25566" in cmd
+
+    def test_data_dir_is_derived_from_name_so_servers_do_not_share_a_world(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.minecraftDataDir("
+            '"nodecraft", "/mnt/games/GameServers")))'
+        )
+        assert out == "/mnt/games/GameServers/nodecraft-data"
+        other = js(
+            "console.log(JSON.stringify(Docker.minecraftDataDir("
+            '"vember-minecraft", "/mnt/games/GameServers")))'
+        )
+        assert other == "/mnt/games/GameServers/vember-minecraft-data"
+        assert out != other
+
+    def test_named_server_gets_its_own_bind_without_an_explicit_dir(self, js):
+        opts = js(
+            "console.log(JSON.stringify(Docker.normalizeMinecraftServerOptions({"
+            'name:"nodecraft", defaultDataDir:"/mnt/games/GameServers"'
+            "})))"
+        )
+        assert opts["dataDir"] == "/mnt/games/GameServers/nodecraft-data"
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'name:"nodecraft", defaultDataDir:"/mnt/games/GameServers"'
+            "})))"
+        )
+        assert "/mnt/games/GameServers/nodecraft-data:/data" in cmd
 
     def test_preflight_commands_are_shaped_for_the_wizard(self, js):
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage()))") == \

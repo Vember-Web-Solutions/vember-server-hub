@@ -195,6 +195,20 @@ export class Docker {
     progress: total > 0 ? Math.max(0, Math.min(1, done / total)) : 0
   };
   }
+  // One data directory per server name. Two containers sharing a single /data
+  // bind fight over world/session.lock and the second one never starts. The
+  // name uses the same validation as the container name, so an edited or
+  // half-typed value still maps to a safe, predictable path.
+  minecraftDataDir(name, baseDir) {
+  var base = shell.trim(String(baseDir || ""));
+  if (base.charAt(0) !== "/" || base.indexOf("\n") !== -1)
+    base = "/mnt/games/GameServers";
+  var n = shell.trim(String(name || ""));
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/.test(n))
+    n = "vember-minecraft";
+  return base.replace(/\/+$/, "") + "/" + n + "-data";
+  }
+
   // Normalise the Minecraft create form before it reaches `docker run`. Every
   // field has a safe default so a blank or hand-edited input can never inject
   // extra arguments into the command array.
@@ -227,15 +241,16 @@ export class Docker {
   if (["PEACEFUL", "EASY", "NORMAL", "HARD"].indexOf(difficulty) === -1)
     difficulty = "NORMAL";
 
-  // Server worlds live on the games mount next to the other game data. A
-  // caller can override this; the fallback keeps the same home for hand-built
-  // commands that omit defaultDataDir.
+  // Server worlds live one directory apart under the games mount, named after
+  // the server (nodecraft -> .../nodecraft-data). Two containers sharing one
+  // /data bind lock the same world and the second never starts, so the default
+  // is derived from the name rather than fixed. An explicit dataDir still wins.
   var defaultDataDir = shell.trim(String(o.defaultDataDir || ""));
   if (defaultDataDir.charAt(0) !== "/" || defaultDataDir.indexOf("\n") !== -1)
-    defaultDataDir = "/mnt/games/GameServers/Minecraft";
+    defaultDataDir = "/mnt/games/GameServers";
   var dataDir = shell.trim(String(o.dataDir || ""));
   if (dataDir.charAt(0) !== "/" || dataDir.indexOf("\n") !== -1)
-    dataDir = defaultDataDir;
+    dataDir = this.minecraftDataDir(name, defaultDataDir);
 
   var port = Number(o.port);
   if (!isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
@@ -418,6 +433,7 @@ export function pruneCommand(...args) { return impl.pruneCommand(...args); }
 export function parsePs(...args) { return impl.parsePs(...args); }
 export function statsCommand(...args) { return impl.statsCommand(...args); }
 export function parseStats(...args) { return impl.parseStats(...args); }
+export function minecraftDataDir(...args) { return impl.minecraftDataDir(...args); }
 export function publishedPorts(...args) { return impl.publishedPorts(...args); }
 export function webUrlFromPorts(...args) { return impl.webUrlFromPorts(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }

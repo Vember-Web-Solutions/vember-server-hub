@@ -736,18 +736,62 @@ class TestOneClickLaunch:
         assert "JoinServerOnLaunchAddress=localhost:25567" in (dst / "instance.cfg").read_text()
         assert json.loads((dst / "vember-hub.json").read_text())["sourceId"] == "CreateVerse"
 
-    def test_wait_command_reports_a_listening_port(self, js):
+    @staticmethod
+    def _varint(n):
+        out = b""
+        while True:
+            b = n & 0x7F
+            n >>= 7
+            out += bytes([b | (0x80 if n else 0)])
+            if not n:
+                return out
+
+    @classmethod
+    def _answer_status(cls, conn):
+        """Answer a Minecraft status handshake with a minimal valid JSON reply."""
+        conn.settimeout(5)
+        data = conn.recv(4096)
+        if not data:
+            return
+        payload = json.dumps({"description": "Fake Server"}).encode()
+        body = cls._varint(0) + cls._varint(len(payload)) + payload
+        conn.sendall(cls._varint(len(body)) + body)
+
+    def test_wait_command_rejects_invalid_port(self, js):
         cmd = js("console.log(JSON.stringify(Gaming.minecraftPortWaitCommand(0, 2)))")
         assert cmd == ["sh", "-c", "exit 1"]
+
+    def test_wait_command_requires_a_real_minecraft_status_reply(self, js):
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        thread = None
+        try:
+            import threading
+            thread = threading.Thread(
+                target=lambda: self._answer_status(server.accept()[0]), daemon=True)
+            thread.start()
+            cmd = js("console.log(JSON.stringify(Gaming.minecraftPortWaitCommand("
+                     + str(port) + ", 5)))")
+            run = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+            assert run.stdout.strip() == "ready", run.stdout
+        finally:
+            server.close()
+
+    def test_wait_command_ignores_a_bare_proxy_socket(self, js):
+        # A dead game server behind Docker's published-port proxy still accepts
+        # TCP. A plain listener must NOT count as ready, or Prism opens to a
+        # refused connection -- the exact failure this ping fixes.
         server = socket.socket()
         server.bind(("127.0.0.1", 0))
         server.listen(1)
         port = server.getsockname()[1]
         try:
             cmd = js("console.log(JSON.stringify(Gaming.minecraftPortWaitCommand("
-                     + str(port) + ", 3)))")
+                     + str(port) + ", 2)))")
             run = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
-            assert run.stdout.strip() == "ready", run.stdout
+            assert run.stdout.strip() == "timeout", run.stdout
         finally:
             server.close()
 

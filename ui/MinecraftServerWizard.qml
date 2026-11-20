@@ -424,7 +424,7 @@ Rectangle {
             selectByMouse: true
             clip: true
             text: panel.hub.mcServerNameDraft
-            onTextChanged: panel.hub.mcServerNameDraft = text
+            onTextChanged: panel.hub.mcWizardNameChanged(text)
           }
         }
         RowLayout {
@@ -515,7 +515,10 @@ Rectangle {
             selectByMouse: true
             clip: true
             text: panel.hub.mcServerDataDirDraft
-            onTextChanged: panel.hub.mcServerDataDirDraft = text
+            onTextEdited: {
+              panel.hub.mcServerDataDirDraft = text;
+              panel.hub.mcServerDataDirAutoName = "";
+            }
           }
         }
       }
