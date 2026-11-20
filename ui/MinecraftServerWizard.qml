@@ -435,7 +435,7 @@ Rectangle {
             label: "Server type"
             value: panel.hub.mcServerTypeDraft
             options: Wizard.serverTypeOptions()
-            onChanged: panel.hub.mcServerTypeDraft = value
+            onChanged: panel.hub.mcWizardSetType(value)
           }
           Dropdown {
             Layout.fillWidth: true
@@ -452,7 +452,7 @@ Rectangle {
             Layout.fillWidth: true
             label: "Memory"
             value: panel.hub.mcServerMemoryDraft
-            options: Wizard.memoryOptions()
+            options: Wizard.memoryOptions(Wizard.isModdedType(panel.hub.mcServerTypeDraft))
             onChanged: panel.hub.mcServerMemoryDraft = value
           }
           Dropdown {

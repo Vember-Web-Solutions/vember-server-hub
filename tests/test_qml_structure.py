@@ -508,9 +508,10 @@ class TestMinecraftServerIsWired:
         wizard = read(REPO / "ui/MinecraftServerWizard.qml")
         for step in ("Client", "Runtime", "Options", "Review"):
             assert '"' + step + '"' in wizard, step + " is missing from the step rail"
-        for option in ("serverTypeOptions()", "versionOptions()",
-                       "memoryOptions()", "difficultyOptions()"):
-            assert "Wizard." + option in wizard, option + " has no dropdown"
+        for option in ("Wizard.serverTypeOptions()", "Wizard.versionOptions()",
+                       "Wizard.memoryOptions(Wizard.isModdedType(panel.hub.mcServerTypeDraft))",
+                       "Wizard.difficultyOptions()", "hub.mcWizardSetType(value)"):
+            assert option in wizard, option + " has no dropdown"
         assert "hub.mcWizardCreate()" in wizard
         assert "hub.mcWizardPullImage()" in wizard
         assert "hub.mcWizardInstallClient()" in wizard
@@ -3116,6 +3117,8 @@ class TestMinecraftServerEditing:
             'property string mcEditOldName: ""',
             'property string mcEditNameDraft: ""',
             'property int mcEditPortDraft: 0',
+            'property string mcEditMemoryDraft: "4G"',
+            'property bool mcEditMemoryModded: false',
             'property string mcEditStatus: ""',
             'property string mcEditResult: ""',
             "id: mcEditInspectProc", "id: mcEditModpackScanProc",
@@ -3128,11 +3131,14 @@ class TestMinecraftServerEditing:
         assert "Docker.inspectMinecraftServerCommand(old)" in body
         assert "Wizard.modpackScanCommand(homeDir)" in body
         assert "mcEditNameDraft = old" in body
+        assert 'mcEditMemoryDraft = "4G"' in body
+        assert "mcEditMemoryModded = false" in body
         assert "mcEditResult = \"\"" in body
 
     def test_save_validates_before_refresh_and_recreate(self):
         body = self._body(read(REPO / "Panel.qml"), "saveMinecraftServerEdit")
         assert "Docker.recreateMinecraftServerCommand(old, opts)" in body
+        assert "memory: mcEditMemoryDraft || s.memory" in body
         assert "Docker.refreshMinecraftModsCommand(" in body
         assert "return false" in body  # validation keeps the dialog open
         assert "return true" in body   # a started edit closes it
@@ -3153,6 +3159,7 @@ class TestMinecraftServerEditing:
             "panel.hub.mcEditSetName(text)",
             "panel.hub.mcEditSetPort(value)",
             "panel.hub.mcEditChooseModpack(value)",
+            "panel.hub.mcEditSetMemory(value)",
             "Pull mods from Prism instance",
             "Docker cannot rename or republish a container in place",
         ):
@@ -3255,6 +3262,16 @@ class TestMinecraftClientTemplateWiring:
             'label: "Join from"',
             "options: Wizard.clientOptions()",
             "onChanged: panel.hub.mcEditSetClient(value)",
+        ):
+            assert name in dialog, name + " is missing"
+
+    def test_edit_dialog_has_memory_dropdown(self):
+        dialog = read(REPO / "ui" / "MinecraftServerEditDialog.qml")
+        for name in (
+            'label: "Memory"',
+            "value: panel.hub.mcEditMemoryDraft",
+            "options: Wizard.memoryOptions(panel.hub.mcEditMemoryModded)",
+            "onChanged: panel.hub.mcEditSetMemory(value)",
         ):
             assert name in dialog, name + " is missing"
 

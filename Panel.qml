@@ -165,6 +165,8 @@ Item {
   property string mcEditNameDraft: ""
   property int mcEditPortDraft: 0
   property var mcEditPortOptions: []
+  property string mcEditMemoryDraft: "4G"
+  property bool mcEditMemoryModded: false
   property string mcEditPortNote: ""
   property var mcEditModpacks: []
   property var mcEditModpackOptions: []
@@ -1624,6 +1626,8 @@ Item {
     mcEditOldName = old;
     mcEditNameDraft = old;
     mcEditPortDraft = isFinite(chosen) ? chosen : 0;
+    mcEditMemoryDraft = "4G";
+    mcEditMemoryModded = false;
     mcEditModpack = "";
     mcEditModpacks = [];
     mcEditModpackOptions = [];
@@ -1649,6 +1653,7 @@ Item {
     mcEditNameDraft = "";
     mcEditPortDraft = 0;
     mcEditPortOptions = [];
+    mcEditMemoryDraft = "4G";
     mcEditPortNote = "";
     mcEditModpacks = [];
     mcEditModpackOptions = [];
@@ -1669,6 +1674,10 @@ Item {
     var chosen = parseInt(value, 10);
     mcEditPortDraft = isFinite(chosen) ? chosen : 0;
     _mcEditRecomputePorts();
+  }
+
+  function mcEditSetMemory(value) {
+    mcEditMemoryDraft = Shell.trim(String(value || "")) || "4G";
   }
 
   function mcEditChooseModpack(id) {
@@ -1736,7 +1745,7 @@ Item {
     var opts = {
       name: name, port: port,
       type: s.type || "PAPER", version: s.version || "LATEST",
-      memory: s.memory || "4G", difficulty: s.difficulty || "NORMAL",
+      memory: mcEditMemoryDraft || s.memory || "4G", difficulty: s.difficulty || "NORMAL",
       dataDir: dataDir, image: s.image || "",
       // A copied mods folder lives in /data; do not also bind the old /mods
       // source over it, or the refreshed files would be hidden.
@@ -1901,6 +1910,15 @@ Item {
     mcServerListProc.running = true;
   }
 
+  // Plain servers use even heap sizes, modded servers odd ones (see
+  // MinecraftWizard.memoryOptions). Changing the loader re-snaps the draft so
+  // it never holds a value that is missing from the Memory dropdown.
+  function mcWizardSetType(value) {
+    mcServerTypeDraft = Shell.trim(String(value || "")).toUpperCase();
+    mcServerMemoryDraft = Wizard.nearestMemory(mcServerMemoryDraft,
+      Wizard.isModdedType(mcServerTypeDraft));
+  }
+
   // Selecting an installed modpack fills in the loader, exact version and a
   // memory size that suits it, and remembers the read-only mod/world mounts.
   function mcWizardChooseModpack(id) {
@@ -1916,7 +1934,8 @@ Item {
         continue;
       mcServerTypeDraft = m.loader || "FORGE";
       mcServerVersionDraft = m.version || "LATEST";
-      mcServerMemoryDraft = "6G";
+      mcServerMemoryDraft = Wizard.nearestMemory("6G",
+        Wizard.isModdedType(mcServerTypeDraft));
       mcWizardModsDir = m.modsDir || "";
       mcWizardWorldDir = m.worldDir || "";
       mcWizardSupportDir = m.supportDir || "";
@@ -2918,9 +2937,13 @@ Item {
         var s = Docker.parseMinecraftServerInspection(text);
         root._mcEditSettings = s;
         root.mcEditDataDir = s.dataDir || "";
+        root.mcEditMemoryModded = Wizard.isModdedType(s.type);
+        root.mcEditMemoryDraft = Wizard.nearestMemory(s.memory || "4G",
+          root.mcEditMemoryModded);
         root.mcEditStatus = s.name
           ? ("Editing " + s.name + " · " + (s.type || "PAPER") + " " + (s.version || "") +
-             (s.port ? " · port " + s.port : ""))
+             (s.port ? " · port " + s.port : "") +
+             (s.memory ? " · " + s.memory + " RAM" : ""))
           : "Could not read settings for " + root.mcEditOldName + ".";
       }
     }

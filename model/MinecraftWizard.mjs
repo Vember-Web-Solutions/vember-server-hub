@@ -45,13 +45,47 @@ export class MinecraftWizard {
     ];
   }
 
-  memoryOptions() {
+  // Plain servers take even values; modded servers take odd values. Keeping
+  // the two sets disjoint makes the loader visible in the chosen heap size.
+  memoryOptions(modded) {
+    if (modded) {
+      return [
+        { value: "3G", label: "3 GB — light modpack" },
+        { value: "5G", label: "5 GB — modded server" },
+        { value: "7G", label: "7 GB — large modpack" },
+        { value: "9G", label: "9 GB — heavy modpack" }
+      ];
+    }
     return [
-      { value: "2G", label: "2 GB — small vanilla worlds" },
+      { value: "2G", label: "2 GB — small worlds" },
       { value: "4G", label: "4 GB — recommended" },
-      { value: "6G", label: "6 GB — modded servers" },
-      { value: "8G", label: "8 GB — large modpacks" }
+      { value: "6G", label: "6 GB — busy server" },
+      { value: "8G", label: "8 GB — large worlds" }
     ];
+  }
+
+  isModdedType(type) {
+    var t = String(type || "").toUpperCase();
+    return t === "FORGE" || t === "FABRIC";
+  }
+
+  // Snap a heap amendment onto the correct parity when the loader changes, so
+  // the dropdown never holds a value that is not in its option list.
+  nearestMemory(value, modded) {
+    var m = /^(\d+)([MG])$/.exec(String(value || "").trim().toUpperCase());
+    var fallback = modded ? "7G" : "4G";
+    if (!m || m[2] !== "G")
+      return fallback;
+    var n = parseInt(m[1], 10);
+    var min = modded ? 3 : 2;
+    var max = modded ? 9 : 8;
+    if (n >= min && n <= max && (n % 2) === (modded ? 1 : 0))
+      return m[0];
+    if (n < min)
+      return min + "G";
+    if (n > max)
+      return max + "G";
+    return (n + 1) + "G";
   }
 
   difficultyOptions() {
@@ -330,6 +364,8 @@ export function runModeOptions(...args) { return new MinecraftWizard().runModeOp
 export function serverTypeOptions(...args) { return new MinecraftWizard().serverTypeOptions(...args); }
 export function versionOptions(...args) { return new MinecraftWizard().versionOptions(...args); }
 export function memoryOptions(...args) { return new MinecraftWizard().memoryOptions(...args); }
+export function isModdedType(...args) { return new MinecraftWizard().isModdedType(...args); }
+export function nearestMemory(...args) { return new MinecraftWizard().nearestMemory(...args); }
 export function difficultyOptions(...args) { return new MinecraftWizard().difficultyOptions(...args); }
 export function clientCheckCommand(...args) { return new MinecraftWizard().clientCheckCommand(...args); }
 export function parseClientScan(...args) { return new MinecraftWizard().parseClientScan(...args); }

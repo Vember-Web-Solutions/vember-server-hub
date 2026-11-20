@@ -20,9 +20,25 @@ class TestWizardOptions:
     def test_difficulty_ram_and_version_are_pick_lists(self, js):
         diff = js("console.log(JSON.stringify(MinecraftWizard.difficultyOptions()))")
         assert [o["value"] for o in diff] == ["PEACEFUL", "EASY", "NORMAL", "HARD"]
-        mem = js("console.log(JSON.stringify(MinecraftWizard.memoryOptions()))")
-        assert "4G" in [o["value"] for o in mem]
-        assert len(mem) >= 4
+        plain = js("console.log(JSON.stringify(MinecraftWizard.memoryOptions(false)))")
+        modded = js("console.log(JSON.stringify(MinecraftWizard.memoryOptions(true)))")
+        assert [o["value"] for o in plain] == ["2G", "4G", "6G", "8G"]
+        assert [o["value"] for o in modded] == ["3G", "5G", "7G", "9G"]
+        assert not set(o["value"] for o in plain) & set(o["value"] for o in modded)
+
+    def test_memory_parity_is_derived_from_loader(self, js):
+        for t in ("FORGE", "FABRIC", "fabric"):
+            assert js("console.log(JSON.stringify(MinecraftWizard.isModdedType(" + json.dumps(t) + ")))") is True
+        for t in ("PAPER", "VANILLA", ""):
+            assert js("console.log(JSON.stringify(MinecraftWizard.isModdedType(" + json.dumps(t) + ")))") is False
+
+    def test_nearest_memory_snaps_onto_correct_parity(self, js):
+        for value, modded, expected in (
+            ("4G", True, "5G"), ("6G", True, "7G"), ("6G", False, "6G"),
+            ("7G", False, "8G"), ("3G", False, "4G"), ("12G", False, "8G"),
+        ):
+            call = "MinecraftWizard.nearestMemory(" + json.dumps(value) + "," + json.dumps(modded) + ")"
+            assert js("console.log(JSON.stringify(" + call + "))") == expected
         versions = js("console.log(JSON.stringify(MinecraftWizard.versionOptions()))")
         assert versions[0]["value"] == "LATEST"
         assert len(versions) >= 4

@@ -1,8 +1,8 @@
 // Edit form for one hub-managed Minecraft server.
 //
 // Docker cannot rename or republish a container in place, so Save recreates it
-// against the same /data bind. Name, port, mod source and client are editable;
-// loader/version/image are read back from the container and shown read-only so
+// against the same /data bind. Name, port, memory, mod source and client are
+// editable; loader/version/image are read back from the container and shown read-only so
 // a modpack stays on the exact recipe it was created with.
 
 import QtQuick
@@ -163,6 +163,23 @@ Rectangle {
         textFormat: Text.PlainText
         text: panel.hub.mcEditPortNote
         color: panel.hub.mcWizardPortBusy ? Color.accent : panel.softText(0.75)
+        font.family: Style.font.family
+        font.pixelSize: Style.font.caption
+        wrapMode: Text.Wrap
+        width: parent.width
+      }
+
+      Dropdown {
+        width: parent.width
+        label: "Memory"
+        value: panel.hub.mcEditMemoryDraft
+        options: Wizard.memoryOptions(panel.hub.mcEditMemoryModded)
+        onChanged: panel.hub.mcEditSetMemory(value)
+      }
+      Text {
+        textFormat: Text.PlainText
+        text: "Heap size for the server JVM. Saving recreates the container against the same data folder, so the world and configs are kept."
+        color: panel.softText(0.7)
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         wrapMode: Text.Wrap

@@ -185,6 +185,7 @@ class TestMinecraftServerEditing:
         for needle in (
             'docker rm -f "$old"', 'docker run -d -it --name "$new"',
             '-p "$port:$port"', '-v "$data:/data"', '-e SERVER_PORT="$port"',
+            '-e MEMORY="$memory"',
             'docker inspect "$new"', "Invalid container name", "Invalid Minecraft port",
             "Refusing to recreate against reserved data dir",
         ):
