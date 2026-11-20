@@ -1104,8 +1104,11 @@ Column {
                   text: "Edit"
                   enabled: !hub.dockerBusy
                   tooltipText: "Rename this server, change its port, or refresh mods from a Prism instance"
-                  onClicked: hub.openMinecraftServerEditDialog(
-                    modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0)
+                  onClicked: {
+                    hub.openMinecraftServerEditDialog(
+                      modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0);
+                    panel.confirmEditMinecraftServer = true;
+                  }
                 }
                 Button {
                   iconText: "󰆴"

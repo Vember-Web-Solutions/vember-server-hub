@@ -3164,6 +3164,12 @@ class TestMinecraftServerEditing:
         assert "hub.openMinecraftServerEditDialog(" in tab
         assert 'text: "Edit"' in tab
 
+    def test_edit_button_opens_the_dialog_not_just_the_status_message(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        row = tab.split('text: "Edit"', 1)[1].split('text: "Remove"', 1)[0]
+        assert "hub.openMinecraftServerEditDialog(" in row
+        assert "panel.confirmEditMinecraftServer = true;" in row
+
     def test_hubpanel_declares_resets_and_instantiates_the_dialog(self):
         hubpanel = read(REPO / "HubPanel.qml")
         assert "property bool confirmEditMinecraftServer: false" in hubpanel
