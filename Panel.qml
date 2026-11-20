@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.53"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 129
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.54"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 130
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -1092,7 +1092,7 @@ Item {
       notifyIfClosed(lastActionMessage);
       return;
     }
-    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    var host = defaultServerName();
     mcServerLaunchName = server;
     mcServerLaunchPort = chosen;
     mcServerLaunchAddress = host + ":" + chosen;
@@ -1565,7 +1565,7 @@ Item {
     mcWizardModsDir = "";
     mcWizardWorldDir = "";
     mcWizardNameChanged(mcServerNameDraft);
-    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    var host = defaultServerName();
     mcWizardJoinAddress = host + ":" + mcServerPortDraft;
 
     mcWizardClientCheckProc.running = false;
@@ -1625,6 +1625,15 @@ Item {
       mcServerMemoryDraft = "6G";
       mcWizardModsDir = m.modsDir || "";
       mcWizardWorldDir = m.worldDir || "";
+      // The image depends on the game version (old modpacks need Java 17).
+      // Re-check so the pull prompt matches the image create will actually use.
+      if (mcWizardDockerReady === "ready") {
+        mcWizardImageReady = false;
+        mcWizardImageCheckProc.command =
+          Docker.minecraftServerImageCheckCommand(mcServerVersionDraft);
+        mcWizardImageCheckProc.running = false;
+        mcWizardImageCheckProc.running = true;
+      }
       break;
     }
   }
@@ -1660,11 +1669,12 @@ Item {
     if (mcWizardPullBusy)
       return;
     mcWizardPullBusy = true;
-    mcWizardPullStatus = "Pulling " + Docker.minecraftServerImage() + "…";
+    var image = Docker.minecraftServerImage(mcServerVersionDraft);
+    mcWizardPullStatus = "Pulling " + image + "…";
     mcWizardPullPercent = -1;
     _mcWizardPullLayers = ({});
     mcWizardPullProc.cancelled = false;
-    mcWizardPullProc.command = Docker.pullCommand(Docker.minecraftServerImage());
+    mcWizardPullProc.command = Docker.pullCommand(image);
     mcWizardPullProc.running = true;
   }
 
@@ -1713,7 +1723,7 @@ Item {
     if (!isFinite(chosen) || chosen < 1 || chosen > 65535)
       chosen = 25565;
     mcServerPortDraft = chosen;
-    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    var host = defaultServerName();
     mcWizardJoinAddress = host + ":" + chosen;
   }
 
@@ -1735,7 +1745,7 @@ Item {
       mcWizardCheckText = "Pull the image before creating the container.";
       return;
     }
-    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    var host = defaultServerName();
     mcWizardJoinAddress = host + ":" + mcServerPortDraft;
     createMinecraftServer();
   }
@@ -2410,7 +2420,10 @@ Item {
         var ready = Shell.trim(text) === "ready";
         root.mcWizardDockerReady = ready ? "ready" : "missing";
         if (ready) {
-          root.mcWizardCheckText = "Docker is available. Checking the " + Docker.minecraftServerImage() + " image…";
+          mcWizardImageCheckProc.command =
+            Docker.minecraftServerImageCheckCommand(root.mcServerVersionDraft);
+          root.mcWizardCheckText = "Docker is available. Checking the " +
+            Docker.minecraftServerImage(root.mcServerVersionDraft) + " image…";
           mcWizardImageCheckProc.running = false;
           mcWizardImageCheckProc.running = true;
         } else {
@@ -2423,7 +2436,7 @@ Item {
 
   Process {
     id: mcWizardImageCheckProc
-    command: Docker.minecraftServerImageCheckCommand()
+    command: Docker.minecraftServerImageCheckCommand(mcServerVersionDraft)
     stdout: StdioCollector {}
     stderr: StdioCollector {}
     onExited: function(code) {
@@ -2498,7 +2511,7 @@ Item {
           " created on port " + root.mcServerPortDraft +
           ". Press Launch to start it and join from Prism.";
         root.mcServerCreateStatus = "Created — starting.";
-        var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+        var host = defaultServerName();
         root.mcServerLaunchName = root.mcServerNameDraft;
         root.mcServerLaunchPort = root.mcServerPortDraft;
         root.mcServerLaunchAddress = host + ":" + root.mcServerPortDraft;

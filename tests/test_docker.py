@@ -266,7 +266,7 @@ class TestMinecraftServerCommands:
         assert "25565:25565" in cmd
         assert "/mnt/games/GameServers/vember-minecraft-data:/data" in cmd
         for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G",
-                    "DIFFICULTY=NORMAL"):
+                    "DIFFICULTY=NORMAL", "SERVER_PORT=25565"):
             assert env in cmd
         assert cmd[-1] == "itzg/minecraft-server:latest"
         # RCON is enabled inside the container but must never reach the host.
@@ -356,13 +356,41 @@ class TestMinecraftServerCommands:
         )
         assert "/mnt/games/GameServers/nodecraft-data:/data" in cmd
 
-    def test_preflight_commands_are_shaped_for_the_wizard(self, js):
+    def test_image_tracks_game_version_jdk_requirement(self, js):
+        # :latest now ships Java 25; 1.18-era modpacks need Java 17 or they
+        # crash on mixin/datapack load. Modern versions stay on :latest.
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage()))") == \
             "itzg/minecraft-server:latest"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('LATEST')))") == \
+            "itzg/minecraft-server:latest"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.18.2')))") == \
+            "itzg/minecraft-server:java17"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.20.1')))") == \
+            "itzg/minecraft-server:java17"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.20.5')))") == \
+            "itzg/minecraft-server:latest"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.21')))") == \
+            "itzg/minecraft-server:latest"
+
+    def test_old_version_command_uses_java17_and_published_port(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'name:"nodecraft", type:"FABRIC", version:"1.18.2", port:25566'
+            "})))"
+        )
+        assert "SERVER_PORT=25566" in cmd
+        assert "25566:25566" in cmd
+        assert cmd[-1] == "itzg/minecraft-server:java17"
+
+    def test_preflight_commands_are_shaped_for_the_wizard(self, js):
         check = js("console.log(JSON.stringify(Docker.dockerReadyCommand()))")
         assert check[0] == "sh" and "docker info" in check[2]
         inspect = js("console.log(JSON.stringify(Docker.minecraftServerImageCheckCommand()))")
         assert inspect == ["docker", "image", "inspect", "itzg/minecraft-server:latest"]
+        old = js(
+            "console.log(JSON.stringify(Docker.minecraftServerImageCheckCommand('1.18.2')))"
+        )
+        assert old == ["docker", "image", "inspect", "itzg/minecraft-server:java17"]
 
     def test_logs_and_inspect_commands(self, js):
         assert js(
@@ -527,7 +555,7 @@ class TestModpackMounts:
         assert "-v" in cmd and "/home/someone/mods:/mods:ro" in cmd
         assert "/home/someone/saves/New World:/worlds/source:ro" in cmd
         assert "WORLD=/worlds/source" in cmd
-        assert cmd[-1] == "itzg/minecraft-server:latest"
+        assert cmd[-1] == "itzg/minecraft-server:java17"
 
     def test_unsafe_mount_paths_are_dropped(self, js):
         opts = js(

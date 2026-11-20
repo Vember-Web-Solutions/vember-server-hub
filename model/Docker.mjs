@@ -274,20 +274,32 @@ export class Docker {
   };
   }
 
+  // The itzg `:latest` tag now ships Java 25, which breaks older Minecraft
+  // modpacks (1.18-era Fabric mixins and datapack registries fail to load).
+  // Pick the JDK by game version: 1.20.5+ / 1.21+ need Java 21 and run fine on
+  // :latest, while 1.17-1.20.4 need Java 17. LATEST stays on :latest.
+  minecraftServerImage(version) {
+  var v = shell.trim(String(version || "")).toUpperCase();
+  if (v === "LATEST" || !v) return "itzg/minecraft-server:latest";
+  var m = v.match(/^1\.(\d+)(?:\.(\d+))?/);
+  if (!m) return "itzg/minecraft-server:latest";
+  var minor = parseInt(m[1], 10);
+  var patch = m[2] ? parseInt(m[2], 10) : 0;
+  if (minor > 20 || (minor === 20 && patch >= 5))
+    return "itzg/minecraft-server:latest";
+  return "itzg/minecraft-server:java17";
+  }
+
   // The wizard offers the itzg image as a guided route. These checks let it
   // explain a missing daemon or image before offering to pull it, instead of
   // failing halfway through `docker run`.
-  minecraftServerImage() {
-  return "itzg/minecraft-server:latest";
+  minecraftServerImageCheckCommand(version) {
+  return ["docker", "image", "inspect", this.minecraftServerImage(version)];
   }
 
   dockerReadyCommand() {
   return ["sh", "-c",
     "command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && echo ready || echo missing"];
-  }
-
-  minecraftServerImageCheckCommand() {
-  return ["docker", "image", "inspect", this.minecraftServerImage()];
   }
 
   // `docker run -d` prints the new container id and returns immediately. The
@@ -306,13 +318,17 @@ export class Docker {
     "-e", "TYPE=" + o.type,
     "-e", "VERSION=" + o.version,
     "-e", "MEMORY=" + o.memory,
-    "-e", "DIFFICULTY=" + o.difficulty
+    "-e", "DIFFICULTY=" + o.difficulty,
+    // itzg listens on 25565 unless told otherwise. Without this, a server
+    // published on 25566+ forwards to a port nothing is bound to and every
+    // join is refused. The healthcheck follows SERVER_PORT too.
+    "-e", "SERVER_PORT=" + o.port
   ];
   if (o.modsDir)
     cmd.push("-v", o.modsDir + ":/mods:ro");
   if (o.worldDir)
     cmd.push("-v", o.worldDir + ":/worlds/source:ro", "-e", "WORLD=/worlds/source");
-  cmd.push(this.minecraftServerImage());
+  cmd.push(this.minecraftServerImage(o.version));
   return cmd;
   }
 
