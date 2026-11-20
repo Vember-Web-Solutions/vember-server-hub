@@ -57,11 +57,20 @@ Out:
   allocator, but the browser URL must use the same chosen port.
 - Existing Paperless stacks must never be silently adopted or overwritten.
 
-## Open items
+## Collaboration
 
-- "Working with Echo to make it run really well" needs a boundary: whether
-  Echo owns runtime tuning (OCR/performance) and the hub owns setup, or Echo
-  is only consulted. Coordinate through Dispatch before building.
+Elena chose (2026-11-20): coordinate with Echo through Dispatch. Arcade owns
+the wizard and Docker setup; Echo advises on runtime tuning (OCR languages,
+memory, storage layout, image pins). Letter sent:
+`~/Projects/dispatch/store/arcade/dispatch-paperless-wizard-echo-coordination-20261120.md`.
+
+## Current state to respect
+
+Paperless already runs on vemberos: `paperless-ngx-webserver-1`
+(`192.168.0.145:9999->8000`), `-db-1` (Postgres 18), `-broker-1`
+(valkey/valkey:9-alpine); media/export are bind-mounted under
+`~/Documents/Paperless/`. The wizard must never adopt or overwrite it. Echo's
+separate `hub-container-db-backups` thread is map-out only — no build.
 
 ## Done when
 
