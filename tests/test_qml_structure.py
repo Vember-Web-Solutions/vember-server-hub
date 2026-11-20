@@ -497,15 +497,24 @@ class TestMinecraftServerIsWired:
         assert "mcServerCreateProc.cancelled = true;" in text
         assert "mcServerCreateProc.running = false;" in text
 
-    def test_servers_tab_has_type_selector_and_create_button(self):
+    def test_servers_tab_opens_the_guided_wizard(self):
         text = read(REPO / "ui/tabs/GamesTab.qml")
-        for kind in ("PAPER", "VANILLA", "FORGE", "FABRIC"):
-            assert 'hub.mcServerTypeDraft = "' + kind + '"' in text, (
-                kind + " is missing from the server type selector"
-            )
-        assert "hub.createMinecraftServer()" in text
+        assert "hub.openMinecraftServerWizard()" in text
         assert "hub.cancelMinecraftServerCreate()" in text
         assert "New Minecraft server" in text
+        assert "Start the server wizard" in text
+
+    def test_wizard_has_four_steps_and_themed_dropdowns(self):
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        for step in ("Client", "Runtime", "Options", "Review"):
+            assert '"' + step + '"' in wizard, step + " is missing from the step rail"
+        for option in ("serverTypeOptions()", "versionOptions()",
+                       "memoryOptions()", "difficultyOptions()"):
+            assert "Wizard." + option in wizard, option + " has no dropdown"
+        assert "hub.mcWizardCreate()" in wizard
+        assert "hub.mcWizardPullImage()" in wizard
+        assert "hub.mcWizardInstallClient()" in wizard
+        assert "import \"../model/MinecraftWizard.mjs\" as Wizard" in wizard
 
     def test_existing_servers_get_all_controls(self):
         text = read(REPO / "ui/tabs/GamesTab.qml")
@@ -2677,13 +2686,14 @@ class TestGameServersLayoutAndBlueSlice:
         text = read(REPO / "ui/tabs/GamesTab.qml")
         return text[text.index('visible: panel.gamesSubTab === "storage"'):]
 
-    def test_new_servers_default_under_game_servers(self):
+    def test_new_servers_default_to_a_portable_path(self):
         docker = read(REPO / "model/Docker.mjs")
         panel = read(REPO / "Panel.qml")
-        assert "/mnt/games/GameServers/Minecraft" in docker
-        assert 'mcServerDataDirDraft: "/mnt/games/GameServers/Minecraft"' in panel
-        assert "/mnt/games/MinecraftServer" not in docker, "old fallback still live"
-        assert "/mnt/games/MinecraftServer" not in panel, "form still defaults to the old path"
+        assert "/var/minecraft-servers" in docker
+        assert "defaultDataDir: homeDir + \"/minecraft-servers\"" in panel
+        assert 'mcServerDataDirDraft: homeDir + "/minecraft-servers"' in panel
+        assert "/mnt/games/GameServers/Minecraft" not in docker, "old hardcoded fallback still live"
+        assert "/mnt/games/GameServers/Minecraft" not in panel, "form still defaults to the old path"
 
     def test_panel_tracks_total_server_bytes(self):
         panel = read(REPO / "Panel.qml")

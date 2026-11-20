@@ -24,6 +24,7 @@ MODULES = [
     "SystemInfo",
     "Tailscale",
     "Gaming",
+    "MinecraftWizard",
     "DevTools",
     "Ssh",
     "Hypr",

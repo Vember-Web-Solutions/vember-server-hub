@@ -6,6 +6,7 @@ import "model/Config.mjs" as Config
 import "model/Docker.mjs" as Docker
 import "model/Gaming.mjs" as Gaming
 import "model/Hypr.mjs" as Hypr
+import "model/MinecraftWizard.mjs" as Wizard
 import "model/InstallLog.mjs" as InstallLog
 import "model/Shell.mjs" as Shell
 import "model/Ssh.mjs" as Ssh
@@ -26,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.46"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 122
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.47"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 123
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -84,7 +85,27 @@ Item {
   property string mcServerTypeDraft: "PAPER"
   property string mcServerVersionDraft: "LATEST"
   property string mcServerMemoryDraft: "4G"
-  property string mcServerDataDirDraft: "/mnt/games/GameServers/Minecraft"
+  property string mcServerDifficultyDraft: "NORMAL"
+  property int mcServerPortDraft: 25565
+  property string mcServerDataDirDraft: homeDir + "/minecraft-servers"
+  // Guided Minecraft server wizard: client → runtime → options → review.
+  property bool mcWizardOpen: false
+  property int mcWizardStep: 1
+  property string mcWizardClient: "prism"
+  property var mcWizardClientInstalled: ({ prism: false, official: false })
+  property string mcWizardRunMode: "docker"
+  property string mcWizardJoinAddress: "localhost:25565"
+  property bool mcWizardInstallBusy: false
+  property string mcWizardInstallStatus: ""
+  property int mcWizardInstallPolls: 0
+  // Preflight: Docker daemon, image availability and guided pull.
+  property string mcWizardDockerReady: "checking"
+  property bool mcWizardImageReady: false
+  property string mcWizardCheckText: "Checking Docker…"
+  property bool mcWizardPullBusy: false
+  property string mcWizardPullStatus: ""
+  property real mcWizardPullPercent: -1
+  property var _mcWizardPullLayers: ({})
   property bool mcServerCreateBusy: false
   property string mcServerCreateStatus: ""
   property string mcServerCreateResult: ""
@@ -1410,6 +1431,113 @@ Item {
     refreshDocker();
   }
 
+  // --- Guided Minecraft server wizard ---
+  // A first-time user can go from "I want a server" to a join address without
+  // knowing the image, the mount syntax or which launcher they need. The draft
+  // fields are shared with the backend create path below.
+  function openMinecraftServerWizard() {
+    mcWizardOpen = true;
+    mcWizardStep = 1;
+    mcWizardClient = "prism";
+    mcWizardClientInstalled = ({ prism: false, official: false });
+    mcWizardInstallStatus = "";
+    mcWizardInstallBusy = false;
+    mcWizardRunMode = "docker";
+    mcWizardDockerReady = "checking";
+    mcWizardImageReady = false;
+    mcWizardCheckText = "Checking Docker…";
+    mcWizardPullStatus = "";
+    mcWizardPullPercent = -1;
+    _mcWizardPullLayers = ({});
+    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    mcWizardJoinAddress = host + ":" + mcServerPortDraft;
+
+    mcWizardClientCheckProc.running = false;
+    mcWizardClientCheckProc.running = true;
+    mcWizardDockerCheckProc.running = false;
+    mcWizardDockerCheckProc.running = true;
+  }
+
+  function closeMinecraftServerWizard() {
+    if (mcServerCreateBusy)
+      return;
+    mcWizardPullProc.cancelled = true;
+    mcWizardPullProc.running = false;
+    mcWizardPullBusy = false;
+    mcWizardInstallProc.cancelled = true;
+    mcWizardInstallProc.running = false;
+    mcWizardInstallBusy = false;
+    mcWizardOpen = false;
+  }
+
+  function mcWizardNext() {
+    if (mcWizardStep < 4)
+      mcWizardStep++;
+  }
+
+  function mcWizardBack() {
+    if (mcWizardStep > 1)
+      mcWizardStep--;
+  }
+
+  function mcWizardInstallClient() {
+    if (mcWizardInstallBusy)
+      return;
+    mcWizardInstallBusy = true;
+    var name = Wizard.clientName(mcWizardClient);
+    mcWizardInstallStatus = "Opening a terminal to install " + name + " — answer any prompts there.";
+    mcWizardInstallPolls = 0;
+    var title = "Vember Install: " + name;
+    var cmd = Wizard.clientInstallCommand(mcWizardClient)[2];
+    mcWizardInstallProc.cancelled = false;
+    mcWizardInstallProc.command = ["sh", "-c", InstallLog.terminalScript(
+      title, cmd, InstallLog.logPath(homeDir), InstallLog.titlePath(homeDir),
+      InstallLog.lockPath(homeDir), "wizard-client")];
+    mcWizardInstallProc.running = true;
+    handOffToExternalSurface();
+  }
+
+  function mcWizardPullImage() {
+    if (mcWizardPullBusy)
+      return;
+    mcWizardPullBusy = true;
+    mcWizardPullStatus = "Pulling " + Docker.minecraftServerImage() + "…";
+    mcWizardPullPercent = -1;
+    _mcWizardPullLayers = ({});
+    mcWizardPullProc.cancelled = false;
+    mcWizardPullProc.command = Docker.pullCommand(Docker.minecraftServerImage());
+    mcWizardPullProc.running = true;
+  }
+
+  function mcWizardCancelPull() {
+    mcWizardPullProc.cancelled = true;
+    mcWizardPullProc.running = false;
+    mcWizardPullBusy = false;
+    mcWizardPullStatus = "Pull stopped. Downloaded layers were kept.";
+  }
+
+  function mcWizardCommandPreview() {
+    return Docker.createMinecraftServerCommand({
+      name: mcServerNameDraft, type: mcServerTypeDraft,
+      version: mcServerVersionDraft, memory: mcServerMemoryDraft,
+      difficulty: mcServerDifficultyDraft,
+      dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
+      defaultDataDir: homeDir + "/minecraft-servers"
+    }).join(" ");
+  }
+
+  function mcWizardCreate() {
+    if (mcWizardRunMode === "manual")
+      return;
+    if (!mcWizardImageReady) {
+      mcWizardCheckText = "Pull the image before creating the container.";
+      return;
+    }
+    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    mcWizardJoinAddress = host + ":" + mcServerPortDraft;
+    createMinecraftServer();
+  }
+
   // --- Minecraft server creation ---
   // Every field is normalised by the model, so a blank or hand-edited input
   // can never turn into extra docker arguments. `docker run -d` returns the
@@ -1421,7 +1549,9 @@ Item {
     var opts = {
       name: mcServerNameDraft, type: mcServerTypeDraft,
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
-      dataDir: mcServerDataDirDraft, port: 25565
+      difficulty: mcServerDifficultyDraft,
+      dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
+      defaultDataDir: homeDir + "/minecraft-servers"
     };
     // Reflect the normalised values back into the form so the operator sees
     // exactly what was created when an input fell back to its default.
@@ -1430,7 +1560,9 @@ Item {
     mcServerTypeDraft = normalized.type;
     mcServerVersionDraft = normalized.version;
     mcServerMemoryDraft = normalized.memory;
+    mcServerDifficultyDraft = normalized.difficulty;
     mcServerDataDirDraft = normalized.dataDir;
+    mcServerPortDraft = normalized.port;
 
     mcServerCreateBusy = true;
     mcServerCreateStatus = "Creating " + normalized.type + " server " + normalized.name + "…";
@@ -1915,6 +2047,156 @@ Item {
         root.notifyIfClosed(root.lastActionMessage);
       }
       root.refreshDocker();
+    }
+  }
+
+  // Wizard preflight and install. Each check is a separate process so the UI
+  // can explain exactly which prerequisite is missing instead of failing at
+  // `docker run` with an opaque exit code.
+  Process {
+    id: mcWizardClientCheckProc
+    command: Wizard.clientCheckCommand()
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var found = Wizard.parseClientScan(text);
+        root.mcWizardClientInstalled = found;
+        if (root.mcWizardInstallBusy && found[root.mcWizardClient]) {
+          root.mcWizardInstallBusy = false;
+          root.mcWizardInstallPolls = 0;
+          root.mcWizardInstallStatus = Wizard.clientName(root.mcWizardClient) +
+            " installed. You're ready to join.";
+        }
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
+  // The install runs in a terminal so sudo prompts are reachable. Re-check for
+  // the launcher until it appears (or two minutes pass) instead of trusting
+  // the terminal launcher's exit code.
+  Timer {
+    id: mcWizardInstallPollTimer
+    interval: 2000
+    repeat: true
+    running: root.mcWizardInstallBusy && root.mcWizardOpen
+    onTriggered: {
+      root.mcWizardInstallPolls++;
+      if (root.mcWizardInstallPolls > 60) {
+        root.mcWizardInstallBusy = false;
+        root.mcWizardInstallStatus = "Still not detected. Install " +
+          Wizard.clientName(root.mcWizardClient) + " in the terminal, then reopen the wizard.";
+        return;
+      }
+      mcWizardClientCheckProc.running = false;
+      mcWizardClientCheckProc.running = true;
+    }
+  }
+
+  Process {
+    id: mcWizardInstallProc
+    property bool cancelled: false
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var line = Shell.trim(text);
+        if (line) root.mcWizardInstallStatus = line;
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (cancelled) {
+        cancelled = false;
+        root.mcWizardInstallBusy = false;
+        return;
+      }
+      if (code === 127) {
+        root.mcWizardInstallBusy = false;
+        root.mcWizardInstallStatus = "Could not open a terminal. Install " +
+          Wizard.clientName(root.mcWizardClient) + " manually, then reopen the wizard.";
+        return;
+      }
+      // The terminal is backgrounded: this exit only means it was launched.
+      // The poll timer watches for the launcher actually appearing.
+      root.mcWizardInstallStatus = "Finish the install in the terminal — this wizard will notice when it's ready.";
+    }
+  }
+
+  Process {
+    id: mcWizardDockerCheckProc
+    command: Docker.dockerReadyCommand()
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var ready = Shell.trim(text) === "ready";
+        root.mcWizardDockerReady = ready ? "ready" : "missing";
+        if (ready) {
+          root.mcWizardCheckText = "Docker is available. Checking the " + Docker.minecraftServerImage() + " image…";
+          mcWizardImageCheckProc.running = false;
+          mcWizardImageCheckProc.running = true;
+        } else {
+          root.mcWizardCheckText = "Docker is not available here. Install Docker and start its service, then reopen the wizard.";
+        }
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
+  Process {
+    id: mcWizardImageCheckProc
+    command: Docker.minecraftServerImageCheckCommand()
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.mcWizardImageReady = (code === 0);
+      root.mcWizardCheckText = code === 0
+        ? "Image ready — you can skip the pull."
+        : "Image not present yet. Pull it to continue.";
+    }
+  }
+
+  Process {
+    id: mcWizardPullProc
+    property bool cancelled: false
+    property string lastLine: ""
+    function handleLine(line) {
+      var t = Shell.trim(line);
+      if (t.length === 0)
+        return;
+      lastLine = t;
+      root.mcWizardPullStatus = t;
+      var ev = Docker.parsePullLine(t);
+      if (!ev)
+        return;
+      var layers = root._mcWizardPullLayers || {};
+      if (ev.phase === "complete") {
+        if (layers[ev.id] && isFinite(layers[ev.id].total))
+          layers[ev.id].current = layers[ev.id].total;
+        else
+          return;
+      } else if (isFinite(ev.current) && isFinite(ev.total) && ev.total > 0) {
+        layers[ev.id] = { current: ev.current, total: ev.total };
+      } else {
+        return;
+      }
+      root._mcWizardPullLayers = layers;
+      var agg = Docker.accumulateLayers(layers);
+      if (agg.total > 0)
+        root.mcWizardPullPercent = agg.progress;
+    }
+    stdout: SplitParser { onRead: function(line) { mcWizardPullProc.handleLine(line) } }
+    stderr: SplitParser { onRead: function(line) { mcWizardPullProc.handleLine(line) } }
+    onExited: function(code) {
+      root.mcWizardPullBusy = false;
+      if (cancelled) {
+        cancelled = false;
+        return;
+      }
+      if (code === 0) {
+        root.mcWizardImageReady = true;
+        root.mcWizardPullPercent = 1;
+        root.mcWizardPullStatus = "Image ready.";
+        root.mcWizardCheckText = "Image ready — you can create the server.";
+      } else {
+        root.mcWizardPullStatus = "Pull failed: " + (Shell.trim(lastLine) || ("code " + code));
+      }
     }
   }
 

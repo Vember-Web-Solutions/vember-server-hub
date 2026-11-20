@@ -178,9 +178,19 @@ export class Docker {
     memory = (amount >= floor && amount <= limit) ? (amount + mm[2]) : "4G";
   }
 
+  var difficulty = String(o.difficulty || "NORMAL").toUpperCase();
+  if (["PEACEFUL", "EASY", "NORMAL", "HARD"].indexOf(difficulty) === -1)
+    difficulty = "NORMAL";
+
+  // A caller with a real home directory passes defaultDataDir; the built-in
+  // fallback stays portable so another user's hub does not depend on Elena's
+  // games mount.
+  var defaultDataDir = shell.trim(String(o.defaultDataDir || ""));
+  if (defaultDataDir.charAt(0) !== "/" || defaultDataDir.indexOf("\n") !== -1)
+    defaultDataDir = "/var/minecraft-servers";
   var dataDir = shell.trim(String(o.dataDir || ""));
   if (dataDir.charAt(0) !== "/" || dataDir.indexOf("\n") !== -1)
-    dataDir = "/mnt/games/GameServers/Minecraft";
+    dataDir = defaultDataDir;
 
   var port = Number(o.port);
   if (!isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
@@ -188,8 +198,24 @@ export class Docker {
 
   return {
     name: name, type: type, version: version,
-    memory: memory, dataDir: dataDir, port: port
+    memory: memory, difficulty: difficulty, dataDir: dataDir, port: port
   };
+  }
+
+  // The wizard offers the itzg image as a guided route. These checks let it
+  // explain a missing daemon or image before offering to pull it, instead of
+  // failing halfway through `docker run`.
+  minecraftServerImage() {
+  return "itzg/minecraft-server:latest";
+  }
+
+  dockerReadyCommand() {
+  return ["sh", "-c",
+    "command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1 && echo ready || echo missing"];
+  }
+
+  minecraftServerImageCheckCommand() {
+  return ["docker", "image", "inspect", this.minecraftServerImage()];
   }
 
   // `docker run -d` prints the new container id and returns immediately. The
@@ -208,7 +234,8 @@ export class Docker {
     "-e", "TYPE=" + o.type,
     "-e", "VERSION=" + o.version,
     "-e", "MEMORY=" + o.memory,
-    "itzg/minecraft-server:latest"
+    "-e", "DIFFICULTY=" + o.difficulty,
+    this.minecraftServerImage()
   ];
   }
 
@@ -333,6 +360,9 @@ export function parsePullLine(...args) { return impl.parsePullLine(...args); }
 export function accumulateLayers(...args) { return impl.accumulateLayers(...args); }
 export function normalizeMinecraftServerOptions(...args) { return impl.normalizeMinecraftServerOptions(...args); }
 export function createMinecraftServerCommand(...args) { return impl.createMinecraftServerCommand(...args); }
+export function minecraftServerImage(...args) { return impl.minecraftServerImage(...args); }
+export function dockerReadyCommand(...args) { return impl.dockerReadyCommand(...args); }
+export function minecraftServerImageCheckCommand(...args) { return impl.minecraftServerImageCheckCommand(...args); }
 export function logsCommand(...args) { return impl.logsCommand(...args); }
 export function inspectDataDirCommand(...args) { return impl.inspectDataDirCommand(...args); }
 export function inspectComposeCommand(...args) { return impl.inspectComposeCommand(...args); }

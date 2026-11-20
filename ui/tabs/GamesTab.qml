@@ -844,10 +844,9 @@ Column {
       }
     }
 
-    // Create a Minecraft server from the itzg image. The backend normalises
-    // every field before building the docker command, so the form is only a
-    // convenience — invalid input falls back to a safe default and the form
-    // is updated to show what was actually used.
+    // Guided server creation. The 4-step wizard lives in its own modal so a
+    // fresh user can go from zero to a join address; this card is the entry
+    // point and keeps the last result visible after the modal closes.
     Rectangle {
       visible: serversSubTab === "create"
       width: parent.width
@@ -855,125 +854,40 @@ Column {
       color: panel.softText(0.05)
       border.color: panel.accentSoft(0.18)
       border.width: 1
-      implicitHeight: mcCreateCol.implicitHeight + 24
+      implicitHeight: mcCreateIntro.implicitHeight + 24
       Column {
-        id: mcCreateCol
+        id: mcCreateIntro
         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
         anchors.margins: 14
         spacing: 10
-
         RowLayout {
           width: parent.width; spacing: 10
           Text { textFormat: Text.PlainText; text: "󰍳"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
           ColumnLayout {
             Layout.fillWidth: true; spacing: 2
             Text { textFormat: Text.PlainText; text: "New Minecraft server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
-            Text { textFormat: Text.PlainText; text: "Creates an itzg/minecraft-server container on LAN port 25565. World data lives on the games drive; RCON stays inside the container. Forge and Fabric start with no mods — add those on the host afterwards."; color: panel.softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+            Text { textFormat: Text.PlainText; text: "A short guided flow: choose a client, let the hub prepare Docker, pick the options, then review before the container is created. Works with Paper, Vanilla, Forge and Fabric."; color: panel.softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
           }
         }
-
-        Text { textFormat: Text.PlainText; text: "Server type"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-        Flow {
-          width: parent.width
-          spacing: 8
-          Button { text: "Paper"; tooltipText: "Fast vanilla-compatible server with plugin support"; selected: hub.mcServerTypeDraft === "PAPER"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "PAPER" }
-          Button { text: "Vanilla"; tooltipText: "Plain Mojang server"; selected: hub.mcServerTypeDraft === "VANILLA"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "VANILLA" }
-          Button { text: "Forge"; tooltipText: "Forge modded server; add mods on the host after creation"; selected: hub.mcServerTypeDraft === "FORGE"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "FORGE" }
-          Button { text: "Fabric"; tooltipText: "Fabric modded server; add mods on the host after creation"; selected: hub.mcServerTypeDraft === "FABRIC"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "FABRIC" }
-        }
-
-        Text { textFormat: Text.PlainText; text: "Container name"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-        Rectangle {
-          width: parent.width
-          radius: 8
-          color: panel.softText(0.03)
-          border.color: panel.accentSoft(0.2)
-          border.width: 1
-          implicitHeight: 36
-          TextInput {
-            anchors.fill: parent; anchors.margins: 9
-            verticalAlignment: TextInput.AlignVCenter
-            color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
-            selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
-            text: hub.mcServerNameDraft
-            onTextChanged: hub.mcServerNameDraft = text
-          }
-        }
-
-        RowLayout {
-          width: parent.width
-          spacing: 10
-          ColumnLayout {
-            Layout.fillWidth: true; spacing: 4
-            Text { textFormat: Text.PlainText; text: "Version"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-            Rectangle {
-              Layout.fillWidth: true; radius: 8
-              color: panel.softText(0.03); border.color: panel.accentSoft(0.2); border.width: 1; implicitHeight: 36
-              TextInput {
-                anchors.fill: parent; anchors.margins: 9
-                verticalAlignment: TextInput.AlignVCenter
-                color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
-                selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
-                text: hub.mcServerVersionDraft
-                onTextChanged: hub.mcServerVersionDraft = text
-              }
-            }
-          }
-          ColumnLayout {
-            Layout.fillWidth: true; spacing: 4
-            Text { textFormat: Text.PlainText; text: "Memory"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-            Rectangle {
-              Layout.fillWidth: true; radius: 8
-              color: panel.softText(0.03); border.color: panel.accentSoft(0.2); border.width: 1; implicitHeight: 36
-              TextInput {
-                anchors.fill: parent; anchors.margins: 9
-                verticalAlignment: TextInput.AlignVCenter
-                color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
-                selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
-                text: hub.mcServerMemoryDraft
-                onTextChanged: hub.mcServerMemoryDraft = text
-              }
-            }
-          }
-        }
-
-        Text { textFormat: Text.PlainText; text: "World data directory"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
-        Rectangle {
-          width: parent.width
-          radius: 8
-          color: panel.softText(0.03)
-          border.color: panel.accentSoft(0.2)
-          border.width: 1
-          implicitHeight: 36
-          TextInput {
-            anchors.fill: parent; anchors.margins: 9
-            verticalAlignment: TextInput.AlignVCenter
-            color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
-            selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
-            text: hub.mcServerDataDirDraft
-            onTextChanged: hub.mcServerDataDirDraft = text
-          }
-        }
-
         Flow {
           width: parent.width
           spacing: 8
           Button {
-            iconText: "󰐊"
-            text: hub.mcServerCreateBusy ? "Creating…" : "Create server"
+            iconText: "󰍳"
+            text: "Start the server wizard"
+            active: true
             enabled: !hub.mcServerCreateBusy
-            tooltipText: "Create and start the container (docker run -d)"
-            onClicked: hub.createMinecraftServer()
+            tooltipText: "Open the 4-step Minecraft server wizard"
+            onClicked: hub.openMinecraftServerWizard()
           }
           Button {
             visible: hub.mcServerCreateBusy
             iconText: "󰓛"
             text: "Stop"
-            tooltipText: "Stop waiting for the image pull; layers already downloaded are kept"
+            tooltipText: "Stop waiting for the server creation"
             onClicked: hub.cancelMinecraftServerCreate()
           }
         }
-
         Text {
           visible: Shell.trim(hub.mcServerCreateStatus).length > 0
           textFormat: Text.PlainText

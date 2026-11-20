@@ -254,15 +254,17 @@ class TestMinecraftServerCommands:
         )
         assert opts == {
             "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
-            "memory": "4G", "dataDir": "/mnt/games/GameServers/Minecraft", "port": 25565,
+            "memory": "4G", "difficulty": "NORMAL",
+            "dataDir": "/var/minecraft-servers", "port": 25565,
         }
         cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
         assert cmd[:4] == ["docker", "run", "-d", "-it"]
         assert cmd[cmd.index("--name") + 1] == "vember-minecraft"
         assert cmd[cmd.index("--restart") + 1] == "unless-stopped"
         assert "25565:25565" in cmd
-        assert "/mnt/games/GameServers/Minecraft:/data" in cmd
-        for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G"):
+        assert "/var/minecraft-servers:/data" in cmd
+        for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G",
+                    "DIFFICULTY=NORMAL"):
             assert env in cmd
         assert cmd[-1] == "itzg/minecraft-server:latest"
         # RCON is enabled inside the container but must never reach the host.
@@ -287,7 +289,8 @@ class TestMinecraftServerCommands:
         assert opts["type"] == "PAPER"
         assert opts["version"] == "LATEST"
         assert opts["memory"] == "4G"
-        assert opts["dataDir"] == "/mnt/games/GameServers/Minecraft"
+        assert opts["difficulty"] == "NORMAL"
+        assert opts["dataDir"] == "/var/minecraft-servers"
         assert opts["port"] == 25565
         cmd = js(
             "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
@@ -307,6 +310,30 @@ class TestMinecraftServerCommands:
             "25566:25566", "/tmp/mc:/data", "modded-world",
         ):
             assert expected in cmd
+
+    def test_difficulty_and_portable_default_are_honoured(self, js):
+        opts = js(
+            "console.log(JSON.stringify(Docker.normalizeMinecraftServerOptions({"
+            'difficulty:"peaceful", defaultDataDir:"/home/someone/minecraft-servers"'
+            "})))"
+        )
+        assert opts["difficulty"] == "PEACEFUL"
+        assert opts["dataDir"] == "/home/someone/minecraft-servers"
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'difficulty:"hard", dataDir:"/srv/mc", port:25566'
+            "})))"
+        )
+        assert "DIFFICULTY=HARD" in cmd
+        assert "25566:25566" in cmd
+
+    def test_preflight_commands_are_shaped_for_the_wizard(self, js):
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage()))") == \
+            "itzg/minecraft-server:latest"
+        check = js("console.log(JSON.stringify(Docker.dockerReadyCommand()))")
+        assert check[0] == "sh" and "docker info" in check[2]
+        inspect = js("console.log(JSON.stringify(Docker.minecraftServerImageCheckCommand()))")
+        assert inspect == ["docker", "image", "inspect", "itzg/minecraft-server:latest"]
 
     def test_logs_and_inspect_commands(self, js):
         assert js(

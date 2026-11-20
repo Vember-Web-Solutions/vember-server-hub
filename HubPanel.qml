@@ -401,6 +401,9 @@ PanelWindow {
     // Code Server setup dialog
     CodeServerSetupDialog { panel: panel; cardRadius: card.radius }
 
+    // Guided Minecraft server creation
+    MinecraftServerWizard { panel: panel; cardRadius: card.radius }
+
     // Confirm prune popup
     PruneConfirmDialog { panel: panel; cardRadius: card.radius }
 
