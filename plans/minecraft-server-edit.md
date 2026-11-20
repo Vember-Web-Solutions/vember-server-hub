@@ -1,7 +1,7 @@
 ---
 node: minecraft-server-edit
 title: Edit an existing Minecraft server
-status: active
+status: done
 created: 2026-11-20
 tags: [minecraft, docker, hub]
 ---
@@ -45,3 +45,12 @@ Out:
 ## Done when
 
 A confirmed edit preserves the server data dir, applies the new name/port, copies the chosen Prism instance's mods, and reports success only after a real status ping on the new port. All repo checks pass.
+
+## Verification
+
+- `uvx pytest -q`: 744 passed; qmllint, plugin validation and diff check clean.
+- Live `docker inspect --format json bigheads` now parses to VANILLA LATEST,
+  port 25580, memory 4G, difficulty PEACEFUL and the existing `/data` bind.
+- Elena confirmed the Edit dialog opens from the server row and reads back the
+  real settings. The missing dialog flag was fixed in `d17610d`; the empty
+  settings read was fixed in `577dcac`.

@@ -1,7 +1,7 @@
 ---
 node: minecraft-client-template
 title: Stable Prism template and a user-chosen Minecraft client
-status: active
+status: done
 created: 2026-11-20
 tags: [minecraft, prism, launcher, hub]
 ---
@@ -23,8 +23,8 @@ In:
 - Per-server client default from wizard step 1 and the Edit dialog, stored in
   the instance sidecar and read back for display.
 - A client picker on the Servers join bar: `Server default`, `Prism`, `Official`.
-- An `Official launcher` button in the Gaming client bar, alongside the Prism
-  vanilla button and the per-server Join buttons (Elena's addition).
+- An `Official launcher` button on the main Launcher bar, gated by a startup
+  client check (Elena's addition; the client bar does not need it).
 - Official path writes `~/.minecraft/servers.dat` and opens `minecraft-launcher`.
 - Tests, qmllint, plugin validation, diff check, live verification, bump, push.
 
@@ -76,7 +76,7 @@ the change is pushed.
 
 ## Verification
 
-- `uvx pytest -q`: 740 passed.
+- `uvx pytest -q`: 744 passed.
 - `/usr/lib/qt6/bin/qmllint` on the changed QML files: exit 0, no errors
   (baseline `Color`/`Style` warnings only).
 - `omarchy plugin validate .`: exit 0. `git diff --check`: exit 0.
@@ -85,5 +85,10 @@ the change is pushed.
 - Scratch homes: setup is idempotent and seeds all three ids; per-server
   sidecars record the client choice; official `servers.dat` adds the new entry,
   keeps manual entries and does not duplicate on repeat.
-- Pending: Elena reloads the shell and clicks through Remove, wizard success,
-  Edit and the new client picker in the GUI.
+- Elena confirmed in the GUI: Remove, wizard success, client picker, Edit, and
+  the Official launcher button on the main Launcher bar. Both keybindings
+  launched their new Prism instances; the official launcher opened `bigheads`
+  to the main menu. A Prism 429 was Mojang rate-limiting repeat logins.
+- Follow-up fixes pushed after the first pass: `d17610d` (the Edit row button
+  now opens the dialog, not just the status message), `577dcac` (inspect parser
+  accepts `docker inspect --format json` array output; launcher button moved).
