@@ -2895,7 +2895,7 @@ class TestPortPoolWiring:
         ):
             assert name in panel, name + " is missing"
         assert "if (root.mcWizardOpen) root.recomputeMinecraftPorts();" in panel
-        assert "Connect on port \" + root.mcServerPortDraft" in panel
+        assert "created on port \" + root.mcServerPortDraft" in panel
 
     def test_creation_result_no_longer_hardcodes_25565(self):
         panel = read(REPO / "Panel.qml")
@@ -2904,3 +2904,32 @@ class TestPortPoolWiring:
     def test_creating_a_second_server_keeps_the_vember_join_entry(self):
         panel = read(REPO / "Panel.qml")
         assert "root.refreshMinecraftServerList(root.mcWizardJoinAddress)" not in panel
+
+
+class TestOneClickLaunchWiring:
+    def test_wizard_result_has_a_launch_button(self):
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        assert "panel.hub.launchMinecraftServer(" in wizard
+        assert "panel.hub.mcServerLaunchName" in wizard
+
+    def test_servers_rows_have_a_launch_button(self):
+        games = read(REPO / "ui/tabs/GamesTab.qml")
+        assert 'text: "Launch"' in games
+        assert "hub.launchMinecraftServer(" in games
+        assert "Docker.publishedPorts(modelData.ports || \"\")" in games
+
+    def test_panel_chains_prepare_start_wait_and_join(self):
+        panel = read(REPO / "Panel.qml")
+        for name in (
+            "function launchMinecraftServer(name, port, sourceId)",
+            "function prepareServerInstance()",
+            "function refreshServerInstanceList()",
+            "id: mcServerLaunchProc",
+            'step = "start"',
+            'step = "wait"',
+            "Gaming.minecraftPortWaitCommand(",
+            "Gaming.minecraftServerInstanceCommand(",
+            "id: mcServerClientProc",
+            "id: mcServerEntryDelayTimer",
+        ):
+            assert name in panel, name + " is missing"

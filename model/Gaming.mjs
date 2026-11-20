@@ -535,9 +535,150 @@ export class Gaming {
   // does not pass the address to modern (26.3) game arguments, so the address
   // lives in the join instance instead. Instance ids are local facts, like the
   // server paths.
-  minecraftClientLaunchCommand(mode) {
-  var id = String(mode || "") === "server" ? "vemberos-server" : "vemberos-vanilla";
+  minecraftClientLaunchCommand(mode, instanceId) {
+  var id = shell.trim(String(instanceId || ""));
+  if (!id)
+    id = String(mode || "") === "server" ? "vemberos-server" : "vemberos-vanilla";
   return ["prismlauncher", "--launch", id];
+  }
+
+  // A stable Prism instance id per server, so a later Launch from the Servers
+  // list reuses the same instance without a registry. Managed hub instances
+  // are reserved and never overwritten by a created server.
+  minecraftInstanceId(name) {
+    var id = shell.trim(String(name || "")).toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "").slice(0, 60);
+    if (!id) id = "vember-server";
+    if (id === "vemberos-server" || id === "vemberos-vanilla")
+      id = "server-" + id;
+    return id;
+  }
+
+  // Create or refresh a Prism instance that auto-joins one hub-created server.
+  // The template is the hub's join instance (26.3 + Fabric + Controlify), or an
+  // installed modpack instance when the server was created from one. A small
+  // sidecar remembers that choice so a later Launch keeps the right game
+  // version. Idempotent: rerunning updates the address without losing mods.
+  minecraftServerInstanceCommand(options) {
+    var o = options || {};
+    var home = shell.trim(String(o.homeDir || ""));
+    var id = shell.trim(String(o.id || ""));
+    var rawName = String(o.name || "");
+    var rawAddress = String(o.address || "");
+    var rawSource = String(o.sourceId || "");
+    if (/[\r\n]/.test(rawName) || /[\r\n]/.test(rawAddress) || /[\r\n]/.test(rawSource))
+      return ["sh", "-c", "exit 1"];
+    var name = shell.trim(rawName).slice(0, 120);
+    var address = shell.trim(rawAddress).slice(0, 200);
+    var source = shell.trim(rawSource).replace(/[^A-Za-z0-9._-]/g, "");
+    if (home.charAt(0) !== "/" || home.indexOf("\n") !== -1 ||
+        !/^[A-Za-z0-9._-]+$/.test(id) || id.indexOf("..") !== -1 ||
+        source.indexOf("..") !== -1 || !name || !address)
+      return ["sh", "-c", "exit 1"];
+
+    var meta = {
+      homeDir: home, id: id, name: name, address: address,
+      sourceId: source, listBytes: this.minecraftServerListBytes(address, name)
+    };
+    var py = [
+      "import json, os, shutil, sys",
+      "m = json.loads(sys.argv[1])",
+      "home, sid = m['homeDir'], m['id']",
+      "roots = [home + '/.local/share/PrismLauncher/instances',",
+      "         home + '/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances']",
+      "root = roots[0]",
+      "for r in roots:",
+      "    if os.path.isdir(r):",
+      "        root = r",
+      "        break",
+      "dst = os.path.join(root, sid)",
+      "sidecar = os.path.join(dst, 'vember-hub.json')",
+      "source = m.get('sourceId') or ''",
+      "if not source and os.path.isfile(sidecar):",
+      "    try:",
+      "        source = json.load(open(sidecar)).get('sourceId', '')",
+      "    except Exception:",
+      "        source = ''",
+      "source = source or 'vemberos-server'",
+      "src = os.path.join(root, source)",
+      "if not os.path.isfile(os.path.join(src, 'instance.cfg')):",
+      "    src = os.path.join(root, 'vemberos-server')",
+      "if not os.path.isfile(os.path.join(src, 'instance.cfg')):",
+      "    sys.stderr.write('No Prism template instance found.\\n')",
+      "    sys.exit(2)",
+      "os.makedirs(os.path.join(dst, 'minecraft'), exist_ok=True)",
+      "lines = open(os.path.join(src, 'instance.cfg'), errors='replace').read().splitlines()",
+      "out, seen = [], set()",
+      "skip = ('lastLaunchTime=', 'lastTimePlayed=', 'totalTimePlayed=', 'uuid=')",
+      "for line in lines:",
+      "    key = line.split('=', 1)[0] if '=' in line else ''",
+      "    if any(line.startswith(s) for s in skip):",
+      "        continue",
+      "    if key in ('name', 'JoinServerOnLaunch', 'JoinServerOnLaunchAddress'):",
+      "        seen.add(key)",
+      "        if key == 'name':",
+      "            line = 'name=' + m['name']",
+      "        elif key == 'JoinServerOnLaunch':",
+      "            line = 'JoinServerOnLaunch=true'",
+      "        else:",
+      "            line = 'JoinServerOnLaunchAddress=' + m['address']",
+      "    out.append(line)",
+      "if len(seen) < 3:",
+      "    extra = []",
+      "    if 'name' not in seen: extra.append('name=' + m['name'])",
+      "    if 'JoinServerOnLaunch' not in seen: extra.append('JoinServerOnLaunch=true')",
+      "    if 'JoinServerOnLaunchAddress' not in seen: extra.append('JoinServerOnLaunchAddress=' + m['address'])",
+      "    if '[General]' in out:",
+      "        i = out.index('[General]') + 1",
+      "        out[i:i] = extra",
+      "    else:",
+      "        out = ['[General]'] + extra + out",
+      "open(os.path.join(dst, 'instance.cfg'), 'w').write('\\n'.join(out) + '\\n')",
+      "pack = os.path.join(src, 'mmc-pack.json')",
+      "if os.path.isfile(pack):",
+      "    shutil.copyfile(pack, os.path.join(dst, 'mmc-pack.json'))",
+      "src_mods = os.path.join(src, 'minecraft', 'mods')",
+      "dst_mods = os.path.join(dst, 'minecraft', 'mods')",
+      "if os.path.isdir(src_mods) and not os.path.exists(dst_mods):",
+      "    if source == 'vemberos-server':",
+      "        shutil.copytree(src_mods, dst_mods)",
+      "    else:",
+      "        os.symlink(src_mods, dst_mods)",
+      "open(os.path.join(dst, 'minecraft', 'servers.dat'), 'wb').write(bytes(m['listBytes']))",
+      "json.dump({'container': m['name'], 'sourceId': source, 'address': m['address']},",
+      "          open(sidecar, 'w'))",
+      "print(dst)"
+    ].join("\n");
+    return ["python3", "-c", py, JSON.stringify(meta)];
+  }
+
+  // Bounded TCP readiness check on the loopback side of a published port.
+  // Always exits 0: a slow first boot is a UI status, not a failed launch.
+  minecraftPortWaitCommand(port, seconds) {
+    var p = parseInt(port, 10);
+    if (!isFinite(p) || p < 1 || p > 65535) return ["sh", "-c", "exit 1"];
+    var n = parseInt(seconds, 10);
+    if (!isFinite(n) || n < 1 || n > 300) n = 90;
+    var py = [
+      "import socket, sys, time",
+      "port, limit = int(sys.argv[1]), int(sys.argv[2])",
+      "end = time.time() + limit",
+      "while time.time() < end:",
+      "    s = socket.socket()",
+      "    s.settimeout(1)",
+      "    try:",
+      "        s.connect(('127.0.0.1', port))",
+      "        print('ready')",
+      "        sys.exit(0)",
+      "    except Exception:",
+      "        pass",
+      "    finally:",
+      "        s.close()",
+      "    time.sleep(1)",
+      "print('timeout')"
+    ].join("\n");
+    return ["python3", "-c", py, String(p), String(n)];
   }
 
   minecraftClientInstalled(apps) {
@@ -594,4 +735,7 @@ export function minecraftServerListBytes(...args) { return impl.minecraftServerL
 export function minecraftServerListCommand(...args) { return impl.minecraftServerListCommand(...args); }
 export function minecraftJoinGameDirs(...args) { return impl.minecraftJoinGameDirs(...args); }
 export function minecraftClientLaunchCommand(...args) { return impl.minecraftClientLaunchCommand(...args); }
+export function minecraftInstanceId(...args) { return impl.minecraftInstanceId(...args); }
+export function minecraftServerInstanceCommand(...args) { return impl.minecraftServerInstanceCommand(...args); }
+export function minecraftPortWaitCommand(...args) { return impl.minecraftPortWaitCommand(...args); }
 export function minecraftClientInstalled(...args) { return impl.minecraftClientInstalled(...args); }

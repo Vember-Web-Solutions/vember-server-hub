@@ -11,6 +11,7 @@ import qs.Ui
 import qs.Commons
 import "../../model/Shell.mjs" as Shell
 import "../../model/Gaming.mjs" as Gaming
+import "../../model/Docker.mjs" as Docker
 
 Column {
   required property var panel
@@ -981,6 +982,15 @@ Column {
                 visible: modelData.serverType !== "steam"
                 width: parent.width
                 spacing: 8
+                Button {
+                  iconText: "󰐊"
+                  text: "Launch"
+                  enabled: !hub.dockerBusy && !hub.mcServerLaunchBusy &&
+                    Docker.publishedPorts(modelData.ports || "").length > 0
+                  tooltipText: "Start this server and open Prism joined to it"
+                  onClicked: hub.launchMinecraftServer(
+                    modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0, "")
+                }
                 Button {
                   iconText: "󰐊"
                   text: "Start"

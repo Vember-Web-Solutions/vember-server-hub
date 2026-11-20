@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.50"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 126
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.51"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 127
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -93,6 +93,14 @@ Item {
   property string mcWizardListeningText: ""
   property string mcWizardPortNote: ""
   property bool mcWizardPortBusy: false
+  // One-click launch: each server gets its own Prism auto-join instance.
+  property string mcServerLaunchName: ""
+  property string mcServerLaunchAddress: ""
+  property int mcServerLaunchPort: 0
+  property string mcServerLaunchSource: ""
+  property string mcServerLaunchInstanceDir: ""
+  property string mcServerLaunchStatus: ""
+  property bool mcServerLaunchBusy: false
   property string mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"
   // Guided Minecraft server wizard: client → runtime → options → review.
   property bool mcWizardOpen: false
@@ -295,6 +303,11 @@ Item {
       mcServerPortDraft: root.mcServerPortDraft,
       mcWizardPortOptions: root.mcWizardPortOptions.length,
       mcWizardPortNote: root.mcWizardPortNote,
+      mcServerLaunchName: root.mcServerLaunchName,
+      mcServerLaunchPort: root.mcServerLaunchPort,
+      mcServerLaunchAddress: root.mcServerLaunchAddress,
+      mcServerLaunchStatus: root.mcServerLaunchStatus,
+      mcServerLaunchBusy: root.mcServerLaunchBusy,
       mcClientLaunchStatus: root.mcClientLaunchStatus,
       mcServerLogsName: root.mcServerLogsName,
       mcServerLogsBusy: root.mcServerLogsBusy,
@@ -1044,6 +1057,66 @@ Item {
     // one back before launching and again once the game has had time to write.
     refreshMinecraftServerList();
     mcServerListDelayTimer.restart();
+  }
+
+  // One click from a created server or a Servers row: prepare its Prism
+  // instance, start the container, wait for the port, then open Prism joined
+  // to it. The per-server instance id is derived from the container name so a
+  // later Launch needs no saved registry.
+  function launchMinecraftServer(name, port, sourceId) {
+    var server = Shell.trim(String(name || ""));
+    var chosen = parseInt(port, 10);
+    if (!server || mcServerLaunchBusy)
+      return;
+    if (!isFinite(chosen) || chosen < 1 || chosen > 65535) {
+      mcServerLaunchStatus = "No published port found for " + server + ".";
+      lastActionMessage = mcServerLaunchStatus;
+      notifyIfClosed(lastActionMessage);
+      return;
+    }
+    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    mcServerLaunchName = server;
+    mcServerLaunchPort = chosen;
+    mcServerLaunchAddress = host + ":" + chosen;
+    mcServerLaunchSource = Shell.trim(String(sourceId || ""));
+    mcServerLaunchInstanceDir = "";
+    mcServerLaunchBusy = true;
+    mcServerLaunchStatus = "Preparing Prism instance for " + server + "…";
+    mcServerLaunchProc.step = "prepare";
+    mcServerLaunchProc.command = Gaming.minecraftServerInstanceCommand({
+      homeDir: homeDir, id: Gaming.minecraftInstanceId(server),
+      name: server, address: mcServerLaunchAddress,
+      sourceId: mcServerLaunchSource
+    });
+    mcServerLaunchProc.running = false;
+    mcServerLaunchProc.running = true;
+  }
+
+  // Written at creation too, so the modpack source survives a hub restart.
+  function prepareServerInstance() {
+    if (!mcServerLaunchName || !mcServerLaunchPort)
+      return;
+    mcServerInstanceProc.command = Gaming.minecraftServerInstanceCommand({
+      homeDir: homeDir, id: Gaming.minecraftInstanceId(mcServerLaunchName),
+      name: mcServerLaunchName, address: mcServerLaunchAddress,
+      sourceId: mcServerLaunchSource
+    });
+    mcServerInstanceProc.running = false;
+    mcServerInstanceProc.running = true;
+  }
+
+  // Prism rewrites servers.dat on launch, hiding the auto-join entry. Refresh
+  // the created server's own instance as well as the hub-managed pair.
+  function refreshServerInstanceList() {
+    if (!mcServerLaunchInstanceDir)
+      return;
+    var cmd = Gaming.minecraftServerListCommand(
+      mcServerLaunchInstanceDir, mcServerLaunchAddress, mcServerLaunchName);
+    if (cmd.length !== 3)
+      return;
+    mcServerEntryProc.command = cmd;
+    mcServerEntryProc.running = false;
+    mcServerEntryProc.running = true;
   }
 
   function launchExtraApp(appId) {
@@ -2364,9 +2437,15 @@ Item {
         var id = Shell.trim(stdout.text).split(/\s+/)[0] || "";
         root.mcServerCreateResult = "Container " + root.mcServerNameDraft +
           (id ? " (" + id.slice(0, 12) + ")" : "") +
-          " created. Connect on port " + root.mcServerPortDraft +
-          " once it is running; the server jar may still be downloading.";
+          " created on port " + root.mcServerPortDraft +
+          ". Press Launch to start it and join from Prism.";
         root.mcServerCreateStatus = "Created — starting.";
+        var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+        root.mcServerLaunchName = root.mcServerNameDraft;
+        root.mcServerLaunchPort = root.mcServerPortDraft;
+        root.mcServerLaunchAddress = host + ":" + root.mcServerPortDraft;
+        root.mcServerLaunchSource = root.mcWizardModpack;
+        root.prepareServerInstance();
         // Keep the hub-managed Prism entry pointed at the Vember server. A
         // second server only changes the wizard's join address, not the
         // one-click launcher's destination.
@@ -2756,6 +2835,90 @@ Item {
         root.notify(root.mcClientLaunchStatus);
       }
     }
+  }
+
+  Process {
+    id: mcServerLaunchProc
+    property string step: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) {
+        root.mcServerLaunchBusy = false;
+        root.mcServerLaunchStatus = Shell.failureMessage(
+          "Could not launch " + root.mcServerLaunchName, code, stderr.text);
+        root.lastActionMessage = root.mcServerLaunchStatus;
+        root.notifyIfClosed(root.lastActionMessage);
+        return;
+      }
+      if (step === "prepare") {
+        root.mcServerLaunchInstanceDir = Shell.trim(stdout.text);
+        root.mcServerLaunchStatus = "Starting " + root.mcServerLaunchName + "…";
+        step = "start";
+        command = Docker.actionCommand("start", root.mcServerLaunchName);
+        running = false;
+        running = true;
+      } else if (step === "start") {
+        root.mcServerLaunchStatus = "Waiting for " + root.mcServerLaunchName + "…";
+        step = "wait";
+        command = Gaming.minecraftPortWaitCommand(root.mcServerLaunchPort, 90);
+        running = false;
+        running = true;
+      } else if (step === "wait") {
+        root.mcServerLaunchBusy = false;
+        var ready = Shell.trim(stdout.text) === "ready";
+        root.mcServerLaunchStatus = ready
+          ? ("Opening Prism and joining " + root.mcServerLaunchAddress)
+          : (root.mcServerLaunchName + " is still starting — Prism will open with it in Multiplayer.");
+        root.lastActionMessage = root.mcServerLaunchStatus;
+        mcServerClientProc.command = Gaming.minecraftClientLaunchCommand(
+          "server", Gaming.minecraftInstanceId(root.mcServerLaunchName));
+        mcServerClientProc.running = false;
+        mcServerClientProc.running = true;
+        root.handOffToExternalSurface();
+        mcServerListDelayTimer.restart();
+        mcServerEntryDelayTimer.restart();
+      }
+    }
+  }
+
+  Process {
+    id: mcServerClientProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {
+      onStreamFinished: if (Shell.trim(text).length > 0)
+        root.mcServerLaunchStatus = "Prism: " + Shell.trim(text)
+    }
+    onExited: function(code) {
+      if (code === 0) {
+        root.mcServerLaunchStatus = "Closed " + root.mcServerLaunchName + ".";
+        root.refreshServerInstanceList();
+      }
+    }
+  }
+
+  Process {
+    id: mcServerInstanceProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var dir = Shell.trim(text);
+        if (dir.charAt(0) === "/") root.mcServerLaunchInstanceDir = dir;
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
+  Process {
+    id: mcServerEntryProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+  }
+
+  Timer {
+    id: mcServerEntryDelayTimer
+    interval: 6000
+    repeat: false
+    onTriggered: root.refreshServerInstanceList()
   }
 
   Process {

@@ -613,6 +613,26 @@ Rectangle {
           wrapMode: Text.Wrap
           width: parent.width
         }
+        Button {
+          visible: Shell.trim(panel.hub.mcServerLaunchName).length > 0
+          enabled: !panel.hub.mcServerLaunchBusy
+          iconText: "󰐊"
+          text: panel.hub.mcServerLaunchBusy ? "Launching…" : ("Launch " + panel.hub.mcServerLaunchName)
+          tooltipText: "Start the container and open Prism joined to this server"
+          onClicked: panel.hub.launchMinecraftServer(
+            panel.hub.mcServerLaunchName, panel.hub.mcServerLaunchPort,
+            panel.hub.mcServerLaunchSource)
+        }
+        Text {
+          visible: Shell.trim(panel.hub.mcServerLaunchStatus).length > 0
+          textFormat: Text.PlainText
+          text: panel.hub.mcServerLaunchStatus
+          color: panel.softText(0.8)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
       }
 
       // Footer

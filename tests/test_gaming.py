@@ -1,7 +1,9 @@
 """Tests for model/Gaming.mjs: catalog, Steam and Battle.net helpers."""
 
 import json
+import socket
 import subprocess
+from pathlib import Path
 
 
 class TestCatalog:
@@ -664,3 +666,87 @@ class TestMinecraftServerList:
         assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-server/minecraft" in dirs
         assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-vanilla/minecraft" in dirs
         assert any(".var/app/org.prismlauncher.PrismLauncher" in d for d in dirs)
+
+
+class TestOneClickLaunch:
+    """Each created server gets its own Prism auto-join instance."""
+
+    @staticmethod
+    def _template(home, instance_id="vemberos-server"):
+        root = home / ".local/share/PrismLauncher/instances" / instance_id
+        (root / "minecraft" / "mods").mkdir(parents=True)
+        (root / "minecraft" / "mods" / "controlify.jar").write_text("jar")
+        (root / "mmc-pack.json").write_text('{"components":[],"formatVersion":1}')
+        (root / "instance.cfg").write_text(
+            "[General]\nname=Template\nJoinServerOnLaunch=false\n"
+            "JoinServerOnLaunchAddress=old:1\nlastLaunchTime=123\nuuid=abc\n\n[UI]\nfoo=bar\n")
+        return root
+
+    def _prepare(self, js, home, name, address, source=""):
+        cmd = js("console.log(JSON.stringify(Gaming.minecraftServerInstanceCommand("
+                 + __import__("json").dumps({
+                     "homeDir": str(home), "id": js(
+                         'console.log(JSON.stringify(Gaming.minecraftInstanceId('
+                         + __import__("json").dumps(name) + ')))'),
+                     "name": name, "address": address, "sourceId": source
+                 }) + ")))")
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        assert run.returncode == 0, run.stderr
+        return Path(run.stdout.strip())
+
+    def test_instance_id_is_stable_and_reserves_hub_instances(self, js):
+        assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("My Cool Server!")))') == "my-cool-server"
+        assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("vemberos-server")))') == "server-vemberos-server"
+        assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("  ")))') == "vember-server"
+
+    def test_unsafe_inputs_are_rejected(self, js):
+        for opts in (
+            {"homeDir": "relative", "id": "ok", "name": "S", "address": "h:1"},
+            {"homeDir": "/tmp/h", "id": "../escape", "name": "S", "address": "h:1"},
+            {"homeDir": "/tmp/h", "id": "ok", "name": "", "address": "h:1"},
+            {"homeDir": "/tmp/h", "id": "ok", "name": "S", "address": "h\ninjected=1"},
+        ):
+            cmd = js("console.log(JSON.stringify(Gaming.minecraftServerInstanceCommand("
+                     + __import__("json").dumps(opts) + ")))")
+            assert cmd == ["sh", "-c", "exit 1"]
+
+    def test_prepare_writes_a_working_join_instance(self, js, tmp_path):
+        template = self._template(tmp_path)
+        dst = self._prepare(js, tmp_path, "Second Server", "localhost:25566")
+        cfg = (dst / "instance.cfg").read_text()
+        assert "name=Second Server" in cfg
+        assert "JoinServerOnLaunch=true" in cfg
+        assert "JoinServerOnLaunchAddress=localhost:25566" in cfg
+        assert "uuid=" not in cfg and "lastLaunchTime=" not in cfg
+        assert "[UI]" in cfg and "foo=bar" in cfg
+        assert (dst / "mmc-pack.json").exists()
+        assert (dst / "minecraft/mods/controlify.jar").exists()
+        expected = bytes(js('console.log(JSON.stringify(Gaming.minecraftServerListBytes('
+                            '"localhost:25566", "Second Server")))'))
+        assert (dst / "minecraft/servers.dat").read_bytes() == expected
+        meta = json.loads((dst / "vember-hub.json").read_text())
+        assert meta == {"container": "Second Server", "sourceId": "vemberos-server",
+                        "address": "localhost:25566"}
+        assert template.exists()
+
+    def test_prepare_is_idempotent_and_keeps_the_source(self, js, tmp_path):
+        self._template(tmp_path)
+        self._prepare(js, tmp_path, "Second Server", "localhost:25566", "CreateVerse")
+        dst = self._prepare(js, tmp_path, "Second Server", "localhost:25567")
+        assert "JoinServerOnLaunchAddress=localhost:25567" in (dst / "instance.cfg").read_text()
+        assert json.loads((dst / "vember-hub.json").read_text())["sourceId"] == "CreateVerse"
+
+    def test_wait_command_reports_a_listening_port(self, js):
+        cmd = js("console.log(JSON.stringify(Gaming.minecraftPortWaitCommand(0, 2)))")
+        assert cmd == ["sh", "-c", "exit 1"]
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        try:
+            cmd = js("console.log(JSON.stringify(Gaming.minecraftPortWaitCommand("
+                     + str(port) + ", 3)))")
+            run = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+            assert run.stdout.strip() == "ready", run.stdout
+        finally:
+            server.close()
