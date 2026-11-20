@@ -235,6 +235,53 @@ Column {
           }
         }
 
+        // Single stacked composition bar: one coloured segment per source,
+        // laid left to right. Each segment is its share of the total, so the
+        // filled length reads as the library's makeup at a glance. Per-source
+        // rows and exact numbers stay below. The track is hidden until at
+        // least one count is known, so an all-— state shows no false bar.
+        Rectangle {
+          visible: libraryCol.hasKnownCounts && libraryCol.totalKnownGames > 0
+          width: parent.width
+          height: 14
+          radius: 7
+          clip: true
+          color: panel.softText(0.10)
+          Row {
+            anchors.fill: parent
+            Rectangle {
+              height: parent.height
+              width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.steamCount / libraryCol.totalKnownGames) : 0
+              color: "#66c0f4"
+              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+            }
+            Rectangle {
+              height: parent.height
+              width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.bnetCount / libraryCol.totalKnownGames) : 0
+              color: "#00aeff"
+              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+            }
+            Rectangle {
+              height: parent.height
+              width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.prismCount / libraryCol.totalKnownGames) : 0
+              color: "#7ac74f"
+              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+            }
+            Rectangle {
+              height: parent.height
+              width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.minecraftCount / libraryCol.totalKnownGames) : 0
+              color: "#e0a53c"
+              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+            }
+            Rectangle {
+              height: parent.height
+              width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.heroicCount / libraryCol.totalKnownGames) : 0
+              color: "#e43357"
+              Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+            }
+          }
+        }
+
         Column {
           visible: libraryCol.hasAnyInstalled
           width: parent.width

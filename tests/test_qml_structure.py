@@ -402,6 +402,38 @@ class TestHeroicGameCountIsWired:
         assert "hub.heroicGameCount >= 0" in text
 
 
+class TestGameLibraryIsStackedBar:
+    """The library summary reads as one left-to-right stacked bar."""
+
+    def _block(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        # The stacked bar is the clipped rounded track holding a Row of segments.
+        start = text.index("// Single stacked composition bar")
+        end = text.index("Column {\n          visible: libraryCol.hasAnyInstalled", start)
+        return text[start:end]
+
+    def test_bar_is_hidden_until_a_count_is_known(self):
+        block = self._block()
+        assert "visible: libraryCol.hasKnownCounts && libraryCol.totalKnownGames > 0" in block
+
+    def test_one_segment_per_source_with_proportional_width(self):
+        block = self._block()
+        for count in ("steamCount", "bnetCount", "prismCount", "minecraftCount", "heroicCount"):
+            assert "libraryCol." + count + " / libraryCol.totalKnownGames" in block, (
+                count + " is missing from the stacked bar"
+            )
+        assert block.count("Behavior on width") == 5, (
+            "each of the five segments should animate its width"
+        )
+
+    def test_segments_are_laid_out_left_to_right(self):
+        block = self._block()
+        colors = ["#66c0f4", "#00aeff", "#7ac74f", "#e0a53c", "#e43357"]
+        positions = [block.index(c) for c in colors]
+        assert positions == sorted(positions), "segments must keep source order left to right"
+        assert "Row {" in block and "anchors.fill: parent" in block
+
+
 class TestLogsStartCollapsed:
     """Both live logs default to collapsed but remain expandable."""
 
