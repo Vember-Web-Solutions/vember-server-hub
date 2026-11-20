@@ -2872,3 +2872,35 @@ class TestModpackAndServerListWiring:
         text = read(REPO / "model/Gaming.mjs")
         assert "export function minecraftServerListCommand" in text
         assert "export function minecraftJoinGameDirs" in text
+
+
+class TestPortPoolWiring:
+    def test_wizard_offers_a_free_port_dropdown(self):
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        assert 'label: "Port"' in wizard
+        assert "options: panel.hub.mcWizardPortOptions" in wizard
+        assert "onChanged: panel.hub.mcWizardSetPort(value)" in wizard
+        assert "panel.hub.refreshMinecraftPorts()" in wizard
+        assert "panel.hub.mcWizardPortNote" in wizard
+
+    def test_panel_scans_and_reassigns_ports(self):
+        panel = read(REPO / "Panel.qml")
+        for name in (
+            "id: mcPortScanProc",
+            "function refreshMinecraftPorts()",
+            "function recomputeMinecraftPorts()",
+            "function mcWizardSetPort(port)",
+            "Wizard.listeningPortsCommand()",
+            "Wizard.portStatus(dockerContainers, mcWizardListeningText, mcServerPortDraft)",
+        ):
+            assert name in panel, name + " is missing"
+        assert "if (root.mcWizardOpen) root.recomputeMinecraftPorts();" in panel
+        assert "Connect on port \" + root.mcServerPortDraft" in panel
+
+    def test_creation_result_no_longer_hardcodes_25565(self):
+        panel = read(REPO / "Panel.qml")
+        assert "Connect on port 25565" not in panel
+
+    def test_creating_a_second_server_keeps_the_vember_join_entry(self):
+        panel = read(REPO / "Panel.qml")
+        assert "root.refreshMinecraftServerList(root.mcWizardJoinAddress)" not in panel

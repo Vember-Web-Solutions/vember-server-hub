@@ -516,3 +516,13 @@ class TestModpackMounts:
         )
         assert "WORLD=" not in " ".join(cmd)
         assert ":/mods:ro" not in " ".join(cmd)
+
+
+class TestDockerPublishedPorts:
+    def test_only_published_host_ports_count(self, js):
+        text = ("0.0.0.0:25565->25565/tcp, [::]:25565->25565/tcp, "
+                "5432/tcp, 127.0.0.1:8610->8000/tcp, "
+                "0.0.0.0:25575->25575/udp, 25576/udp")
+        ports = js("console.log(JSON.stringify(Docker.publishedPorts("
+                   + __import__("json").dumps(text) + ")))")
+        assert ports == [8610, 25565, 25575]

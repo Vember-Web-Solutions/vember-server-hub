@@ -54,6 +54,22 @@ export class Docker {
   return [22, 25, 53, 110, 143, 1194, 3306, 3389, 5432, 5900, 6379, 25565, 27017, 51820];
   }
 
+  // Host ports published by a container. Docker's Ports column mixes published
+  // ports ("0.0.0.0:25565->25565/tcp", "[::]:25565->25565/tcp") with bare
+  // container ports ("5432/tcp"); only the former reserve a host slot.
+  publishedPorts(portsText) {
+    var text = shell.trim(String(portsText || ""));
+    var out = [];
+    if (text.length === 0) return out;
+    text.split(/[,\s]+/).forEach(function (entry) {
+      var m = entry.match(/:(\d+)->\d+\/(?:tcp|udp)$/i);
+      if (!m) return;
+      var port = parseInt(m[1], 10);
+      if (port > 0 && port <= 65535 && out.indexOf(port) === -1) out.push(port);
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+
   // Derive one browser URL from Docker's `Ports` column. Only published TCP
   // ports count; a bare "5432/tcp" is not reachable. Bind addresses are kept
   // only when they are literal IPs — wildcard and loopback become localhost,
@@ -371,6 +387,7 @@ export function actionCommand(...args) { return impl.actionCommand(...args); }
 export function pullCommand(...args) { return impl.pullCommand(...args); }
 export function pruneCommand(...args) { return impl.pruneCommand(...args); }
 export function parsePs(...args) { return impl.parsePs(...args); }
+export function publishedPorts(...args) { return impl.publishedPorts(...args); }
 export function webUrlFromPorts(...args) { return impl.webUrlFromPorts(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }
 export function parsePullLine(...args) { return impl.parsePullLine(...args); }

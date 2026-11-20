@@ -6,6 +6,7 @@
 
 import { shell } from './Shell.mjs';
 import { Gaming } from './Gaming.mjs';
+import { publishedPorts } from './Docker.mjs';
 
 export class MinecraftWizard {
   // Step 1: which client will the operator use to join the server?
@@ -184,6 +185,115 @@ export class MinecraftWizard {
     }
     return options;
   }
+
+  // --- Port pool -----------------------------------------------------------
+  // 25565 is the Minecraft default and is taken by the first server. Give the
+  // wizard a predictable run of slots so a second server gets a working
+  // default instead of colliding with the one already running.
+  portPool() {
+    var out = [];
+    for (var port = 25565; port <= 25584; port++) out.push(port);
+    return out;
+  }
+
+  // Docker publishes host ports; read them from the same `docker ps -a` poll
+  // that already feeds the Servers tab. Stopped containers still reserve their
+  // published ports, so this covers servers that are not currently running.
+  usedContainerPorts(containers) {
+    var out = [];
+    var list = Array.isArray(containers) ? containers : [];
+    for (var i = 0; i < list.length; i++) {
+      var ports = publishedPorts((list[i] || {}).ports);
+      for (var j = 0; j < ports.length; j++)
+        if (out.indexOf(ports[j]) === -1) out.push(ports[j]);
+    }
+    return out.sort(function (a, b) { return a - b; });
+  }
+
+  portOwner(containers, port) {
+    var list = Array.isArray(containers) ? containers : [];
+    var wanted = Number(port);
+    for (var i = 0; i < list.length; i++) {
+      var c = list[i] || {};
+      if (publishedPorts(c.ports).indexOf(wanted) !== -1)
+        return shell.trim(c.name || "") || "";
+    }
+    return "";
+  }
+
+  // Catch listeners that are not Docker containers (/proc/net/tcp and tcp6,
+  // state 0A = LISTEN). The kernel's own view is authoritative: a port that is
+  // bound cannot be published by Docker, whatever the container list says.
+  listeningPortsCommand() {
+    var py = [
+      "import sys",
+      "seen = set()",
+      "for path in sys.argv[1:]:",
+      "    try:",
+      "        lines = open(path).read().splitlines()[1:]",
+      "    except Exception:",
+      "        continue",
+      "    for line in lines:",
+      "        f = line.split()",
+      "        if len(f) < 4 or f[3] != '0A':",
+      "            continue",
+      "        try:",
+      "            seen.add(int(f[1].rsplit(':', 1)[1], 16))",
+      "        except Exception:",
+      "            continue",
+      "for p in sorted(seen):",
+      "    print(p)"
+    ].join("\n");
+    return ["python3", "-c", py, "/proc/net/tcp", "/proc/net/tcp6"];
+  }
+
+  parseListeningPorts(text) {
+    var out = [];
+    shell.nonEmptyLines(text).forEach(function (line) {
+      var port = parseInt(shell.trim(line), 10);
+      if (isFinite(port) && port > 0 && port <= 65535 && out.indexOf(port) === -1)
+        out.push(port);
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+
+  chooseFreePort(free, currentPort) {
+    var list = Array.isArray(free) ? free : [];
+    var current = Number(currentPort);
+    // Keep an operator's existing choice if it is still free; otherwise take
+    // the first slot in the pool.
+    if (isFinite(current) && list.indexOf(current) !== -1) return current;
+    return list.length > 0 ? list[0] : null;
+  }
+
+  portStatus(containers, listeningText, currentPort) {
+    var used = this.usedContainerPorts(containers);
+    var listeners = this.parseListeningPorts(listeningText);
+    for (var i = 0; i < listeners.length; i++)
+      if (used.indexOf(listeners[i]) === -1) used.push(listeners[i]);
+    used.sort(function (a, b) { return a - b; });
+
+    var pool = this.portPool();
+    var free = pool.filter(function (p) { return used.indexOf(p) === -1; });
+    var chosen = this.chooseFreePort(free, currentPort);
+    var options = free.map(function (p) {
+      return { value: String(p), label: String(p) + (p === 25565 ? " — default" : " — free") };
+    });
+
+    var note = "";
+    var changed = Number(currentPort) !== chosen;
+    if (chosen === null) {
+      note = "All ports " + pool[0] + "–" + pool[pool.length - 1] +
+        " are in use. Free one before creating another server.";
+    } else if (used.indexOf(25565) !== -1 && chosen !== 25565) {
+      var owner = this.portOwner(containers, 25565);
+      note = "25565 is in use" + (owner ? " by " + owner : "") +
+        " — using " + chosen + ".";
+    } else if (changed) {
+      note = "Assigned the next free port " + chosen + ".";
+    }
+    return { used: used, free: free, options: options, port: chosen, note: note };
+  }
 }
 
 export function clientOptions(...args) { return new MinecraftWizard().clientOptions(...args); }
@@ -199,3 +309,10 @@ export function clientName(...args) { return new MinecraftWizard().clientName(..
 export function modpackScanCommand(...args) { return new MinecraftWizard().modpackScanCommand(...args); }
 export function parseModpackScan(...args) { return new MinecraftWizard().parseModpackScan(...args); }
 export function modpackOptions(...args) { return new MinecraftWizard().modpackOptions(...args); }
+export function portPool(...args) { return new MinecraftWizard().portPool(...args); }
+export function usedContainerPorts(...args) { return new MinecraftWizard().usedContainerPorts(...args); }
+export function portOwner(...args) { return new MinecraftWizard().portOwner(...args); }
+export function listeningPortsCommand(...args) { return new MinecraftWizard().listeningPortsCommand(...args); }
+export function parseListeningPorts(...args) { return new MinecraftWizard().parseListeningPorts(...args); }
+export function chooseFreePort(...args) { return new MinecraftWizard().chooseFreePort(...args); }
+export function portStatus(...args) { return new MinecraftWizard().portStatus(...args); }

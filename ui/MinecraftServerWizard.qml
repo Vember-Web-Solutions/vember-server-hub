@@ -463,6 +463,34 @@ Rectangle {
             onChanged: panel.hub.mcServerDifficultyDraft = value
           }
         }
+        RowLayout {
+          width: parent.width
+          spacing: 10
+          Dropdown {
+            Layout.fillWidth: true
+            label: "Port"
+            value: String(panel.hub.mcServerPortDraft)
+            options: panel.hub.mcWizardPortOptions
+            onChanged: panel.hub.mcWizardSetPort(value)
+          }
+          Button {
+            Layout.alignment: Qt.AlignBottom
+            iconText: "󰅱"
+            tooltipText: "Rescan ports in use"
+            enabled: !panel.hub.mcWizardPortBusy
+            onClicked: panel.hub.refreshMinecraftPorts()
+          }
+        }
+        Text {
+          visible: Shell.trim(panel.hub.mcWizardPortNote).length > 0
+          textFormat: Text.PlainText
+          text: panel.hub.mcWizardPortNote
+          color: panel.hub.mcWizardPortBusy ? Color.accent : panel.softText(0.75)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
         Text {
           textFormat: Text.PlainText
           text: "World data directory"

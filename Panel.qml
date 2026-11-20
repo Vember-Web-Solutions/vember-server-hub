@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.49"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 125
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.50"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 126
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -87,6 +87,12 @@ Item {
   property string mcServerMemoryDraft: "4G"
   property string mcServerDifficultyDraft: "NORMAL"
   property int mcServerPortDraft: 25565
+  // Port pool: 25565 belongs to the first server. Scan Docker + host listeners
+  // and offer the first free slot as the default for new servers.
+  property var mcWizardPortOptions: []
+  property string mcWizardListeningText: ""
+  property string mcWizardPortNote: ""
+  property bool mcWizardPortBusy: false
   property string mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"
   // Guided Minecraft server wizard: client → runtime → options → review.
   property bool mcWizardOpen: false
@@ -286,6 +292,9 @@ Item {
       mcServerCreateBusy: root.mcServerCreateBusy,
       mcServerCreateStatus: root.mcServerCreateStatus,
       mcServerCreateResult: root.mcServerCreateResult,
+      mcServerPortDraft: root.mcServerPortDraft,
+      mcWizardPortOptions: root.mcWizardPortOptions.length,
+      mcWizardPortNote: root.mcWizardPortNote,
       mcClientLaunchStatus: root.mcClientLaunchStatus,
       mcServerLogsName: root.mcServerLogsName,
       mcServerLogsBusy: root.mcServerLogsBusy,
@@ -1474,6 +1483,8 @@ Item {
     mcWizardModpackScanProc.running = false;
     mcWizardModpackScanProc.running = true;
     refreshMinecraftServerList();
+    refreshDocker();
+    refreshMinecraftPorts();
   }
 
   function closeMinecraftServerWizard() {
@@ -1570,6 +1581,35 @@ Item {
     mcWizardPullProc.running = false;
     mcWizardPullBusy = false;
     mcWizardPullStatus = "Pull stopped. Downloaded layers were kept.";
+  }
+
+  // The default port is taken by the first server, so the wizard keeps a pool
+  // and assigns the first free slot. Docker's published ports come from the
+  // existing ps poll; /proc/net/tcp catches listeners outside Docker too.
+  function recomputeMinecraftPorts() {
+    var status = Wizard.portStatus(dockerContainers, mcWizardListeningText, mcServerPortDraft);
+    mcWizardPortOptions = status.options;
+    mcWizardPortNote = status.note;
+    if (status.port !== null)
+      mcWizardSetPort(status.port);
+  }
+
+  function refreshMinecraftPorts() {
+    mcWizardPortBusy = true;
+    mcPortScanProc.running = false;
+    mcPortScanProc.command = Wizard.listeningPortsCommand();
+    mcPortScanProc.running = true;
+    // Apply Docker's view immediately; refine when the host scan returns.
+    recomputeMinecraftPorts();
+  }
+
+  function mcWizardSetPort(port) {
+    var chosen = parseInt(port, 10);
+    if (!isFinite(chosen) || chosen < 1 || chosen > 65535)
+      chosen = 25565;
+    mcServerPortDraft = chosen;
+    var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
+    mcWizardJoinAddress = host + ":" + chosen;
   }
 
   function mcWizardCommandPreview() {
@@ -2076,7 +2116,10 @@ Item {
     id: dockerPsProc
     command: Docker.psCommand()
     stdout: StdioCollector {
-      onStreamFinished: root.dockerContainers = Docker.parsePs(text)
+      onStreamFinished: {
+        root.dockerContainers = Docker.parsePs(text);
+        if (root.mcWizardOpen) root.recomputeMinecraftPorts();
+      }
     }
     stderr: StdioCollector {
       onStreamFinished: if (Shell.trim(text).length > 0) root.dockerError = Shell.trim(text)
@@ -2115,6 +2158,25 @@ Item {
     id: mcServerListProc
     stdout: StdioCollector {}
     stderr: StdioCollector {}
+  }
+
+  // One host-listener scan per wizard open. Docker's published ports come from
+  // dockerPsProc, so both sources are combined by recomputeMinecraftPorts().
+  Process {
+    id: mcPortScanProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.mcWizardListeningText = text;
+        root.mcWizardPortBusy = false;
+        root.recomputeMinecraftPorts();
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.mcWizardPortBusy = false;
+      if (code !== 0)
+        root.mcWizardPortNote = "Port scan failed; using Docker's published ports only.";
+    }
   }
 
   Timer {
@@ -2302,9 +2364,13 @@ Item {
         var id = Shell.trim(stdout.text).split(/\s+/)[0] || "";
         root.mcServerCreateResult = "Container " + root.mcServerNameDraft +
           (id ? " (" + id.slice(0, 12) + ")" : "") +
-          " created. Connect on port 25565 once it is running; the server jar may still be downloading.";
+          " created. Connect on port " + root.mcServerPortDraft +
+          " once it is running; the server jar may still be downloading.";
         root.mcServerCreateStatus = "Created — starting.";
-        root.refreshMinecraftServerList(root.mcWizardJoinAddress);
+        // Keep the hub-managed Prism entry pointed at the Vember server. A
+        // second server only changes the wizard's join address, not the
+        // one-click launcher's destination.
+        root.refreshMinecraftServerList();
       } else {
         root.mcServerCreateStatus = "Creation failed.";
         root.mcServerCreateResult = Shell.failureMessage(

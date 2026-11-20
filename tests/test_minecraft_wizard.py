@@ -175,3 +175,69 @@ class TestModpackRecipes:
         packs = js('console.log(JSON.stringify(MinecraftWizard.parseModpackScan('
                    + __import__("json").dumps(raw) + ')))')
         assert [p["id"] for p in packs] == ["CreateVerse"]
+
+
+class TestPortPool:
+    """New servers get the first free port instead of a colliding default."""
+
+    @staticmethod
+    def _containers(ports, name="vember-minecraft"):
+        return [{"name": name, "ports": ports}]
+
+    def test_pool_starts_at_the_default(self, js):
+        pool = js("console.log(JSON.stringify(MinecraftWizard.portPool()))")
+        assert pool[0] == 25565
+        assert pool == list(range(25565, 25585))
+
+    def test_published_docker_ports_reserve_slots(self, js):
+        containers = self._containers(
+            "0.0.0.0:25565->25565/tcp, [::]:25565->25565/tcp, 5432/tcp")
+        used = js("console.log(JSON.stringify(MinecraftWizard.usedContainerPorts("
+                  + __import__("json").dumps(containers) + ")))")
+        assert used == [25565]
+
+    def test_taken_default_assigns_the_next_free_slot(self, js):
+        containers = self._containers(
+            "0.0.0.0:25565->25565/tcp, [::]:25565->25565/tcp")
+        status = js("console.log(JSON.stringify(MinecraftWizard.portStatus("
+                    + __import__("json").dumps(containers) + ', "", 25565)))')
+        assert status["port"] == 25566
+        assert 25565 not in status["free"]
+        assert "by vember-minecraft" in status["note"]
+        assert status["options"][0]["value"] == "25566"
+
+    def test_host_listeners_block_a_port_too(self, js):
+        status = js("console.log(JSON.stringify(MinecraftWizard.portStatus("
+                    '[], "22\\n25566\\n25567\\nnot-a-port", 25565)))')
+        assert status["port"] == 25565  # default is free
+        assert 25566 not in status["free"]
+        status2 = js("console.log(JSON.stringify(MinecraftWizard.portStatus("
+                     '[], "25565\\n25566", 25565)))')
+        assert status2["port"] == 25567
+
+    def test_an_existing_free_choice_is_kept(self, js):
+        containers = self._containers("0.0.0.0:25565->25565/tcp")
+        status = js("console.log(JSON.stringify(MinecraftWizard.portStatus("
+                    + __import__("json").dumps(containers) + ', "", 25570)))')
+        assert status["port"] == 25570
+        assert "in use by vember-minecraft" in status["note"]
+        assert "assigned" not in status["note"]
+
+    def test_exhausted_pool_is_reported(self, js):
+        listeners = "\n".join(str(p) for p in range(25565, 25585))
+        status = js("console.log(JSON.stringify(MinecraftWizard.portStatus("
+                    '[], ' + __import__("json").dumps(listeners) + ', 25565)))')
+        assert status["port"] is None
+        assert status["options"] == []
+        assert "are in use" in status["note"]
+
+    def test_listener_command_and_parser(self, js):
+        cmd = js("console.log(JSON.stringify(MinecraftWizard.listeningPortsCommand()))")
+        assert cmd[0] == "python3" and cmd[1] == "-c"
+        assert "/proc/net/tcp" in cmd and "/proc/net/tcp6" in cmd
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        assert run.returncode == 0, run.stderr
+        ports = js("console.log(JSON.stringify(MinecraftWizard.parseListeningPorts("
+                   + __import__("json").dumps(run.stdout) + ")))")
+        assert isinstance(ports, list)
+        assert all(isinstance(p, int) and 1 <= p <= 65535 for p in ports)
