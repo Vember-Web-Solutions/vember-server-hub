@@ -10,17 +10,17 @@ export class DevTools {
   checkCommand() {
   // Outputs lines: name\tinstalled\tpath\tversion
   var script = [
-    // The panel does not inherit a login shell's PATH, so include the usual
-    // per-user install dirs or uv/gh installed there look missing.
-    "PATH=\"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/pnpm:$PATH\"; export PATH;",
+    // The panel does not inherit a login shell's PATH, so add the usual
+    // per-user install dirs or uv/gh installed there look missing. Append them:
+    // prepending made a stale ~/.local/bin/uv shadow the version mise puts on
+    // PATH, so the panel showed 0.13.5 while `uv --version` said 0.13.9.
+    "PATH=\"$PATH:$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.local/share/pnpm\"; export PATH;",
     "check(){ n=\"$1\"; shift; p=\"\"; v=\"\"; for c in \"$@\"; do if command -v \"$c\" >/dev/null 2>&1; then p=$(command -v \"$c\"); break; fi; done;",
     "if [ -n \"$p\" ]; then",
+    // Ask the resolved binary itself. Calling the bare name again could answer
+    // with a different binary than the path shown in the panel.
     "  case \"$n\" in",
-    "    uv) v=$(uv --version 2>/dev/null | head -n1 || true);;",
-    "    python) v=$(python3 --version 2>/dev/null || python --version 2>/dev/null || true);;",
-    "    gh) v=$(gh --version 2>/dev/null | head -n1 || true);;",
-    "    zed) v=$(zed --version 2>/dev/null | head -n1 || zeditor --version 2>/dev/null | head -n1 || true);;",
-    "    vscode) v=$(code --version 2>/dev/null | head -n1 || code-oss --version 2>/dev/null | head -n1 || true);;",
+    "    uv|python|gh|zed|vscode) v=$(\"$p\" --version 2>/dev/null | head -n1 || true);;",
     "  esac;",
     "  printf '%s\\t%s\\t%s\\t%s\\n' \"$n\" yes \"$p\" \"$v\";",
     "else",

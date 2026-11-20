@@ -41,6 +41,27 @@ class TestToolChecks:
         assert "$HOME/.cargo/bin" in cmd[2]
         assert "$HOME/.local/share/pnpm" in cmd[2]
 
+    def test_per_user_dirs_are_appended_not_prepended(self, js):
+        cmd = js("console.log(JSON.stringify(DevTools.checkCommand()))")
+        script = cmd[2]
+        # Prepending made a stale ~/.local/bin/uv (0.13.5) shadow the 0.13.9
+        # that mise puts on PATH, so the panel reported the wrong version.
+        assert script.index("$PATH") < script.index("$HOME/.local/bin"), (
+            "per-user bin dirs must be appended to PATH, not prepended"
+        )
+
+    def test_version_comes_from_the_resolved_binary(self, js):
+        cmd = js("console.log(JSON.stringify(DevTools.checkCommand()))")
+        script = cmd[2]
+        assert '"$p" --version' in script, (
+            "the version must be read from the binary found by command -v"
+        )
+        for name in ("uv", "python3", "gh", "zed", "zeditor", "code", "code-oss"):
+            assert name + " --version" not in script, (
+                "a bare " + name + " --version could resolve to a different "
+                "binary than the path shown in the panel"
+            )
+
     def test_labels_are_human_readable(self, js):
         out = js(
             "console.log(JSON.stringify("

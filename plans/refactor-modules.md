@@ -442,6 +442,15 @@ Work that fell out of the split, done in the same arc:
   message the user caused. The `cancelled` flag is set before the stop and
   checked before the failure message, and `TestDockerPullHasAnEscapeHatch` pins
   that order as well as the UI path.
+- **The tools panel reported the wrong uv version.** The detector prepended
+  `~/.local/bin` to PATH so per-user installs would be found. On this machine
+  that folder holds a stale uv 0.13.5, which then shadowed mise's 0.13.9 — the
+  panel said 0.13.5 while `uv --version` in a terminal said 0.13.9. The fallback
+  dirs are now appended, so the tool the user actually selected on PATH wins.
+  The version is also read from the resolved binary (`"$p" --version`) instead
+  of a second bare-name lookup, so the path and version columns cannot disagree.
+  Guards: `test_per_user_dirs_are_appended_not_prepended` and
+  `test_version_comes_from_the_resolved_binary`.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -466,8 +475,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 493 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8887 lines. The growth is comments, per-file
+- 495 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 8,887 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
 - The three monoliths went 7,694 → 3,236 lines: `HubPanel.qml` 4,376 → 424,
@@ -476,6 +485,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,812, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4412 lines across 12 files and drives the real modules
+- The test suite is 4,433 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.34, build 72 → 110.
+- Version 0.1.0 → 0.6.35, build 72 → 111.
