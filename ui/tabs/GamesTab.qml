@@ -785,6 +785,65 @@ Column {
       }
     }
 
+    // Client quick launch. Both buttons use the same clean Prism instance;
+    // only the join variant passes --server. Hidden when Prism is absent.
+    Rectangle {
+      visible: serversSubTab === "list" && Gaming.minecraftClientInstalled(hub.extraApps || [])
+      width: parent.width
+      radius: Style.cornerRadius
+      color: panel.accentSoft(0.08)
+      border.color: panel.accentSoft(0.20)
+      border.width: 1
+      implicitHeight: clientLaunchCol.implicitHeight + 24
+      Column {
+        id: clientLaunchCol
+        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: 12
+        spacing: 8
+        Text {
+          textFormat: Text.PlainText
+          text: "Minecraft client"
+          color: Color.menu.text
+          font.family: Style.font.family
+          font.bold: true
+        }
+        Text {
+          textFormat: Text.PlainText
+          text: "Prism · clean 26.3 · join the local server or open to the main menu"
+          color: panel.softText(0.75)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+        Row {
+          spacing: 8
+          Button {
+            iconText: "󰍳"
+            text: "Join Vember server"
+            tooltipText: "Launch Minecraft already connected to vemberos:25565"
+            onClicked: hub.launchMinecraftClient("server")
+          }
+          Button {
+            iconText: "󰐊"
+            text: "Plain vanilla"
+            tooltipText: "Open the same clean client to the main menu"
+            onClicked: hub.launchMinecraftClient("vanilla")
+          }
+        }
+        Text {
+          visible: Shell.trim(hub.mcClientLaunchStatus).length > 0
+          textFormat: Text.PlainText
+          text: hub.mcClientLaunchStatus
+          color: panel.softText(0.8)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+      }
+    }
+
     // Create a Minecraft server from the itzg image. The backend normalises
     // every field before building the docker command, so the form is only a
     // convenience — invalid input falls back to a safe default and the form

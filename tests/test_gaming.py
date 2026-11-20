@@ -532,3 +532,32 @@ class TestGameServerDetectionAndSizes:
         )
         assert out == 300
         assert js("console.log(JSON.stringify(Gaming.gameServerTotalBytes(null)))") == 0
+
+
+class TestMinecraftClientLaunch:
+    """Two clean Prism instances: join-on-launch and plain main menu."""
+
+    def test_join_command_uses_the_join_instance(self, js):
+        cmd = js('console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("server")))')
+        assert cmd == ["prismlauncher", "--launch", "vemberos-server"]
+
+    def test_vanilla_command_uses_the_plain_instance(self, js):
+        cmd = js('console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("vanilla")))')
+        assert cmd == ["prismlauncher", "--launch", "vemberos-vanilla"]
+        assert "--server" not in cmd
+
+    def test_unknown_mode_falls_back_to_plain_launch(self, js):
+        for mode in ("", "bogus"):
+            cmd = js("console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("
+                     + __import__("json").dumps(mode) + ")))")
+            assert cmd == ["prismlauncher", "--launch", "vemberos-vanilla"]
+
+    def test_installed_detection(self, js):
+        apps = [{"id": "steam", "installed": True},
+                {"id": "prismlauncher", "installed": False}]
+        assert js("console.log(JSON.stringify(Gaming.minecraftClientInstalled("
+                  + __import__("json").dumps(apps) + ")))") is False
+        apps[1]["installed"] = True
+        assert js("console.log(JSON.stringify(Gaming.minecraftClientInstalled("
+                  + __import__("json").dumps(apps) + ")))") is True
+        assert js("console.log(JSON.stringify(Gaming.minecraftClientInstalled(null)))") is False

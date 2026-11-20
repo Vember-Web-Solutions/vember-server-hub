@@ -2804,3 +2804,36 @@ class TestComposeApplyUpdate:
         assert "dockerApplyName: root.dockerApplyName" in panel
         assert "dockerApplyStatus: root.dockerApplyStatus" in panel
         assert "dockerApplyResult: root.dockerApplyResult" in panel
+
+
+class TestMinecraftDirectLaunch:
+    """Both client launches use clean Prism instances with distinct targets."""
+
+    def test_model_helper_is_wired(self):
+        model = read(REPO / "model/Gaming.mjs")
+        panel = read(REPO / "Panel.qml")
+        assert "export function minecraftClientLaunchCommand" in model
+        assert "export function minecraftClientInstalled" in model
+        assert "Gaming.minecraftClientLaunchCommand(which)" in panel
+
+    def test_panel_launch_process_hands_off(self):
+        panel = read(REPO / "Panel.qml")
+        assert "function launchMinecraftClient(mode)" in panel
+        start = panel.index("function launchMinecraftClient(mode)")
+        body = panel[start:start + 900]
+        assert '=== "server" ? "server" : "vanilla"' in body
+        assert "mcClientLaunchProc.running = true" in body
+        assert "handOffToExternalSurface()" in body
+        assert "id: mcClientLaunchProc" in panel
+
+    def test_both_buttons_exist_and_are_gated(self):
+        tabs = read(REPO / "ui/tabs/GamesTab.qml")
+        assert 'hub.launchMinecraftClient("server")' in tabs
+        assert 'hub.launchMinecraftClient("vanilla")' in tabs
+        assert "Gaming.minecraftClientInstalled(hub.extraApps" in tabs
+        assert 'text: "Join Vember server"' in tabs
+        assert 'text: "Plain vanilla"' in tabs
+
+    def test_status_exposes_launch_state(self):
+        panel = read(REPO / "Panel.qml")
+        assert "mcClientLaunchStatus: root.mcClientLaunchStatus" in panel

@@ -468,6 +468,25 @@ export class Gaming {
   // Bytes across every detected server, for the blue slice of the partition
   // bar. This lives in the model so the arithmetic is tested alongside the
   // parser that produced the numbers.
+  // Two clean Prism instances: one has JoinServerOnLaunchAddress set to the
+  // local server, the other opens to the main menu. Prism's --server CLI flag
+  // does not pass the address to modern (26.3) game arguments, so the address
+  // lives in the join instance instead. Instance ids are local facts, like the
+  // server paths.
+  minecraftClientLaunchCommand(mode) {
+  var id = String(mode || "") === "server" ? "vemberos-server" : "vemberos-vanilla";
+  return ["prismlauncher", "--launch", id];
+  }
+
+  minecraftClientInstalled(apps) {
+  var list = Array.isArray(apps) ? apps : [];
+  for (var i = 0; i < list.length; i++) {
+    if ((list[i] || {}).id === "prismlauncher" && list[i].installed)
+      return true;
+  }
+  return false;
+  }
+
   gameServerTotalBytes(sizes) {
   var list = Array.isArray(sizes) ? sizes : [];
   var total = 0;
@@ -508,3 +527,5 @@ export function gameServerContainers(...args) { return impl.gameServerContainers
 export function gameServerSizeCommand(...args) { return impl.gameServerSizeCommand(...args); }
 export function parseGameServerSizes(...args) { return impl.parseGameServerSizes(...args); }
 export function gameServerTotalBytes(...args) { return impl.gameServerTotalBytes(...args); }
+export function minecraftClientLaunchCommand(...args) { return impl.minecraftClientLaunchCommand(...args); }
+export function minecraftClientInstalled(...args) { return impl.minecraftClientInstalled(...args); }

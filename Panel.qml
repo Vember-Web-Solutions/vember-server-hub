@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.44"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 120
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.45"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 121
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -88,6 +88,7 @@ Item {
   property bool mcServerCreateBusy: false
   property string mcServerCreateStatus: ""
   property string mcServerCreateResult: ""
+  property string mcClientLaunchStatus: ""
   property string mcServerLogsName: ""
   property bool mcServerLogsBusy: false
   property string mcServerLogsText: ""
@@ -258,6 +259,7 @@ Item {
       mcServerCreateBusy: root.mcServerCreateBusy,
       mcServerCreateStatus: root.mcServerCreateStatus,
       mcServerCreateResult: root.mcServerCreateResult,
+      mcClientLaunchStatus: root.mcClientLaunchStatus,
       mcServerLogsName: root.mcServerLogsName,
       mcServerLogsBusy: root.mcServerLogsBusy,
       mcServerLogsLines: root.mcServerLogsText.length,
@@ -986,6 +988,22 @@ Item {
     gameServerSizesProc.running = false;
     gameServerSizesProc.command = Gaming.gameServerSizeCommand(servers);
     gameServerSizesProc.running = true;
+  }
+
+  // Two ways into the same clean Prism instance: with --server it lands in
+  // the Vember server, without it opens to the main menu. The panel steps
+  // aside as with any other external surface.
+  function launchMinecraftClient(mode) {
+    var which = String(mode || "") === "server" ? "server" : "vanilla";
+    var cmd = Gaming.minecraftClientLaunchCommand(which);
+    mcClientLaunchProc.mode = which;
+    mcClientLaunchProc.command = cmd;
+    mcClientLaunchProc.modeLabel = which === "server" ? "Minecraft (Vember server)" : "vanilla Minecraft";
+    mcClientLaunchProc.running = false;
+    mcClientLaunchStatus = "Launching " + mcClientLaunchProc.modeLabel + "…";
+    lastActionMessage = mcClientLaunchStatus;
+    mcClientLaunchProc.running = true;
+    handOffToExternalSurface();
   }
 
   function launchExtraApp(appId) {
@@ -2275,6 +2293,27 @@ Item {
       root.extraAppsScanBusy = false;
       if (code !== 0 && (!root.extraApps || root.extraApps.length === 0)) {
         root.extraApps = Gaming.parseScan("", Gaming.catalog());
+      }
+    }
+  }
+
+  Process {
+    // Stays alive as long as the game does; onExited only reports a close or
+    // a launch failure. First run downloads the version assets and can take a
+    // minute before a window appears.
+    id: mcClientLaunchProc
+    property string mode: "vanilla"
+    property string modeLabel: "Minecraft"
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code === 0) {
+        root.mcClientLaunchStatus = "Closed " + modeLabel + ".";
+      } else {
+        var err = Shell.trim(stderr.text || "");
+        root.mcClientLaunchStatus = "Could not launch " + modeLabel +
+          (err.length > 0 ? (": " + err) : (" (code " + code + ")."));
+        root.notify(root.mcClientLaunchStatus);
       }
     }
   }
