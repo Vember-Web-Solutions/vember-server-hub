@@ -274,10 +274,13 @@ export class Docker {
   };
   }
 
-  // The itzg `:latest` tag now ships Java 25, which breaks older Minecraft
-  // modpacks (1.18-era Fabric mixins and datapack registries fail to load).
-  // Pick the JDK by game version: 1.20.5+ / 1.21+ need Java 21 and run fine on
-  // :latest, while 1.17-1.20.4 need Java 17. LATEST stays on :latest.
+  // The itzg `:latest` tag now ships Java 25. That breaks 1.18-era modpacks
+  // (mixin/datapack load) and 1.20.5+/1.21.x modpacks whose native profilers
+  // SIGSEGV on JDK 25. Pick the JDK by game version instead: 1.20.5+/1.21.x
+  // need Java 21, 1.17-1.20.4 need Java 17. An explicit VERSION=LATEST means
+  // "newest game" and stays on :latest (Java 25). `docker run` pulls a tag
+  // that is not cached, so choosing it here also makes first launch fetch
+  // the right image without a separate manual pull.
   minecraftServerImage(version) {
   var v = shell.trim(String(version || "")).toUpperCase();
   if (v === "LATEST" || !v) return "itzg/minecraft-server:latest";
@@ -286,7 +289,7 @@ export class Docker {
   var minor = parseInt(m[1], 10);
   var patch = m[2] ? parseInt(m[2], 10) : 0;
   if (minor > 20 || (minor === 20 && patch >= 5))
-    return "itzg/minecraft-server:latest";
+    return "itzg/minecraft-server:java21";
   return "itzg/minecraft-server:java17";
   }
 

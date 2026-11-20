@@ -544,8 +544,9 @@ class TestMinecraftServerCommands:
         assert "/mnt/games/GameServers/nodecraft-data:/data" in cmd
 
     def test_image_tracks_game_version_jdk_requirement(self, js):
-        # :latest now ships Java 25; 1.18-era modpacks need Java 17 or they
-        # crash on mixin/datapack load. Modern versions stay on :latest.
+        # :latest now ships Java 25. 1.18-era modpacks need Java 17, and
+        # 1.20.5+/1.21.x modpacks need Java 21 (Spark's native profiler
+        # SIGSEGVs on JDK 25). An explicit LATEST game stays on :latest.
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage()))") == \
             "itzg/minecraft-server:latest"
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage('LATEST')))") == \
@@ -555,9 +556,11 @@ class TestMinecraftServerCommands:
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.20.1')))") == \
             "itzg/minecraft-server:java17"
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.20.5')))") == \
-            "itzg/minecraft-server:latest"
+            "itzg/minecraft-server:java21"
         assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.21')))") == \
-            "itzg/minecraft-server:latest"
+            "itzg/minecraft-server:java21"
+        assert js("console.log(JSON.stringify(Docker.minecraftServerImage('1.21.1')))") == \
+            "itzg/minecraft-server:java21"
 
     def test_old_version_command_uses_java17_and_published_port(self, js):
         cmd = js(
@@ -578,6 +581,10 @@ class TestMinecraftServerCommands:
             "console.log(JSON.stringify(Docker.minecraftServerImageCheckCommand('1.18.2')))"
         )
         assert old == ["docker", "image", "inspect", "itzg/minecraft-server:java17"]
+        modern = js(
+            "console.log(JSON.stringify(Docker.minecraftServerImageCheckCommand('1.21.1')))"
+        )
+        assert modern == ["docker", "image", "inspect", "itzg/minecraft-server:java21"]
 
     def test_logs_and_inspect_commands(self, js):
         assert js(
