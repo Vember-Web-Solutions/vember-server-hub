@@ -347,6 +347,18 @@ Column {
             }
           }
 
+          // Apply-update status/result (single global operation).
+          Text {
+            visible: Shell.trim(hub.dockerApplyStatus).length > 0 || Shell.trim(hub.dockerApplyResult).length > 0
+            textFormat: Text.PlainText
+            text: Shell.trim(hub.dockerApplyStatus).length > 0 ? hub.dockerApplyStatus : hub.dockerApplyResult
+            color: Color.menu.text
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
           Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
 
           Flow {
@@ -384,6 +396,18 @@ Column {
               enabled: !containerDetails.selBusy && !!containerDetails.selected && Shell.trim(containerDetails.selected.image || "").length > 0
               tooltipText: containerDetails.selected ? ("Pull / update image: " + (containerDetails.selected.image || "")) : ""
               onClicked: if (containerDetails.selected) hub.runDockerPull(containerDetails.selected.image, containerDetails.selected.name)
+            }
+            Button {
+              // Pulling only downloads the image; this recreates the service so
+              // the container actually runs it. Confirm first (brief downtime).
+              iconText: "󰓯"
+              text: "Apply update"
+              enabled: !containerDetails.selBusy && !!containerDetails.selected
+              tooltipText: "Recreate this container from its Compose file to apply the pulled image"
+              onClicked: if (containerDetails.selected) {
+                panel.applyUpdateTarget = containerDetails.selected.name;
+                panel.confirmApplyUpdate = true;
+              }
             }
             Button {
               // A stalled pull has no timeout and disables every action on the

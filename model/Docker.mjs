@@ -226,6 +226,66 @@ export class Docker {
     shell.trim(String(name || ""))];
   }
 
+  // Compose records its project, service and config files as container labels.
+  // `|~|` is the separator: paths cannot contain it, unlike a tab which Go's
+  // template escaping tends to mangle. All four fields come back in one
+  // inspect so applying an update needs no extra round trips.
+  inspectComposeCommand(name) {
+  var n = shell.trim(String(name || ""));
+  if (n.length === 0) return [];
+  var label = function(key) {
+    return '{{index .Config.Labels "' + key + '"}}';
+  };
+  var fields = [
+    label("com.docker.compose.project.config_files"),
+    label("com.docker.compose.project.working_dir"),
+    label("com.docker.compose.project"),
+    label("com.docker.compose.service")
+  ];
+  return ["docker", "inspect", "--format", fields.join("|~|"), n];
+  }
+
+  parseComposeInfo(text) {
+  var t = shell.trim(String(text || ""));
+  if (t.indexOf("|~|") === -1) return null;
+  var parts = t.split("|~|");
+  while (parts.length < 4) parts.push("");
+  var files = shell.trim(parts[0]).split(",").map(function(f) {
+    return shell.trim(f);
+  }).filter(function(f) { return f.length > 0; });
+  var workingDir = shell.trim(parts[1]);
+  var project = shell.trim(parts[2]);
+  var service = shell.trim(parts[3]);
+  var safeName = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+  if (files.length === 0 || !safeName.test(project) || !safeName.test(service))
+    return null;
+  for (var i = 0; i < files.length; i++) {
+    if (files[i].charAt(0) !== "/" || files[i].indexOf("\n") !== -1)
+      return null;
+  }
+  if (workingDir.length > 0 && workingDir.charAt(0) !== "/") return null;
+  return {
+    files: files,
+    workingDir: workingDir,
+    project: project,
+    service: service
+  };
+  }
+
+  // `up -d --no-deps <service>` recreates only what the operator picked. The
+  // values came from local Docker labels, but they are still validated above
+  // and passed as argv — no interpolation into a shell string.
+  applyComposeUpdateCommand(info) {
+  var c = info || {};
+  if (!Array.isArray(c.files) || c.files.length === 0) return [];
+  var cmd = ["docker", "compose"];
+  if (shell.trim(String(c.workingDir || "")).length > 0)
+    cmd.push("--project-directory", c.workingDir);
+  for (var i = 0; i < c.files.length; i++)
+    cmd.push("-f", c.files[i]);
+  return cmd.concat(["-p", c.project, "up", "-d", "--no-deps", c.service]);
+  }
+
   // Colour for a container state. Null means "no opinion", so the caller can
   // fall back to the theme's muted colour instead of a hardcoded grey.
   stateTone(state) {
@@ -275,6 +335,9 @@ export function normalizeMinecraftServerOptions(...args) { return impl.normalize
 export function createMinecraftServerCommand(...args) { return impl.createMinecraftServerCommand(...args); }
 export function logsCommand(...args) { return impl.logsCommand(...args); }
 export function inspectDataDirCommand(...args) { return impl.inspectDataDirCommand(...args); }
+export function inspectComposeCommand(...args) { return impl.inspectComposeCommand(...args); }
+export function parseComposeInfo(...args) { return impl.parseComposeInfo(...args); }
+export function applyComposeUpdateCommand(...args) { return impl.applyComposeUpdateCommand(...args); }
 export function stateTone(...args) { return impl.stateTone(...args); }
 export function stateBackground(...args) { return impl.stateBackground(...args); }
 export function runningCount(...args) { return impl.runningCount(...args); }

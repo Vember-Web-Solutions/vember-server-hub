@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.43"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 119
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.44"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 120
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -67,6 +67,11 @@ Item {
   property real dockerPullPercent: -1
   property var _dockerPullLayers: ({})
   property string dockerPullResult: ""
+  // Compose-aware "Apply update": inspect labels, then recreate one service.
+  // Uses dockerBusy as the global guard so every container action is exclusive.
+  property string dockerApplyName: ""
+  property string dockerApplyStatus: ""
+  property string dockerApplyResult: ""
   property bool dockerPruneBusy: false
   property string dockerDetailSizeName: ""
   property string dockerDetailSizeText: ""
@@ -258,7 +263,10 @@ Item {
       mcServerLogsLines: root.mcServerLogsText.length,
       gameServerSizesBusy: root.gameServerSizesBusy,
       gameServerSizes: root.gameServerSizes,
-      gameServerDataBytes: root.gameServerDataBytes
+      gameServerDataBytes: root.gameServerDataBytes,
+      dockerApplyName: root.dockerApplyName,
+      dockerApplyStatus: root.dockerApplyStatus,
+      dockerApplyResult: root.dockerApplyResult
     });
   }
 
@@ -1340,6 +1348,24 @@ Item {
     dockerPullProc.running = true;
   }
 
+  // Called from the confirm dialog. The name was chosen in the Containers tab;
+  // it is re-validated here because every Docker action funnels through this.
+  function startApplyComposeUpdate(name) {
+    if (dockerBusy)
+      return;
+    var n = Shell.trim(String(name || ""));
+    if (n.length === 0)
+      return;
+    dockerBusy = true;
+    dockerBusyName = n;
+    dockerApplyName = n;
+    dockerApplyResult = "";
+    dockerApplyStatus = "Inspecting " + n + "…";
+    dockerComposeInspectProc.targetName = n;
+    dockerComposeInspectProc.command = Docker.inspectComposeCommand(n);
+    dockerComposeInspectProc.running = true;
+  }
+
   // A pull that stalls — a dropped network, a hung registry — leaves
   // dockerPullActive true with no timer to end it, and every action on the
   // container is disabled while it runs. Docker emits no failure until the
@@ -2004,6 +2030,74 @@ Item {
         root.dockerPullResult = "Pull failed for " + image +
           (reason.length > 0 ? (": " + reason) : (" (code " + code + ")")) + ".";
         root.notifyIfClosed(root.dockerPullResult);
+      }
+      root.refreshDocker();
+    }
+  }
+
+  // Apply update is a two-step chain: read Compose labels from the running
+  // container, then recreate only that service. Passing a plain `docker run`
+  // container reaches the first process and fails with a clear message.
+  Process {
+    id: dockerComposeInspectProc
+    property string targetName: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      var info = Docker.parseComposeInfo(dockerComposeInspectProc.stdout.text || "");
+      if (code !== 0 || !info) {
+        root.dockerBusy = false;
+        root.dockerBusyName = "";
+        root.dockerApplyName = "";
+        root.dockerApplyStatus = "";
+        var why = Shell.trim(dockerComposeInspectProc.stderr.text || "");
+        root.dockerApplyResult = "Cannot apply update for " + targetName +
+          ": the container is not managed by Compose" +
+          (why.length > 0 && code !== 0 ? (" (" + why + ")") : "") + ".";
+        root.notifyIfClosed(root.dockerApplyResult);
+        root.refreshDocker();
+        return;
+      }
+      var cmd = Docker.applyComposeUpdateCommand(info);
+      if (cmd.length === 0) {
+        root.dockerBusy = false;
+        root.dockerBusyName = "";
+        root.dockerApplyName = "";
+        root.dockerApplyStatus = "";
+        root.dockerApplyResult = "Cannot apply update for " + targetName + ": invalid Compose configuration.";
+        root.notifyIfClosed(root.dockerApplyResult);
+        return;
+      }
+      root.dockerApplyStatus = "Recreating " + info.service + "…";
+      dockerComposeApplyProc.targetName = targetName;
+      dockerComposeApplyProc.serviceName = info.service;
+      dockerComposeApplyProc.command = cmd;
+      dockerComposeApplyProc.running = true;
+    }
+  }
+
+  Process {
+    id: dockerComposeApplyProc
+    property string targetName: ""
+    property string serviceName: ""
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.dockerBusy = false;
+      root.dockerBusyName = "";
+      root.dockerApplyName = "";
+      root.dockerApplyStatus = "";
+      if (code === 0) {
+        root.dockerApplyResult = "Applied update: recreated " + serviceName +
+          " from " + targetName + "'s compose file.";
+        root.lastActionMessage = root.dockerApplyResult;
+      } else {
+        var reason = Shell.trim(
+          (dockerComposeApplyProc.stderr.text || "") + " " + (dockerComposeApplyProc.stdout.text || ""));
+        root.dockerApplyResult = Shell.failureMessage(
+          "Apply update failed for " + targetName, code, reason);
+        root.lastActionMessage = root.dockerApplyResult;
+        root.notifyIfClosed(root.dockerApplyResult);
       }
       root.refreshDocker();
     }

@@ -2751,3 +2751,56 @@ class TestContainerWebLinks:
         docker = read(REPO / "model/Docker.mjs")
         assert "{{.Ports}}" in docker
         assert "webUrl: self.webUrlFromPorts(" in docker
+
+
+class TestComposeApplyUpdate:
+    """Pulling an image is not enough; apply recreates the Compose service."""
+
+    def test_model_exports_are_wired_into_the_panel_chain(self):
+        docker = read(REPO / "model/Docker.mjs")
+        panel = read(REPO / "Panel.qml")
+        for fn in ("inspectComposeCommand", "parseComposeInfo",
+                   "applyComposeUpdateCommand"):
+            assert "export function " + fn in docker
+            assert "Docker." + fn + "(" in panel, fn + " is never called"
+
+    def test_apply_uses_no_deps_and_project_directory(self):
+        docker = read(REPO / "model/Docker.mjs")
+        assert '"-p", c.project, "up", "-d", "--no-deps", c.service' in docker
+        assert '"--project-directory", c.workingDir' in docker
+
+    def test_two_step_process_chain(self):
+        panel = read(REPO / "Panel.qml")
+        assert "function startApplyComposeUpdate(name)" in panel
+        assert "id: dockerComposeInspectProc" in panel
+        assert "id: dockerComposeApplyProc" in panel
+        start = panel.index("id: dockerComposeInspectProc")
+        end = panel.index("id: dockerComposeApplyProc")
+        chain = panel[start:end]
+        assert "Docker.parseComposeInfo(" in chain
+        assert "not managed by Compose" in chain
+        assert "dockerComposeApplyProc.running = true" in chain
+        # Both failure exits of the inspect step must release the global guard,
+        # or every Docker action stays disabled after a rejected apply.
+        assert chain.count("root.dockerBusy = false") >= 2
+        apply = panel[end:]
+        assert "root.dockerBusy = false" in apply[:900]
+        assert "root.refreshDocker()" in apply[:1600]
+
+    def test_confirmation_dialog_and_button(self):
+        hub = read(REPO / "HubPanel.qml")
+        assert "property bool confirmApplyUpdate: false" in hub
+        assert "property string applyUpdateTarget" in hub
+        assert "ApplyUpdateConfirmDialog { panel: panel; cardRadius: card.radius }" in hub
+        dialog = read(REPO / "ui/ApplyUpdateConfirmDialog.qml")
+        assert "startApplyComposeUpdate(panel.applyUpdateTarget)" in dialog
+        tabs = read(REPO / "ui/tabs/ContainersTab.qml")
+        assert "panel.applyUpdateTarget = containerDetails.selected.name" in tabs
+        assert "panel.confirmApplyUpdate = true" in tabs
+        assert 'text: "Apply update"' in tabs
+
+    def test_apply_result_exposed_for_verification(self):
+        panel = read(REPO / "Panel.qml")
+        assert "dockerApplyName: root.dockerApplyName" in panel
+        assert "dockerApplyStatus: root.dockerApplyStatus" in panel
+        assert "dockerApplyResult: root.dockerApplyResult" in panel

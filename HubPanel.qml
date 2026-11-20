@@ -19,6 +19,8 @@ PanelWindow {
 
   property string currentTab: "overview"
   property bool confirmPrune: false
+  property bool confirmApplyUpdate: false
+  property string applyUpdateTarget: ""
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
   property bool codeServerSetupOpen: false
@@ -110,6 +112,8 @@ PanelWindow {
   // memory for the rest of the session and be redisplayed on the next open.
   function resetTransientState() {
     panel.confirmPrune = false;
+    panel.confirmApplyUpdate = false;
+    panel.applyUpdateTarget = "";
     panel.confirmRemoveSshKey = false;
     panel.confirmRemoveCodeServer = false;
     panel.codeServerSetupPassword = "";
@@ -399,6 +403,9 @@ PanelWindow {
 
     // Confirm prune popup
     PruneConfirmDialog { panel: panel; cardRadius: card.radius }
+
+    // Confirm apply-update popup (recreate one Compose service)
+    ApplyUpdateConfirmDialog { panel: panel; cardRadius: card.radius }
 
     // Confirm remove SSH key popup
     SshKeyConfirmDialog { panel: panel; cardRadius: card.radius }

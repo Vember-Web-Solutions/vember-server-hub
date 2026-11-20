@@ -397,3 +397,64 @@ class TestContainerWebUrls:
         )
         assert out[0]["ports"] == "192.168.0.145:9999->8000/tcp"
         assert out[0]["webUrl"] == "http://192.168.0.145:9999"
+
+
+class TestComposeApply:
+    """Apply update recreates a Compose service from the container's own labels."""
+
+    def test_inspect_command_reads_all_four_labels(self, js):
+        cmd = js('console.log(JSON.stringify(Docker.inspectComposeCommand("web")))')
+        assert cmd[:3] == ["docker", "inspect", "--format"]
+        assert cmd[-1] == "web"
+        fmt = cmd[3]
+        for key in ("project.config_files", "project.working_dir", "project", "service"):
+            assert "com.docker.compose." + key in fmt
+        assert "|~|" in fmt
+        assert js('console.log(JSON.stringify(Docker.inspectComposeCommand("  ")))') == []
+
+    def test_parse_real_label_shape(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parseComposeInfo('
+            '"/home/elena/containers/paperless-ngx/docker-compose.yml|~|'
+            '/home/elena/containers/paperless-ngx|~|paperless-ngx|~|webserver")))'
+        )
+        assert out["files"] == ["/home/elena/containers/paperless-ngx/docker-compose.yml"]
+        assert out["workingDir"] == "/home/elena/containers/paperless-ngx"
+        assert out["project"] == "paperless-ngx"
+        assert out["service"] == "webserver"
+
+    def test_parse_multiple_compose_files_in_order(self, js):
+        out = js(
+            'console.log(JSON.stringify(Docker.parseComposeInfo('
+            '"/a/base.yml, /a/override.yml|~|/a|~|proj|~|svc")))'
+        )
+        assert out["files"] == ["/a/base.yml", "/a/override.yml"]
+
+    def test_parse_rejects_unsafe_values(self, js):
+        for raw in (
+            "",
+            "garbage",
+            "relative.yml|~|/a|~|proj|~|svc",
+            "/a/c.yml|~|relative|~|proj|~|svc",
+            "/a/c.yml|~|/a|~|bad project|~|svc",
+            "/a/c.yml|~|/a|~|proj|~|bad service!",
+            "/a/c.yml|~|/a|~|proj",
+        ):
+            assert js("console.log(JSON.stringify(Docker.parseComposeInfo("
+                      + __import__("json").dumps(raw) + ")))") is None, raw
+
+    def test_apply_command_uses_no_deps_and_project_directory(self, js):
+        info = {
+            "files": ["/a/base.yml", "/a/override.yml"],
+            "workingDir": "/a",
+            "project": "paperless-ngx",
+            "service": "webserver",
+        }
+        argv = js("console.log(JSON.stringify(Docker.applyComposeUpdateCommand("
+                  + __import__("json").dumps(info) + ")))")
+        assert argv == [
+            "docker", "compose", "--project-directory", "/a",
+            "-f", "/a/base.yml", "-f", "/a/override.yml",
+            "-p", "paperless-ngx", "up", "-d", "--no-deps", "webserver",
+        ]
+        assert js("console.log(JSON.stringify(Docker.applyComposeUpdateCommand(null)))") == []
