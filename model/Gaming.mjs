@@ -360,6 +360,99 @@ export class Gaming {
   var t = shell.trim(text);
   return /^\d+$/.test(t) ? Number(t) : 0;
   }
+
+  // One keyword list for both the Servers list and the Storage size card. It
+  // used to live inline in GamesTab.qml; a second consumer made a shared,
+  // testable definition necessary. Container names come from Docker, not from
+  // the form, so a strict allowlist here still cannot reject a legitimate
+  // server the operator created outside the hub.
+  gameServerKeywords() {
+  return ["minecraft", "valheim", "factorio", "palworld", "terraria", "ark",
+    "cs2", "csgo", "rust", "satisfactory", "7dtd", "zomboid", "projectzomboid",
+    "enshrouded", "foundry", "vintage", "vrising", "conan", "dayz", "game",
+    "gameserver", "pterodactyl", "crafty", "steamcmd"];
+  }
+
+  gameServerContainers(list, steamServers) {
+  var out = [];
+  var containers = Array.isArray(list) ? list : [];
+  var keys = this.gameServerKeywords();
+  for (var i = 0; i < containers.length; i++) {
+    var c = containers[i] || {};
+    var hay = ((c.name || "") + " " + (c.image || "")).toLowerCase();
+    var match = false;
+    for (var k = 0; k < keys.length; k++) {
+      if (hay.indexOf(keys[k]) !== -1) { match = true; break; }
+    }
+    if (match) out.push({
+      serverType: "container", name: c.name || "unknown",
+      image: c.image || "", state: c.state || "", status: c.status || ""
+    });
+  }
+  var steam = Array.isArray(steamServers) ? steamServers : [];
+  for (var s = 0; s < steam.length; s++) {
+    var ss = steam[s] || {};
+    out.push({
+      serverType: "steam", name: ss.name || "Steam Dedicated Server",
+      image: ss.appid ? ("AppID " + ss.appid) : "Steam dedicated server",
+      state: "installed",
+      status: ss.installdir ? ("Install dir: " + ss.installdir) : "Host install (Steam)",
+      installdir: ss.installdir || "", appid: ss.appid || ""
+    });
+  }
+  return out;
+  }
+
+  // Both size figures in one process: `du -sh` on the host path mounted at
+  // /data (the space worlds actually use) and `docker ps -s` (writable layer
+  // plus image). Names and paths are positional args to `sh -c`, never spliced
+  // into the script text. A missing mount or a stopped container shows "-".
+  gameServerSizeCommand(servers) {
+  var list = Array.isArray(servers) ? servers : [];
+  var script = "while [ $# -ge 3 ]; do\n" +
+    "  name=$1; kind=$2; path=$3; shift 3\n" +
+    "  csize='-'\n" +
+    "  if [ \"$kind\" != 'steam' ]; then\n" +
+    "    path=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Source}}{{end}}{{end}}' \"$name\" 2>/dev/null)\n" +
+    "    csize=$(docker ps -a -s --no-trunc --filter \"name=^/${name}$\" --format '{{.Size}}' 2>/dev/null)\n" +
+    "    [ -n \"$csize\" ] || csize='-'\n" +
+    "  fi\n" +
+    "  dsize='-'\n" +
+    "  if [ -n \"$path\" ] && [ -d \"$path\" ]; then\n" +
+    "    dsize=$(du -sh \"$path\" 2>/dev/null | cut -f1)\n" +
+    "    [ -n \"$dsize\" ] || dsize='-'\n" +
+    "  fi\n" +
+    "  printf '%s\\t%s\\t%s\\t%s\\n' \"$name\" \"$path\" \"$dsize\" \"$csize\"\n" +
+    "done\n";
+  var cmd = ["sh", "-c", script, "sh"];
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i] || {};
+    var name = shell.trim(String(s.name || ""));
+    if (name.length === 0) continue;
+    cmd.push(name);
+    cmd.push(s.serverType === "steam" ? "steam" : "container");
+    cmd.push(s.serverType === "steam" ? shell.trim(String(s.installdir || "")) : "");
+  }
+  return cmd;
+  }
+
+  parseGameServerSizes(text) {
+  var out = [];
+  var lines = String(text || "").split(/\r?\n/);
+  for (var i = 0; i < lines.length; i++) {
+    var parts = lines[i].split("\t");
+    if (parts.length < 4) continue;
+    var name = shell.trim(parts[0]);
+    if (name.length === 0) continue;
+    out.push({
+      name: name,
+      path: shell.trim(parts[1]),
+      dataSize: shell.trim(parts[2]) || "-",
+      containerSize: shell.trim(parts[3]) || "-"
+    });
+  }
+  return out;
+  }
 }
 
 const impl = new Gaming();
@@ -386,3 +479,7 @@ export function minecraftVersionCountCommand(...args) { return impl.minecraftVer
 export function parseMinecraftVersionCount(...args) { return impl.parseMinecraftVersionCount(...args); }
 export function heroicGameCountCommand(...args) { return impl.heroicGameCountCommand(...args); }
 export function parseHeroicGameCount(...args) { return impl.parseHeroicGameCount(...args); }
+export function gameServerKeywords(...args) { return impl.gameServerKeywords(...args); }
+export function gameServerContainers(...args) { return impl.gameServerContainers(...args); }
+export function gameServerSizeCommand(...args) { return impl.gameServerSizeCommand(...args); }
+export function parseGameServerSizes(...args) { return impl.parseGameServerSizes(...args); }

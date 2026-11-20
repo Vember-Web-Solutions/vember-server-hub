@@ -10,9 +10,26 @@ import Quickshell
 import qs.Ui
 import qs.Commons
 import "../../model/Shell.mjs" as Shell
+import "../../model/Gaming.mjs" as Gaming
 
 Column {
   required property var panel
+
+  // Servers has its own second-level sub-nav. The create form and the log
+  // viewer are separate views from the list so neither pushes the server rows
+  // off screen. A Logs click on a row switches to the log view.
+  property string serversSubTab: "list"
+
+  // Closing the hub hides HubPanel, but this child's `visible` binding stays
+  // true, so Storage's onVisibleChanged does not fire when it reopens on
+  // Storage. Refresh on open in that one case instead of leaving stale sizes.
+  Connections {
+    target: hub
+    function onOpenedChanged() {
+      if (hub.opened && panel.gamesSubTab === "storage")
+        hub.refreshGameServerSizes()
+    }
+  }
 
   // One collapse state for both log panels, so switching between Launchers and
   // Apps does not unexpectedly expand the log again. Starts collapsed; the log
@@ -744,11 +761,36 @@ Column {
     width: parent.width
     spacing: Style.spacing.md
 
+    Row {
+      spacing: 8
+      Button {
+        iconText: "󰒋"
+        text: "Servers"
+        active: serversSubTab === "list"
+        onClicked: serversSubTab = "list"
+      }
+      Button {
+        iconText: "󰍳"
+        text: "Create"
+        active: serversSubTab === "create"
+        onClicked: serversSubTab = "create"
+      }
+      Button {
+        iconText: "󰋽"
+        text: "Logs"
+        active: serversSubTab === "logs"
+        enabled: Shell.trim(hub.mcServerLogsName).length > 0
+        tooltipText: "Last 200 lines of the server whose Logs action you used"
+        onClicked: serversSubTab = "logs"
+      }
+    }
+
     // Create a Minecraft server from the itzg image. The backend normalises
     // every field before building the docker command, so the form is only a
     // convenience — invalid input falls back to a safe default and the form
     // is updated to show what was actually used.
     Rectangle {
+      visible: serversSubTab === "create"
       width: parent.width
       radius: Style.cornerRadius
       color: panel.softText(0.05)
@@ -896,6 +938,7 @@ Column {
     }
 
     Rectangle {
+      visible: serversSubTab === "list"
       width: parent.width
       radius: Style.cornerRadius
       color: panel.softText(0.05)
@@ -919,24 +962,10 @@ Column {
 
         Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
 
-        property var detectedGameServers: {
-          var out = [];
-          var list = hub.dockerContainers || [];
-          var keys = ["minecraft", "valheim", "factorio", "palworld", "terraria", "ark", "cs2", "csgo", "rust", "satisfactory", "7dtd", "zomboid", "projectzomboid", "enshrouded", "foundry", "vintage", "vrising", "conan", "dayz", "game", "gameserver", "pterodactyl", "crafty", "steamcmd"];
-          for (var i = 0; i < list.length; i++) {
-            var c = list[i] || {};
-            var hay = ((c.name || "") + " " + (c.image || "")).toLowerCase();
-            var match = false;
-            for (var k = 0; k < keys.length; k++) { if (hay.indexOf(keys[k]) !== -1) { match = true; break; } }
-            if (match) out.push({ serverType: "container", name: c.name || "unknown", image: c.image || "", state: c.state || "", status: c.status || "" });
-          }
-          var steamServers = hub.steamDedicatedServers || [];
-          for (var s = 0; s < steamServers.length; s++) {
-            var ss = steamServers[s] || {};
-            out.push({ serverType: "steam", name: ss.name || "Steam Dedicated Server", image: ss.appid ? ("AppID " + ss.appid) : "Steam dedicated server", state: "installed", status: ss.installdir ? ("Install dir: " + ss.installdir) : "Host install (Steam)", installdir: ss.installdir || "", appid: ss.appid || "" });
-          }
-          return out;
-        }
+        // Shared with the Storage size card so both views see the same servers.
+        // The keyword list lives in Gaming.mjs and is covered by model tests.
+        property var detectedGameServers: Gaming.gameServerContainers(
+          hub.dockerContainers || [], hub.steamDedicatedServers || [])
 
         Text {
           visible: (gameServersCol.detectedGameServers || []).length === 0
@@ -1002,7 +1031,10 @@ Column {
                   text: "Logs"
                   enabled: !hub.dockerBusy && !hub.mcServerLogsBusy
                   tooltipText: "Show the last 200 lines of this container's log"
-                  onClicked: hub.showMinecraftServerLogs(modelData.name)
+                  onClicked: {
+                    hub.showMinecraftServerLogs(modelData.name);
+                    serversSubTab = "logs";
+                  }
                 }
                 Button {
                   iconText: "󰋊"
@@ -1030,7 +1062,7 @@ Column {
     // Recent container logs, opened by the Logs action on a server row. Not a
     // live tail: a fixed snapshot so a busy server cannot flood the panel.
     Rectangle {
-      visible: Shell.trim(hub.mcServerLogsName).length > 0
+      visible: serversSubTab === "logs" && Shell.trim(hub.mcServerLogsName).length > 0
       width: parent.width
       radius: Style.cornerRadius
       color: panel.softText(0.05)
@@ -1050,7 +1082,15 @@ Column {
             Text { textFormat: Text.PlainText; text: "Log • " + hub.mcServerLogsName; color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
             Text { textFormat: Text.PlainText; text: hub.mcServerLogsBusy ? "Loading…" : "Last 200 lines"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
           }
-          Button { iconText: "󰆴"; text: "Close"; enabled: !hub.mcServerLogsBusy; onClicked: hub.clearMinecraftServerLogs() }
+          Button {
+            iconText: "󰆴"
+            text: "Close"
+            enabled: !hub.mcServerLogsBusy
+            onClicked: {
+              hub.clearMinecraftServerLogs();
+              serversSubTab = "list";
+            }
+          }
         }
         Rectangle {
           width: parent.width
@@ -1089,6 +1129,9 @@ Column {
     visible: panel.gamesSubTab === "storage"
     width: parent.width
     spacing: Style.spacing.md
+    // `du -sh` walks each world folder. Ask only when Storage is actually
+    // shown, and let the Refresh button update it — never from the 15s poll.
+    onVisibleChanged: if (visible) hub.refreshGameServerSizes()
 
     Rectangle {
       width: parent.width
@@ -1161,6 +1204,102 @@ Column {
             implicitWidth: mountBadge3.implicitWidth + 14
             implicitHeight: mountBadge3.implicitHeight + 8
             Text { id: mountBadge3; anchors.centerIn: parent; textFormat: Text.PlainText; text: hub.gameMountPresent ? "mounted" : "not mounted"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          }
+        }
+      }
+    }
+
+    // Game server data lives on the same partition, so put what each server
+    // uses next to the overall usage bar. One query returns both figures:
+    // du on the host path (world size) and docker ps -s (container + image).
+    Rectangle {
+      width: parent.width
+      radius: Style.cornerRadius
+      color: panel.softText(0.05)
+      border.color: panel.accentSoft(0.18)
+      border.width: 1
+      implicitHeight: serverSizesCol.implicitHeight + 24
+      Column {
+        id: serverSizesCol
+        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: 14
+        spacing: 10
+        RowLayout {
+          width: parent.width; spacing: 10
+          Text { textFormat: Text.PlainText; text: "󰒋"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+          ColumnLayout {
+            Layout.fillWidth: true; spacing: 2
+            Text { textFormat: Text.PlainText; text: "Game server storage"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+            Text { textFormat: Text.PlainText; text: "Data folder is the host path mounted at /data — the space your worlds use. Container is the writable layer plus image. Queried when this tab opens."; color: panel.softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+          }
+          Button {
+            iconText: "󰑐"
+            text: "Refresh"
+            enabled: !hub.gameServerSizesBusy
+            tooltipText: "Re-query all detected game servers"
+            onClicked: hub.refreshGameServerSizes()
+          }
+        }
+        Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
+        Text {
+          visible: hub.gameServerSizesBusy
+          textFormat: Text.PlainText
+          text: "Reading server folders…"
+          color: panel.accentSoft(0.95)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+        }
+        Text {
+          visible: Shell.trim(hub.gameServerSizesError).length > 0
+          textFormat: Text.PlainText
+          text: hub.gameServerSizesError
+          color: "#ef4444"
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+        Text {
+          visible: !hub.gameServerSizesBusy && hub.gameServerSizes.length === 0 && Shell.trim(hub.gameServerSizesError).length === 0
+          textFormat: Text.PlainText
+          text: "No game servers detected. They appear under Gaming → Servers."
+          color: panel.softText(0.75)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          width: parent.width
+        }
+        Repeater {
+          model: hub.gameServerSizes || []
+          delegate: Rectangle {
+            required property var modelData
+            width: serverSizesCol.width
+            radius: 8
+            color: panel.softText(0.03)
+            border.color: panel.softText(0.08)
+            border.width: 1
+            implicitHeight: sizeRow.implicitHeight + 12
+            Column {
+              id: sizeRow
+              anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+              anchors.margins: 8
+              spacing: 4
+              RowLayout {
+                width: parent.width; spacing: 8
+                Text { textFormat: Text.PlainText; text: modelData.name || "unknown"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+                Text { textFormat: Text.PlainText; text: "Data " + (modelData.dataSize || "-"); color: panel.softText(0.9); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                Text { textFormat: Text.PlainText; text: "Container " + (modelData.containerSize || "-"); color: panel.softText(0.9); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+              }
+              Text {
+                visible: Shell.trim(modelData.path || "").length > 0
+                textFormat: Text.PlainText
+                text: modelData.path
+                color: panel.softText(0.65)
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                elide: Text.ElideMiddle
+                width: parent.width
+              }
+            }
           }
         }
       }

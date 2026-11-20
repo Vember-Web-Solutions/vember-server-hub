@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.41"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 117
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.42"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 118
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -104,6 +104,12 @@ Item {
   property int minecraftVersionCount: -1
   // Installed Heroic games (Epic/GOG/Amazon), from Heroic's install-info files.
   property int heroicGameCount: -1
+
+  // Per-server sizes for Gaming → Storage. Queried when Storage opens, never
+  // on the 15s poll: `du -sh` walks the world directory and can take seconds.
+  property var gameServerSizes: []
+  property bool gameServerSizesBusy: false
+  property string gameServerSizesError: ""
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
@@ -247,7 +253,9 @@ Item {
       mcServerCreateResult: root.mcServerCreateResult,
       mcServerLogsName: root.mcServerLogsName,
       mcServerLogsBusy: root.mcServerLogsBusy,
-      mcServerLogsLines: root.mcServerLogsText.length
+      mcServerLogsLines: root.mcServerLogsText.length,
+      gameServerSizesBusy: root.gameServerSizesBusy,
+      gameServerSizes: root.gameServerSizes
     });
   }
 
@@ -931,6 +939,25 @@ Item {
       extraAppsScanProc.running = true;
     }
     recoverStalledCounts();
+  }
+
+  // Sizes are requested when Storage opens and from its Refresh button. Never
+  // from refreshGames(): du walks each world folder and the 15s poll would
+  // keep restarting it. The command passes names as positional args, so a
+  // container name cannot turn into shell text.
+  function refreshGameServerSizes() {
+    var servers = Gaming.gameServerContainers(dockerContainers, steamDedicatedServers);
+    if (servers.length === 0) {
+      gameServerSizes = [];
+      gameServerSizesBusy = false;
+      gameServerSizesError = "";
+      return;
+    }
+    gameServerSizesBusy = true;
+    gameServerSizesError = "";
+    gameServerSizesProc.running = false;
+    gameServerSizesProc.command = Gaming.gameServerSizeCommand(servers);
+    gameServerSizesProc.running = true;
   }
 
   function launchExtraApp(appId) {
@@ -2065,6 +2092,27 @@ Item {
     stdout: StdioCollector { onStreamFinished: root.heroicGameCount = Gaming.parseHeroicGameCount(text) }
     stderr: StdioCollector {}
   }
+  Process {
+    id: gameServerSizesProc
+    property string errText: ""
+    stdout: StdioCollector {
+      onStreamFinished: root.gameServerSizes = Gaming.parseGameServerSizes(text)
+    }
+    stderr: StdioCollector { onStreamFinished: gameServerSizesProc.errText = text }
+    onExited: function(code) {
+      root.gameServerSizesBusy = false;
+      if (code !== 0) {
+        root.gameServerSizesError = Shell.failureMessage(
+          "Could not read game server sizes", code, gameServerSizesProc.errText);
+        gameServerSizesProc.errText = "";
+      } else {
+        root.gameServerSizesError = "";
+      }
+      if (root.gameServerSizes.length === 0 && Shell.trim(root.gameServerSizesError).length === 0)
+        root.gameServerSizesError = "No size data returned for the detected servers.";
+    }
+  }
+
   Process {
     id: steamDirProc
     onExited: function(code) { root.steamInstalled = (code === 0) }

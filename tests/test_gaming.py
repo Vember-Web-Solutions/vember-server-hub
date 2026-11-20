@@ -398,3 +398,117 @@ class TestHeroicGameCount:
             "console.log(JSON.stringify(Gaming.parseHeroicGameCount("
             + json.dumps(result.stdout) + ")))"
         ) == 0
+
+
+class TestGameServerDetectionAndSizes:
+    """Servers and Storage share one detection list and one size query."""
+
+    def test_detection_keywords_are_shared(self, js):
+        keys = js("console.log(JSON.stringify(Gaming.gameServerKeywords()))")
+        for key in ("minecraft", "valheim", "factorio", "steamcmd"):
+            assert key in keys
+        assert len(keys) == len(set(keys))
+
+    def test_detection_matches_image_and_adds_steam_servers(self, js):
+        out = js(
+            "console.log(JSON.stringify(Gaming.gameServerContainers("
+            '[{name:"vember-minecraft",image:"itzg/minecraft-server:latest",'
+            'state:"running",status:"up"},'
+            '{name:"postgres",image:"postgres:16"}],'
+            '[{name:"CS2",appid:"162990",installdir:"/mnt/games/cs2"}])))'
+        )
+        assert len(out) == 2
+        assert out[0] == {
+            "serverType": "container", "name": "vember-minecraft",
+            "image": "itzg/minecraft-server:latest", "state": "running",
+            "status": "up",
+        }
+        assert out[1]["serverType"] == "steam"
+        assert out[1]["installdir"] == "/mnt/games/cs2"
+        assert out[1]["image"] == "AppID 162990"
+
+    def test_detection_handles_null_and_missing_fields(self, js):
+        assert js(
+            "console.log(JSON.stringify(Gaming.gameServerContainers(null, null)))"
+        ) == []
+        out = js(
+            "console.log(JSON.stringify(Gaming.gameServerContainers([{}],[{}])))"
+        )
+        assert len(out) == 1  # the empty container does not match a keyword
+        assert out[0]["name"] == "Steam Dedicated Server"
+
+    def test_size_command_passes_names_as_args_not_script(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.gameServerSizeCommand("
+            '[{serverType:"container",name:"vember-minecraft"},'
+            '{serverType:"steam",name:"CS2",installdir:"/mnt/games/cs2"}])))'
+        )
+        assert cmd[:3] == ["sh", "-c", cmd[2]]
+        assert cmd[2].startswith("while [ $# -ge 3 ]")
+        assert cmd[3] == "sh"
+        assert cmd[4:7] == ["vember-minecraft", "container", ""]
+        assert cmd[7:10] == ["CS2", "steam", "/mnt/games/cs2"]
+        # Names and paths are positional args, never spliced into shell text.
+        assert "vember-minecraft" not in cmd[2]
+        assert "/mnt/games/cs2" not in cmd[2]
+        # Both figures come from one process.
+        assert "du -sh" in cmd[2] and "docker ps -a -s" in cmd[2]
+        assert "/data" in cmd[2]
+
+    def test_size_command_skips_blank_names(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.gameServerSizeCommand("
+            '[{serverType:"container",name:"  "},null])))'
+        )
+        assert len(cmd) == 4 and cmd[3] == "sh"
+
+    def test_size_parser_reads_both_figures_and_skips_junk(self, js):
+        text = (
+            "vember-minecraft\t/mnt/games/MinecraftServer\t225M\t135kB (virtual 982MB)\n"
+            "CS2\t/mnt/games/cs2\t18G\t-\n"
+            "malformed\n"
+            "\t/path\t1G\t2G\n"
+        )
+        out = js(
+            "console.log(JSON.stringify(Gaming.parseGameServerSizes("
+            + json.dumps(text) + ")))"
+        )
+        assert len(out) == 2
+        assert out[0] == {
+            "name": "vember-minecraft", "path": "/mnt/games/MinecraftServer",
+            "dataSize": "225M", "containerSize": "135kB (virtual 982MB)",
+        }
+        assert out[1]["containerSize"] == "-"
+
+    def test_size_command_round_trips_through_stubbed_tools(self, js, tmp_path, monkeypatch):
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        data = tmp_path / "data"
+        data.mkdir()
+        docker = bindir / "docker"
+        docker.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = inspect ]; then echo ' + str(data) + '; exit 0; fi\n'
+            'if [ "$1" = ps ]; then echo "10kB (virtual 500MB)"; exit 0; fi\n'
+            "exit 1\n"
+        )
+        docker.chmod(0o755)
+        du = bindir / "du"
+        du.write_text('#!/bin/sh\nprintf "42M\\t%s\\n" "$2"\n')
+        du.chmod(0o755)
+        monkeypatch.setenv("PATH", str(bindir) + ":/usr/bin:/bin")
+
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.gameServerSizeCommand("
+            '[{serverType:"container",name:"vember-minecraft"}])))'
+        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        parsed = js(
+            "console.log(JSON.stringify(Gaming.parseGameServerSizes("
+            + json.dumps(result.stdout) + ")))"
+        )
+        assert parsed == [{
+            "name": "vember-minecraft", "path": str(data),
+            "dataSize": "42M", "containerSize": "10kB (virtual 500MB)",
+        }]

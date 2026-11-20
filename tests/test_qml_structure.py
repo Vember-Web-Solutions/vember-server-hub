@@ -2572,3 +2572,99 @@ class TestNotificationsAreQueued:
         assert "_drainNotify()" in block, (
             "notifyProc.onExited must drain the queue"
         )
+
+
+class TestServersSubTabs:
+    """Servers has its own sub-nav: list, create and logs are separate views."""
+
+    def _servers_column(self, text):
+        start = text.index('visible: panel.gamesSubTab === "servers"')
+        end = text.index('// Storage tab', start)
+        return text[start:end]
+
+    def test_three_sub_tabs_are_wired(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        assert 'property string serversSubTab: "list"' in text
+        body = self._servers_column(text)
+        for view in ("list", "create", "logs"):
+            assert 'serversSubTab = "' + view + '"' in body, (
+                view + " has no sub-nav button"
+            )
+
+    def test_each_view_has_a_visibility_gate(self):
+        body = self._servers_column(read(REPO / "ui/tabs/GamesTab.qml"))
+        for view in ("list", "create", "logs"):
+            assert 'visible: serversSubTab === "' + view + '"' in body, (
+                view + " is not gated, so it will render on every sub-tab"
+            )
+
+    def test_logs_action_opens_the_logs_tab(self):
+        body = self._servers_column(read(REPO / "ui/tabs/GamesTab.qml"))
+        match = re.search(
+            r"hub\.showMinecraftServerLogs\(modelData\.name\);(.*?)\}", body, re.S
+        )
+        assert match, "the row Logs action no longer calls showMinecraftServerLogs"
+        assert 'serversSubTab = "logs"' in match.group(1), (
+            "clicking Logs must open the Logs sub-tab, or nothing appears to happen"
+        )
+
+    def test_closing_logs_returns_to_the_list(self):
+        body = self._servers_column(read(REPO / "ui/tabs/GamesTab.qml"))
+        match = re.search(
+            r"hub\.clearMinecraftServerLogs\(\);(.*?)\}", body, re.S
+        )
+        assert match, "the log Close action is missing"
+        assert 'serversSubTab = "list"' in match.group(1)
+
+    def test_detection_comes_from_the_shared_model(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        assert 'import "../../model/Gaming.mjs" as Gaming' in text
+        assert "Gaming.gameServerContainers(" in text
+        assert '"steamcmd"' not in text, (
+            "the keyword list must live in Gaming.mjs, not duplicated in QML"
+        )
+
+
+class TestGameServerStorageCard:
+    """Storage reports both sizes for the same servers the Servers tab lists."""
+
+    def test_panel_has_size_state_process_and_refresh(self):
+        text = read(REPO / "Panel.qml")
+        for declaration in (
+            "property var gameServerSizes: []",
+            "property bool gameServerSizesBusy: false",
+            'property string gameServerSizesError: ""',
+        ):
+            assert declaration in text, declaration
+        assert "function refreshGameServerSizes()" in text
+        assert "Gaming.gameServerContainers(dockerContainers, steamDedicatedServers)" in text
+        assert "Gaming.gameServerSizeCommand(servers)" in text
+        assert "id: gameServerSizesProc" in text
+        assert "Gaming.parseGameServerSizes(text)" in text
+
+    def test_sizes_are_not_on_the_poll_path(self):
+        text = read(REPO / "Panel.qml")
+        assert "refreshGameServerSizes()" not in _refresh_games_body(text), (
+            "du walks each world folder; the 15s poll must not re-run it"
+        )
+
+    def test_storage_queries_on_open_and_has_refresh(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        start = text.index('visible: panel.gamesSubTab === "storage"')
+        body = text[start:]
+        assert "onVisibleChanged: if (visible) hub.refreshGameServerSizes()" in body
+        assert "hub.refreshGameServerSizes()" in body
+        assert "Game server storage" in body
+
+    def test_reopening_on_storage_refreshes(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        match = re.search(r"function onOpenedChanged\(\) \{(.*?)\n  \}", text, re.S)
+        assert match, "no open-time refresh hook in GamesTab"
+        assert "panel.gamesSubTab === \"storage\"" in match.group(1)
+        assert "hub.refreshGameServerSizes()" in match.group(1)
+
+    def test_both_size_figures_are_rendered(self):
+        body = read(REPO / "ui/tabs/GamesTab.qml")
+        assert "modelData.dataSize" in body
+        assert "modelData.containerSize" in body
+        assert "modelData.path" in body

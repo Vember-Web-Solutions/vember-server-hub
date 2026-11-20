@@ -504,6 +504,16 @@ Work that fell out of the split, done in the same arc:
   flight (every parser returns >= 0, so -1 is unambiguous). Guards:
   TestGamingCountsRecoverOnFullRefresh and the updated TestSteamScanPollSafety;
   four mutations were caught. Verified live through two 15s poll cycles.
+- **Servers has sub-tabs and Storage reports game server sizes.** Gaming →
+  Servers is now Servers / Create / Logs; the row Logs action opens the Logs
+  tab and Close returns to the list. Detection moved from QML into Gaming.mjs
+  so Servers and Storage share one keyword list. Storage queries `du -sh` on
+  the host /data path and `docker ps -s` for each server only when it opens,
+  with a Refresh button and an open-time refresh for the leave-it-on-Storage
+  case — never on the 15s poll. Names are positional args to `sh -c`. Guards:
+  TestServersSubTabs and TestGameServerStorageCard, plus a stubbed end-to-end
+  size round trip; five mutations caught. Live: 225M data / 135kB (982MB virtual)
+  container for vember-minecraft.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -528,8 +538,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 545 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 9,683 lines. The growth is comments, per-file
+- 562 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 9,967 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
 - The three monoliths went 7,694 → 3,271 lines: `HubPanel.qml` 4,376 → 424,
@@ -538,6 +548,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,847, then `ui/tabs/GamesTab.qml` at 1,169.
-- The test suite is 5,016 lines across 12 files and drives the real modules
+- The test suite is 5,226 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.41, build 72 → 117.
+- Version 0.1.0 → 0.6.42, build 72 → 118.
