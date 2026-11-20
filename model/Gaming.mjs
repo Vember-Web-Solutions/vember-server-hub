@@ -37,15 +37,6 @@ export class Gaming {
       installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm prismlauncher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub org.prismlauncher.PrismLauncher; else echo 'No supported installer found for Prism Launcher.'; exit 1; fi"
     },
     {
-      id: "minecraft-launcher",
-      name: "Minecraft Launcher",
-      description: "Official Minecraft launcher (AUR/flatpak depending on setup).",
-      category: "minecraft",
-      icon: "file:///usr/share/icons/hicolor/256x256/apps/minecraft-launcher.png",
-      launchCmd: ["sh", "-c", "command -v minecraft-launcher >/dev/null 2>&1 && exec minecraft-launcher || exec flatpak run com.mojang.Minecraft"],
-      installCmd: "if command -v yay >/dev/null 2>&1; then yay -S --needed --noconfirm minecraft-launcher; elif command -v paru >/dev/null 2>&1; then paru -S --needed --noconfirm minecraft-launcher; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.mojang.Minecraft; else echo 'Install yay/paru or flatpak to install Minecraft Launcher.'; exit 1; fi"
-    },
-    {
       id: "curseforge",
       name: "CurseForge",
       description: "Mod manager for Minecraft and other supported games (best-effort detection).",
@@ -82,8 +73,6 @@ export class Gaming {
     "if has_cmd lutris || has_flatpak net.lutris.Lutris; then il=1; else il=0; fi; if running_any lutris; then rl=1; else rl=0; fi; emit lutris \"$il\" \"$rl\" ''",
     // prismlauncher
     "if has_cmd prismlauncher || has_flatpak org.prismlauncher.PrismLauncher; then ip=1; else ip=0; fi; if running_any prismlauncher; then rp=1; else rp=0; fi; emit prismlauncher \"$ip\" \"$rp\" ''",
-    // minecraft-launcher
-    "if has_cmd minecraft-launcher || has_flatpak com.mojang.Minecraft; then im=1; else im=0; fi; if running_any minecraft-launcher; then rm=1; else rm=0; fi; emit minecraft-launcher \"$im\" \"$rm\" ''",
     // curseforge
     "cf_app=$(ls \"$HOME\"/Applications/CurseForge*.AppImage \"$HOME\"/Applications/curseforge*.AppImage 2>/dev/null | head -n1 || true); if has_cmd curseforge || [ -n \"$cf_app\" ] || has_flatpak com.curseforge.curseforge; then ic=1; else ic=0; fi; if running_any curseforge CurseForge; then rc=1; else rc=0; fi; emit curseforge \"$ic\" \"$rc\" \"$cf_app\"",
     // discord

@@ -119,7 +119,7 @@ Column {
             }
             delegate: Button {
               required property var modelData
-              iconText: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "minecraft-launcher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰐊"))))
+              iconText: modelData.id === "heroic" ? "󰊗" : (modelData.id === "lutris" ? "󰺷" : (modelData.id === "prismlauncher" ? "󰍳" : (modelData.id === "curseforge" ? "󰏗" : "󰐊")))
               text: modelData.name || modelData.id
               tooltipText: "Launch " + (modelData.name || modelData.id)
               onClicked: hub.launchExtraApp(modelData.id)
@@ -487,7 +487,7 @@ Column {
         var apps = hub.extraApps || [];
         for (var i = 0; i < apps.length; i++) {
           var a = apps[i];
-          if (a && !a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push({ kind: "extra", id: a.id, name: a.name, description: a.description || "", icon: a.id === "heroic" ? "󰊗" : (a.id === "lutris" ? "󰺷" : (a.id === "prismlauncher" ? "󰍳" : (a.id === "minecraft-launcher" ? "󰍳" : (a.id === "curseforge" ? "󰏗" : "󰊴")))) });
+          if (a && !a.installed && (a.category === "launchers" || a.category === "minecraft" || a.category === "mods")) out.push({ kind: "extra", id: a.id, name: a.name, description: a.description || "", icon: a.id === "heroic" ? "󰊗" : (a.id === "lutris" ? "󰺷" : (a.id === "prismlauncher" ? "󰍳" : (a.id === "curseforge" ? "󰏗" : "󰊴"))) });
         }
         return out;
       }
@@ -531,9 +531,9 @@ Column {
                 width: parent.width
                 spacing: 8
                 Button {
-                  iconText: modelData.id === "minecraft-launcher" ? "󰐕" : "󰏔"
-                  text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : (modelData.kind === "bnet" ? "Set up" : (modelData.id === "minecraft-launcher" ? "Add" : "Install"))
-                  tooltipText: modelData.kind === "steam" ? "Install Steam in the default terminal (answer the sudo prompt there)" : (modelData.kind === "bnet" ? "Open the Lutris Battle.net install page" : (modelData.id === "minecraft-launcher" ? "Add/install Minecraft Launcher" : ("Open terminal to install " + modelData.name)))
+                  iconText: "󰏔"
+                  text: (hub.installRunning && hub.installRunningId === modelData.id) ? "Installing…" : (modelData.kind === "bnet" ? "Set up" : "Install")
+                  tooltipText: modelData.kind === "steam" ? "Install Steam in the default terminal (answer the sudo prompt there)" : (modelData.kind === "bnet" ? "Open the Lutris Battle.net install page" : ("Open terminal to install " + modelData.name))
                   enabled: !hub.installRunning && !hub.omarchyUpdateRunning
                   onClicked: {
                     if (modelData.kind === "extra") hub.installExtraApp(modelData.id);

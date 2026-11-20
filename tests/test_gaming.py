@@ -7,7 +7,7 @@ import subprocess
 class TestCatalog:
     def test_every_entry_has_the_fields_the_ui_needs(self, js):
         out = js("console.log(JSON.stringify(Gaming.catalog()))")
-        assert len(out) >= 6
+        assert len(out) >= 5
         for app in out:
             assert app["id"]
             assert app["name"]
@@ -29,6 +29,10 @@ class TestCatalog:
 
     def test_unknown_id_returns_null(self, js):
         out = js('console.log(JSON.stringify(Gaming.defById("nope")))')
+        assert out is None
+
+    def test_retired_official_launcher_is_absent(self, js):
+        out = js('console.log(JSON.stringify(Gaming.defById("minecraft-launcher")))')
         assert out is None
 
 
