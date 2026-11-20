@@ -24,6 +24,7 @@ PanelWindow {
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
   property bool confirmRemoveGameServer: false
+  property bool confirmEditMinecraftServer: false
   property bool codeServerSetupOpen: false
   property string codeServerSetupPassword: ""
   property string codeServerSetupPort: "8443"
@@ -118,8 +119,10 @@ PanelWindow {
     panel.confirmRemoveSshKey = false;
     panel.confirmRemoveCodeServer = false;
     panel.confirmRemoveGameServer = false;
+    panel.confirmEditMinecraftServer = false;
     panel.codeServerSetupPassword = "";
     if (typeof hub.closeGameServerRemoveDialog === "function") hub.closeGameServerRemoveDialog();
+    if (typeof hub.closeMinecraftServerEditDialog === "function") hub.closeMinecraftServerEditDialog();
     panel.settingsMenuOpen = false;
     panel.arrangeTabsOpen = false;
   }
@@ -421,6 +424,9 @@ PanelWindow {
 
     // Confirm remove one game server container + its data dir
     GameServerRemoveDialog { panel: panel; cardRadius: card.radius }
+
+    // Edit one Minecraft server: name, port and mod source
+    MinecraftServerEditDialog { panel: panel; cardRadius: card.radius }
 
     // Settings menu
     SettingsMenu { panel: panel }

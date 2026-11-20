@@ -14,12 +14,26 @@ import "../../model/Gaming.mjs" as Gaming
 import "../../model/Docker.mjs" as Docker
 
 Column {
+  id: gamesTabRoot
   required property var panel
 
   // Servers has its own second-level sub-nav. The create form and the log
   // viewer are separate views from the list so neither pushes the server rows
   // off screen. A Logs click on a row switches to the log view.
   property string serversSubTab: "list"
+
+  // Join targets come from the detected server list, never from a hardcoded
+  // launcher name, version or address. Kept at the root so both the client bar
+  // and the server rows read the same source.
+  property var minecraftJoinServers: Gaming.minecraftServers(hub.dockerContainers || [])
+  // Empty means use each server's saved choice. Prism and Official override it
+  // for one launch without changing the server.
+  property string clientChoice: ""
+  readonly property var clientChoiceOptions: [
+    { value: "", label: "Server default" },
+    { value: "prism", label: "Prism" },
+    { value: "official", label: "Official" }
+  ]
 
   // Closing the hub hides HubPanel, but this child's `visible` binding stays
   // true, so Storage's onVisibleChanged does not fire when it reopens on
@@ -786,10 +800,13 @@ Column {
       }
     }
 
-    // Client quick launch. Both buttons use the same clean Prism instance;
-    // only the join variant passes --server. Hidden when Prism is absent.
+    // Client quick launch. Join targets come from the detected Minecraft
+    // containers, so a renamed server or a new port is reflected without a code
+    // change. Prism vanilla and official vanilla both open to the main menu.
     Rectangle {
-      visible: serversSubTab === "list" && Gaming.minecraftClientInstalled(hub.extraApps || [])
+      visible: serversSubTab === "list" &&
+        (Gaming.minecraftClientInstalled(hub.extraApps || []) ||
+         hub.mcWizardClientInstalled.official)
       width: parent.width
       radius: Style.cornerRadius
       color: panel.accentSoft(0.08)
@@ -810,32 +827,55 @@ Column {
         }
         Text {
           textFormat: Text.PlainText
-          text: "Prism · clean 26.3 · join the local server or open to the main menu"
+          text: "Join a detected server or open a client to the main menu. The server's saved choice is used unless you pick one here."
           color: panel.softText(0.75)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
           wrapMode: Text.Wrap
           width: parent.width
         }
-        Row {
+        Dropdown {
+          width: Math.min(parent.width, 260)
+          label: "Join with"
+          value: gamesTabRoot.clientChoice
+          options: gamesTabRoot.clientChoiceOptions
+          onChanged: gamesTabRoot.clientChoice = value
+        }
+        Flow {
+          width: parent.width
           spacing: 8
-          Button {
-            iconText: "󰍳"
-            text: "Join Vember server"
-            tooltipText: "Launch Minecraft already connected to vemberos:25565"
-            onClicked: hub.launchMinecraftClient("server")
+          Repeater {
+            model: gamesTabRoot.minecraftJoinServers || []
+            delegate: Button {
+              iconText: "󰍳"
+              text: "Join " + (modelData.name || "server")
+              enabled: !hub.dockerBusy && !hub.mcServerLaunchBusy && modelData.port > 0
+              tooltipText: modelData.port > 0
+                ? "Start this server and open the client joined to it on port " + modelData.port
+                : "No published port detected for this server"
+              onClicked: hub.launchMinecraftServer(modelData.name, modelData.port, "",
+                gamesTabRoot.clientChoice)
+            }
           }
           Button {
             iconText: "󰐊"
             text: "Plain vanilla"
-            tooltipText: "Open the same clean client to the main menu"
+            tooltipText: "Open Prism to the main menu"
             onClicked: hub.launchMinecraftClient("vanilla")
+          }
+          Button {
+            iconText: "󰐊"
+            text: "Official launcher"
+            tooltipText: "Open the official Minecraft Launcher to the main menu"
+            onClicked: hub.launchMinecraftOfficial()
           }
         }
         Text {
-          visible: Shell.trim(hub.mcClientLaunchStatus).length > 0
+          visible: Shell.trim(hub.mcClientLaunchStatus).length > 0 ||
+            Shell.trim(hub.mcServerLaunchStatus).length > 0
           textFormat: Text.PlainText
-          text: hub.mcClientLaunchStatus
+          text: Shell.trim(hub.mcServerLaunchStatus).length > 0
+            ? hub.mcServerLaunchStatus : hub.mcClientLaunchStatus
           color: panel.softText(0.8)
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
@@ -951,6 +991,21 @@ Column {
           width: parent.width
         }
 
+        // Edit progress and result land here: the dialog closes when Save is
+        // accepted, so its outcome has to remain visible on this card.
+        Text {
+          visible: Shell.trim(hub.mcEditStatus).length > 0 || Shell.trim(hub.mcEditResult).length > 0
+          textFormat: Text.PlainText
+          text: Shell.trim(hub.mcEditResult).length > 0 ? hub.mcEditResult : hub.mcEditStatus
+          color: hub.mcEditResult.indexOf("failed") !== -1 ||
+            hub.mcEditResult.indexOf("Could not") === 0 ||
+            hub.mcEditResult.indexOf("may only") !== -1 ? "#ef4444" : panel.softText(0.78)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+
         // Shared with the Storage size card so both views see the same servers.
         // The keyword list lives in Gaming.mjs and is covered by model tests.
         property var detectedGameServers: Gaming.gameServerContainers(
@@ -1002,9 +1057,10 @@ Column {
                   text: "Launch"
                   enabled: !hub.dockerBusy && !hub.mcServerLaunchBusy &&
                     Docker.publishedPorts(modelData.ports || "").length > 0
-                  tooltipText: "Start this server and open Prism joined to it"
+                  tooltipText: "Start this server and open the chosen client joined to it"
                   onClicked: hub.launchMinecraftServer(
-                    modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0, "")
+                    modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0, "",
+                    gamesTabRoot.clientChoice)
                 }
                 Button {
                   iconText: "󰐊"
@@ -1039,6 +1095,15 @@ Column {
                   text: "Data folder"
                   tooltipText: "Open the host path mounted at /data in the file manager"
                   onClicked: hub.openMinecraftDataFolder(modelData.name)
+                }
+                Button {
+                  visible: Gaming.isMinecraftContainer(modelData)
+                  iconText: "󰒝"
+                  text: "Edit"
+                  enabled: !hub.dockerBusy
+                  tooltipText: "Rename this server, change its port, or refresh mods from a Prism instance"
+                  onClicked: hub.openMinecraftServerEditDialog(
+                    modelData.name, Docker.publishedPorts(modelData.ports || "")[0] || 0)
                 }
                 Button {
                   iconText: "󰆴"

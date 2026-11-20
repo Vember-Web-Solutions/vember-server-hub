@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.56"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 132
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.58"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 134
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -106,9 +106,17 @@ Item {
   property string mcServerLaunchAddress: ""
   property int mcServerLaunchPort: 0
   property string mcServerLaunchSource: ""
+  property string mcServerLaunchClient: "prism"
   property string mcServerLaunchInstanceDir: ""
   property string mcServerLaunchStatus: ""
   property bool mcServerLaunchBusy: false
+  // Prism infrastructure: one clone template plus the two keybinding instances.
+  // The seed is read once to keep Controlify; after that the template stands
+  // alone, so an emptied Trash cannot break a launch.
+  property string mcPrismSeedDir: homeDir + "/.local/share/Trash/files/vemberos-server"
+  property bool mcPrismSetupBusy: false
+  property string mcPrismSetupStatus: ""
+  property var mcClientDefaults: ({})
   property string mcServerDataDirDraft: gameMount + "/GameServers/vember-minecraft-data"
   // Name the data dir was auto-derived from. If the field still matches that
   // derivation, a name edit follows it; a hand-edited path is left alone.
@@ -148,6 +156,23 @@ Item {
   property bool mcServerLogsBusy: false
   property string mcServerLogsText: ""
   property string mcDataDirName: ""
+
+  // Editing an existing Minecraft server. The visual dialog owns its confirm
+  // flag; the backend owns the inspected settings and the save process chain.
+  property string mcEditOldName: ""
+  property string mcEditNameDraft: ""
+  property int mcEditPortDraft: 0
+  property var mcEditPortOptions: []
+  property string mcEditPortNote: ""
+  property var mcEditModpacks: []
+  property var mcEditModpackOptions: []
+  property string mcEditModpack: ""
+  property string mcEditClient: "prism"
+  property string mcEditStatus: ""
+  property string mcEditResult: ""
+  property string mcEditDataDir: ""
+  property var _mcEditSettings: ({})
+  property var _mcEditPendingRecreate: []
 
   property bool steamInstalled: false
   property bool steamRunning: false
@@ -325,10 +350,22 @@ Item {
       mcServerLaunchAddress: root.mcServerLaunchAddress,
       mcServerLaunchStatus: root.mcServerLaunchStatus,
       mcServerLaunchBusy: root.mcServerLaunchBusy,
+      mcServerLaunchClient: root.mcServerLaunchClient,
+      mcPrismSetupBusy: root.mcPrismSetupBusy,
+      mcPrismSetupStatus: root.mcPrismSetupStatus,
+      mcClientDefaults: Object.keys(root.mcClientDefaults).length,
       mcClientLaunchStatus: root.mcClientLaunchStatus,
       mcServerLogsName: root.mcServerLogsName,
       mcServerLogsBusy: root.mcServerLogsBusy,
       mcServerLogsLines: root.mcServerLogsText.length,
+      mcEditOldName: root.mcEditOldName,
+      mcEditNameDraft: root.mcEditNameDraft,
+      mcEditPortDraft: root.mcEditPortDraft,
+      mcEditDataDir: root.mcEditDataDir,
+      mcEditClient: root.mcEditClient,
+      mcEditStatus: root.mcEditStatus,
+      mcEditResult: root.mcEditResult,
+      mcEditModpackOptions: root.mcEditModpackOptions.length,
       gameServerSizesBusy: root.gameServerSizesBusy,
       gameServerSizes: root.gameServerSizes,
       gameServerDataBytes: root.gameServerDataBytes,
@@ -1084,11 +1121,43 @@ Item {
     mcServerListDelayTimer.restart();
   }
 
-  // One click from a created server or a Servers row: prepare its Prism
-  // instance, start the container, wait for the port, then open Prism joined
-  // to it. The per-server instance id is derived from the container name so a
-  // later Launch needs no saved registry.
-  function launchMinecraftServer(name, port, sourceId) {
+  // The official launcher has no auto-join flag, so this opens it to the main
+  // menu. The per-server Join button adds the server to its list first.
+  function launchMinecraftOfficial() {
+    mcClientLaunchProc.mode = "official";
+    mcClientLaunchProc.command = Gaming.minecraftOfficialLaunchCommand();
+    mcClientLaunchProc.modeLabel = "official Minecraft launcher";
+    mcClientLaunchProc.running = false;
+    mcClientLaunchStatus = "Launching " + mcClientLaunchProc.modeLabel + "…";
+    lastActionMessage = mcClientLaunchStatus;
+    mcClientLaunchProc.running = true;
+    handOffToExternalSurface();
+  }
+
+  // Prism setup is idempotent and runs before any instance is cloned. Keeping
+  // it separate from a launch means a broken Trash or a missing template is
+  // reported on its own, not mistaken for a failed server start.
+  function setupMinecraftPrism() {
+    if (mcPrismSetupBusy)
+      return;
+    mcPrismSetupBusy = true;
+    mcPrismSetupStatus = "Preparing Prism template…";
+    mcPrismSetupProc.command = Gaming.minecraftPrismSetupCommand(homeDir, mcPrismSeedDir);
+    mcPrismSetupProc.running = false;
+    mcPrismSetupProc.running = true;
+  }
+
+  function refreshMinecraftClientDefaults() {
+    mcClientDefaultsProc.command = Gaming.minecraftClientDefaultsCommand(homeDir);
+    mcClientDefaultsProc.running = false;
+    mcClientDefaultsProc.running = true;
+  }
+
+  // One click from a created server or a Servers row: start the container,
+  // wait for a real status ping, then open the chosen client. Prism gets a
+  // per-server auto-join instance; the official launcher gets the server added
+  // to its list before it opens. A join-bar choice overrides the saved default.
+  function launchMinecraftServer(name, port, sourceId, clientOverride) {
     var server = Shell.trim(String(name || ""));
     var chosen = parseInt(port, 10);
     if (!server || mcServerLaunchBusy)
@@ -1100,31 +1169,44 @@ Item {
       return;
     }
     var host = defaultServerName();
+    var override = Shell.trim(String(clientOverride || ""));
+    var saved = mcClientDefaults[server] || "prism";
+    mcServerLaunchClient = override === "official" || override === "prism"
+      ? override : (saved === "official" ? "official" : "prism");
     mcServerLaunchName = server;
     mcServerLaunchPort = chosen;
     mcServerLaunchAddress = host + ":" + chosen;
     mcServerLaunchSource = Shell.trim(String(sourceId || ""));
     mcServerLaunchInstanceDir = "";
     mcServerLaunchBusy = true;
-    mcServerLaunchStatus = "Preparing Prism instance for " + server + "…";
-    mcServerLaunchProc.step = "prepare";
-    mcServerLaunchProc.command = Gaming.minecraftServerInstanceCommand({
-      homeDir: homeDir, id: Gaming.minecraftInstanceId(server),
-      name: server, address: mcServerLaunchAddress,
-      sourceId: mcServerLaunchSource
-    });
+    if (mcServerLaunchClient === "official") {
+      // No Prism instance is needed. The saved choice is refreshed at setup so
+      // the per-server default still survives a hub restart.
+      mcServerLaunchStatus = "Starting " + server + "…";
+      mcServerLaunchProc.step = "start";
+      mcServerLaunchProc.command = Docker.actionCommand("start", server);
+    } else {
+      mcServerLaunchStatus = "Preparing Prism instance for " + server + "…";
+      mcServerLaunchProc.step = "prepare";
+      mcServerLaunchProc.command = Gaming.minecraftServerInstanceCommand({
+        homeDir: homeDir, id: Gaming.minecraftInstanceId(server),
+        name: server, address: mcServerLaunchAddress,
+        sourceId: mcServerLaunchSource, client: "prism"
+      });
+    }
     mcServerLaunchProc.running = false;
     mcServerLaunchProc.running = true;
   }
 
-  // Written at creation too, so the modpack source survives a hub restart.
+  // Written at creation too, so the modpack source and client choice survive a
+  // hub restart.
   function prepareServerInstance() {
     if (!mcServerLaunchName || !mcServerLaunchPort)
       return;
     mcServerInstanceProc.command = Gaming.minecraftServerInstanceCommand({
       homeDir: homeDir, id: Gaming.minecraftInstanceId(mcServerLaunchName),
       name: mcServerLaunchName, address: mcServerLaunchAddress,
-      sourceId: mcServerLaunchSource
+      sourceId: mcServerLaunchSource, client: mcServerLaunchClient
     });
     mcServerInstanceProc.running = false;
     mcServerInstanceProc.running = true;
@@ -1504,6 +1586,179 @@ Item {
     gameServerRemoveResult = "Removing " + target + " and its /data folder…";
     gameServerRemoveProc.command = Docker.removeGameServerCommand(target);
     gameServerRemoveProc.running = true;
+  }
+
+  // --- Edit an existing Minecraft server ---
+  // The dialog shows the inspected settings so a modpack stays on its exact
+  // loader/version/image. Only name, port and mod source are editable.
+  function _mcEditBuildModpackOptions() {
+    var out = [{
+      value: "", label: "Keep current mods",
+      detail: "Leave the server's mods folder as it is"
+    }];
+    var list = mcEditModpacks || [];
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i] || {};
+      out.push({
+        value: m.id || "", label: m.name || m.id || "Prism instance",
+        detail: (m.loader || "") + (m.version ? " " + m.version : "")
+      });
+    }
+    mcEditModpackOptions = out;
+  }
+
+  function _mcEditRecomputePorts() {
+    var status = Wizard.editPortStatus(dockerContainers, mcWizardListeningText,
+      mcEditOldName, mcEditPortDraft);
+    mcEditPortOptions = status.options;
+    mcEditPortNote = status.note;
+  }
+
+  function openMinecraftServerEditDialog(name, port) {
+    var old = Shell.trim(String(name || ""));
+    if (old.length === 0 || dockerBusy)
+      return;
+    var chosen = parseInt(port, 10);
+    mcEditOldName = old;
+    mcEditNameDraft = old;
+    mcEditPortDraft = isFinite(chosen) ? chosen : 0;
+    mcEditModpack = "";
+    mcEditModpacks = [];
+    mcEditModpackOptions = [];
+    mcEditClient = mcClientDefaults[old] || "prism";
+    mcEditDataDir = "";
+    mcEditStatus = "Inspecting " + old + "…";
+    mcEditResult = "";
+    _mcEditSettings = ({});
+    _mcEditPendingRecreate = [];
+    _mcEditRecomputePorts();
+    refreshMinecraftPorts();
+    mcEditInspectProc.command = Docker.inspectMinecraftServerCommand(old);
+    mcEditInspectProc.running = false;
+    mcEditInspectProc.running = true;
+    mcEditModpackScanProc.command = Wizard.modpackScanCommand(homeDir);
+    mcEditModpackScanProc.running = false;
+    mcEditModpackScanProc.running = true;
+    refreshMinecraftClientDefaults();
+  }
+
+  function closeMinecraftServerEditDialog() {
+    mcEditOldName = "";
+    mcEditNameDraft = "";
+    mcEditPortDraft = 0;
+    mcEditPortOptions = [];
+    mcEditPortNote = "";
+    mcEditModpacks = [];
+    mcEditModpackOptions = [];
+    mcEditModpack = "";
+    mcEditClient = "prism";
+    mcEditStatus = "";
+    mcEditResult = "";
+    mcEditDataDir = "";
+    _mcEditSettings = ({});
+    _mcEditPendingRecreate = [];
+  }
+
+  function mcEditSetName(name) {
+    mcEditNameDraft = Shell.trim(String(name || ""));
+  }
+
+  function mcEditSetPort(value) {
+    var chosen = parseInt(value, 10);
+    mcEditPortDraft = isFinite(chosen) ? chosen : 0;
+    _mcEditRecomputePorts();
+  }
+
+  function mcEditChooseModpack(id) {
+    mcEditModpack = Shell.trim(String(id || ""));
+  }
+
+  function mcEditSetClient(value) {
+    mcEditClient = Shell.trim(String(value || "")) === "official" ? "official" : "prism";
+  }
+
+  // The client choice lives in the per-server sidecar, so saving an edit has
+  // to refresh it after the container has been recreated under the new name.
+  function saveMinecraftEditClient() {
+    mcServerLaunchName = mcEditNameDraft;
+    mcServerLaunchPort = mcEditPortDraft;
+    mcServerLaunchAddress = defaultServerName() + ":" + mcEditPortDraft;
+    mcServerLaunchSource = Shell.trim(String(mcEditModpack || ""));
+    mcServerLaunchClient = mcEditClient;
+    prepareServerInstance();
+  }
+
+  function _mcEditFail(message, code, detail) {
+    dockerBusy = false;
+    dockerBusyName = "";
+    mcEditStatus = "Edit failed.";
+    mcEditResult = Shell.failureMessage(message, code, detail);
+    lastActionMessage = mcEditResult;
+    notify(lastActionMessage);
+    refreshDocker();
+    refreshGames();
+  }
+
+  function _mcEditStartRecreate() {
+    mcEditRecreateProc.command = _mcEditPendingRecreate;
+    mcEditRecreateProc.running = false;
+    mcEditRecreateProc.running = true;
+  }
+
+  function saveMinecraftServerEdit() {
+    var old = Shell.trim(String(mcEditOldName || ""));
+    var name = Shell.trim(String(mcEditNameDraft || ""));
+    var port = parseInt(mcEditPortDraft, 10);
+    var s = _mcEditSettings || {};
+    var dataDir = Shell.trim(String(s.dataDir || ""));
+    if (old.length === 0 || dockerBusy)
+      return false;
+    if (!/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(name)) {
+      mcEditResult = "Container name may only use letters, numbers, dot, dash and underscore, and must start with a letter or number.";
+      return false;
+    }
+    if (!(port > 0 && port <= 65535)) {
+      mcEditResult = "Choose a port between 1 and 65535.";
+      return false;
+    }
+    if (dataDir.charAt(0) !== "/") {
+      mcEditResult = "Could not find the server's /data folder. Close the dialog and try again.";
+      return false;
+    }
+
+    var pack = null;
+    var packs = mcEditModpacks || [];
+    for (var i = 0; i < packs.length; i++) {
+      if ((packs[i] || {}).id === mcEditModpack) { pack = packs[i]; break; }
+    }
+    var opts = {
+      name: name, port: port,
+      type: s.type || "PAPER", version: s.version || "LATEST",
+      memory: s.memory || "4G", difficulty: s.difficulty || "NORMAL",
+      dataDir: dataDir, image: s.image || "",
+      // A copied mods folder lives in /data; do not also bind the old /mods
+      // source over it, or the refreshed files would be hidden.
+      modsDir: pack ? "" : (s.modsDir || ""),
+      worldDir: s.worldDir || ""
+    };
+    _mcEditPendingRecreate = Docker.recreateMinecraftServerCommand(old, opts);
+    if (_mcEditPendingRecreate.length === 0) {
+      mcEditResult = "Could not build the recreate command for " + old + ".";
+      return false;
+    }
+
+    dockerBusy = true;
+    dockerBusyName = old;
+    mcEditStatus = "Saving " + old + "…";
+    mcEditResult = "";
+    if (pack && pack.modsDir) {
+      mcEditModsProc.command = Docker.refreshMinecraftModsCommand(dataDir, pack.modsDir, pack.supportDir);
+      mcEditModsProc.running = false;
+      mcEditModsProc.running = true;
+    } else {
+      _mcEditStartRecreate();
+    }
+    return true;
   }
 
   function runDockerPull(image, name) {
@@ -2591,13 +2846,15 @@ Item {
         root.mcServerCreateResult = "Success: " + root.mcServerNameDraft +
           (id ? " (" + id.slice(0, 12) + ")" : "") +
           " created on port " + root.mcServerPortDraft +
-          ". Use Games → Servers to Launch and join from Prism.";
+          ". Use Games → Servers to Launch and join from " +
+          (root.mcWizardClient === "official" ? "the official launcher." : "Prism.");
         root.mcServerCreateStatus = "Created — starting.";
         var host = defaultServerName();
         root.mcServerLaunchName = root.mcServerNameDraft;
         root.mcServerLaunchPort = root.mcServerPortDraft;
         root.mcServerLaunchAddress = host + ":" + root.mcServerPortDraft;
         root.mcServerLaunchSource = root.mcWizardModpack;
+        root.mcServerLaunchClient = root.mcWizardClient;
         root.prepareServerInstance();
         // Keep the hub-managed Prism entry pointed at the Vember server. A
         // second server only changes the wizard's join address, not the
@@ -2644,6 +2901,106 @@ Item {
         " server " + root.mcServerNameDraft + "…";
       mcServerCreateProc.command = root._mcPendingCreateCommand;
       mcServerCreateProc.running = true;
+    }
+  }
+
+  // --- Edit an existing Minecraft server ---------------------------------
+  // Inspect -> (optional mod refresh) -> recreate -> status ping. Each stage
+  // is its own process so the dialog can name the one that failed.
+
+  Process {
+    id: mcEditInspectProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var s = Docker.parseMinecraftServerInspection(text);
+        root._mcEditSettings = s;
+        root.mcEditDataDir = s.dataDir || "";
+        root.mcEditStatus = s.name
+          ? ("Editing " + s.name + " · " + (s.type || "PAPER") + " " + (s.version || "") +
+             (s.port ? " · port " + s.port : ""))
+          : "Could not read settings for " + root.mcEditOldName + ".";
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0)
+        root.mcEditResult = Shell.failureMessage(
+          "Could not inspect " + root.mcEditOldName, code, stderr.text);
+    }
+  }
+
+  Process {
+    id: mcEditModpackScanProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.mcEditModpacks = Wizard.parseModpackScan(text);
+        root._mcEditBuildModpackOptions();
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
+  Process {
+    id: mcEditModsProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var line = Shell.trim(text);
+        if (line.length > 0) root.mcEditStatus = line;
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) {
+        root._mcEditFail("Could not refresh mods for " + root.mcEditNameDraft, code, stderr.text);
+        return;
+      }
+      root.mcEditStatus = "Recreating " + root.mcEditOldName + " as " + root.mcEditNameDraft + "…";
+      root._mcEditStartRecreate();
+    }
+  }
+
+  Process {
+    id: mcEditRecreateProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) {
+        root._mcEditFail("Could not recreate server " + root.mcEditNameDraft, code, stderr.text);
+        return;
+      }
+      root.mcEditStatus = "Waiting for " + root.mcEditNameDraft + " on port " + root.mcEditPortDraft + "…";
+      mcEditWaitProc.command = Gaming.minecraftPortWaitCommand(root.mcEditPortDraft, 90);
+      mcEditWaitProc.running = false;
+      mcEditWaitProc.running = true;
+    }
+  }
+
+  Process {
+    id: mcEditWaitProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      var ready = Shell.trim(stdout.text) === "ready";
+      root.dockerBusy = false;
+      root.dockerBusyName = "";
+      if (ready) {
+        root.mcEditStatus = "Saved.";
+        root.mcEditResult = "Success: " + root.mcEditNameDraft +
+          " now runs on port " + root.mcEditPortDraft + " with its data dir preserved" +
+          (root.mcEditModpack ? " and fresh mods." : ".");
+      } else {
+        root.mcEditStatus = "Saved — not responding yet.";
+        root.mcEditResult = root.mcEditNameDraft + " was recreated on port " +
+          root.mcEditPortDraft + " but did not answer a status ping in time. " +
+          "It may still be starting; check its logs.";
+      }
+      root.lastActionMessage = root.mcEditResult;
+      root.notify(root.lastActionMessage);
+      root.saveMinecraftEditClient();
+      root.refreshDocker();
+      root.refreshGames();
+      root.refreshGameServerSizes();
+      root.refreshMinecraftServerList();
     }
   }
 
@@ -3050,8 +3407,18 @@ Item {
         running = false;
         running = true;
       } else if (step === "wait") {
-        root.mcServerLaunchBusy = false;
         var ready = Shell.trim(stdout.text) === "ready";
+        if (root.mcServerLaunchClient === "official") {
+          root.mcServerLaunchStatus = "Adding " + root.mcServerLaunchAddress +
+            " to the official launcher's server list…";
+          step = "official-list";
+          command = Gaming.minecraftOfficialServerListCommand(
+            homeDir, root.mcServerLaunchAddress, root.mcServerLaunchName);
+          running = false;
+          running = true;
+          return;
+        }
+        root.mcServerLaunchBusy = false;
         root.mcServerLaunchStatus = ready
           ? ("Opening Prism and joining " + root.mcServerLaunchAddress)
           : (root.mcServerLaunchName + " is still starting — Prism will open with it in Multiplayer.");
@@ -3063,6 +3430,16 @@ Item {
         root.handOffToExternalSurface();
         mcServerListDelayTimer.restart();
         mcServerEntryDelayTimer.restart();
+      } else if (step === "official-list") {
+        root.mcServerLaunchBusy = false;
+        root.mcServerLaunchStatus = "Opening the official launcher — pick " +
+          root.mcServerLaunchName + " from Multiplayer.";
+        root.lastActionMessage = root.mcServerLaunchStatus;
+        mcServerClientProc.command = Gaming.minecraftOfficialLaunchCommand();
+        mcServerClientProc.running = false;
+        mcServerClientProc.running = true;
+        root.handOffToExternalSurface();
+        root.refreshMinecraftClientDefaults();
       }
     }
   }
@@ -3072,7 +3449,8 @@ Item {
     stdout: StdioCollector {}
     stderr: StdioCollector {
       onStreamFinished: if (Shell.trim(text).length > 0)
-        root.mcServerLaunchStatus = "Prism: " + Shell.trim(text)
+        root.mcServerLaunchStatus =
+          (root.mcServerLaunchClient === "official" ? "Launcher: " : "Prism: ") + Shell.trim(text)
     }
     onExited: function(code) {
       if (code === 0) {
@@ -3088,6 +3466,39 @@ Item {
       onStreamFinished: {
         var dir = Shell.trim(text);
         if (dir.charAt(0) === "/") root.mcServerLaunchInstanceDir = dir;
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code === 0) root.refreshMinecraftClientDefaults();
+    }
+  }
+
+  Process {
+    id: mcPrismSetupProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var made = Shell.trim(text);
+        if (made.length > 0) root.mcPrismSetupStatus = "Prism ready: " + made;
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.mcPrismSetupBusy = false;
+      if (code !== 0) {
+        root.mcPrismSetupStatus = Shell.failureMessage("Prism setup failed", code, stderr.text);
+        root.notify(root.mcPrismSetupStatus);
+        return;
+      }
+      root.refreshMinecraftClientDefaults();
+    }
+  }
+
+  Process {
+    id: mcClientDefaultsProc
+    stdout: StdioCollector {
+      onStreamFinished: {
+        root.mcClientDefaults = Gaming.parseMinecraftClientDefaults(text);
       }
     }
     stderr: StdioCollector {}
@@ -3379,6 +3790,8 @@ Item {
     loadHubConfig();
     loadOmarchyUpdateLog();
     loadInstallLog();
+    setupMinecraftPrism();
+    refreshMinecraftClientDefaults();
     refreshMinecraftServerList();
   }
 

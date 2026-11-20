@@ -166,8 +166,10 @@ export class MinecraftWizard {
         supportDir: shell.trim(parts[6] || "")
       };
     }).filter(function (m) {
-      // The hub's own join instance carries Fabric mods but is not a modpack.
-      var managed = m.id === "vemberos-server" || m.id === "vemberos-vanilla";
+      // The template and the two keybinding clones carry Fabric mods but are
+      // hub infrastructure, not modpacks the user can pull mods from.
+      var managed = ["minecraft-server", "minecraft-join", "minecraft-vanilla",
+        "vemberos-server", "vemberos-vanilla"].indexOf(m.id) !== -1;
       return !managed && m.id.length > 0 && m.modsDir.length > 0 &&
         (m.loader === "FORGE" || m.loader === "FABRIC");
     });
@@ -296,6 +298,31 @@ export class MinecraftWizard {
     }
     return { used: used, free: free, options: options, port: chosen, note: note };
   }
+
+  // Editing excludes the container being changed from the used set: its own
+  // port is not a collision. The host scan sees that same published port as a
+  // listener, so it is dropped too — otherwise every edit would be pushed off
+  // the port the server already owns.
+  editPortStatus(containers, listeningText, oldName, currentPort) {
+    var skip = shell.trim(String(oldName || ""));
+    var others = (Array.isArray(containers) ? containers : []).filter(function (c) {
+      return shell.trim(String((c || {}).name || "")) !== skip;
+    });
+    var wanted = parseInt(currentPort, 10);
+    var listeners = this.parseListeningPorts(listeningText).filter(function (p) {
+      return !(isFinite(wanted) && p === wanted);
+    });
+    var status = this.portStatus(others, listeners.join("\n"), currentPort);
+    if (isFinite(wanted) && this.portPool().indexOf(wanted) !== -1 &&
+        status.free.indexOf(wanted) !== -1) {
+      status.options = status.free.map(function (p) {
+        return { value: String(p), label: String(p) + (p === wanted ? " — current" :
+          (p === 25565 ? " — default" : " — free")) };
+      });
+      status.note = "Keeping current port " + wanted + ".";
+    }
+    return status;
+  }
 }
 
 export function clientOptions(...args) { return new MinecraftWizard().clientOptions(...args); }
@@ -318,3 +345,4 @@ export function listeningPortsCommand(...args) { return new MinecraftWizard().li
 export function parseListeningPorts(...args) { return new MinecraftWizard().parseListeningPorts(...args); }
 export function chooseFreePort(...args) { return new MinecraftWizard().chooseFreePort(...args); }
 export function portStatus(...args) { return new MinecraftWizard().portStatus(...args); }
+export function editPortStatus(...args) { return new MinecraftWizard().editPortStatus(...args); }

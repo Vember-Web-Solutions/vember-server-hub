@@ -2,6 +2,7 @@
 
 import json
 import socket
+import struct
 import subprocess
 from pathlib import Path
 
@@ -427,7 +428,7 @@ class TestGameServerDetectionAndSizes:
         assert out[0] == {
             "serverType": "container", "name": "vember-minecraft",
             "image": "itzg/minecraft-server:latest", "state": "running",
-            "status": "up",
+            "status": "up", "ports": "",
         }
         assert out[1]["serverType"] == "steam"
         assert out[1]["installdir"] == "/mnt/games/cs2"
@@ -442,6 +443,36 @@ class TestGameServerDetectionAndSizes:
         )
         assert len(out) == 1  # the empty container does not match a keyword
         assert out[0]["name"] == "Steam Dedicated Server"
+
+    def test_client_bar_uses_detected_servers_not_a_hardcoded_name(self, js):
+        containers = [
+            {"name": "RPG", "image": "itzg/minecraft-server:java17",
+             "ports": "0.0.0.0:25570->25570/tcp"},
+            {"name": "bigheads", "image": "itzg/minecraft-server:latest",
+             "ports": "0.0.0.0:25571->25571/tcp, [::]:25571->25571/tcp"},
+            {"name": "postgres", "image": "postgres:16",
+             "ports": "0.0.0.0:5432->5432/tcp"},
+        ]
+        out = js("console.log(JSON.stringify(Gaming.minecraftServers("
+                 + json.dumps(containers) + ")))")
+        assert out == [
+            {"name": "RPG", "image": "itzg/minecraft-server:java17", "port": 25570},
+            {"name": "bigheads", "image": "itzg/minecraft-server:latest", "port": 25571},
+        ]
+
+    def test_minecraft_predicate_matches_image_and_name(self, js):
+        yes = js("console.log(JSON.stringify(Gaming.isMinecraftContainer("
+                 '{name:"my-minecraft",image:"custom"})))')
+        by_image = js("console.log(JSON.stringify(Gaming.isMinecraftContainer("
+                      '{name:"RPG",image:"itzg/minecraft-server:java17"})))')
+        no = js("console.log(JSON.stringify(Gaming.isMinecraftContainer("
+                '{name:"postgres",image:"postgres:16"})))')
+        assert yes is True and by_image is True and no is False
+
+    def test_minecraft_server_without_published_port_has_zero(self, js):
+        out = js('console.log(JSON.stringify(Gaming.minecraftServers('
+                 '[{name:"RPG",image:"itzg/minecraft-server:java17"}])))')
+        assert out == [{"name": "RPG", "image": "itzg/minecraft-server:java17", "port": 0}]
 
     def test_size_command_passes_names_as_args_not_script(self, js):
         cmd = js(
@@ -545,18 +576,18 @@ class TestMinecraftClientLaunch:
 
     def test_join_command_uses_the_join_instance(self, js):
         cmd = js('console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("server")))')
-        assert cmd == ["prismlauncher", "--launch", "vemberos-server"]
+        assert cmd == ["prismlauncher", "--launch", "minecraft-join"]
 
     def test_vanilla_command_uses_the_plain_instance(self, js):
         cmd = js('console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("vanilla")))')
-        assert cmd == ["prismlauncher", "--launch", "vemberos-vanilla"]
+        assert cmd == ["prismlauncher", "--launch", "minecraft-vanilla"]
         assert "--server" not in cmd
 
     def test_unknown_mode_falls_back_to_plain_launch(self, js):
         for mode in ("", "bogus"):
             cmd = js("console.log(JSON.stringify(Gaming.minecraftClientLaunchCommand("
                      + __import__("json").dumps(mode) + ")))")
-            assert cmd == ["prismlauncher", "--launch", "vemberos-vanilla"]
+            assert cmd == ["prismlauncher", "--launch", "minecraft-vanilla"]
 
     def test_installed_detection(self, js):
         apps = [{"id": "steam", "installed": True},
@@ -663,8 +694,8 @@ class TestMinecraftServerList:
         dirs = js(
             'console.log(JSON.stringify(Gaming.minecraftJoinGameDirs("/home/someone")))'
         )
-        assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-server/minecraft" in dirs
-        assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-vanilla/minecraft" in dirs
+        assert "/home/someone/.local/share/PrismLauncher/instances/minecraft-join/minecraft" in dirs
+        assert "/home/someone/.local/share/PrismLauncher/instances/minecraft-vanilla/minecraft" in dirs
         assert any(".var/app/org.prismlauncher.PrismLauncher" in d for d in dirs)
 
 
@@ -672,7 +703,7 @@ class TestOneClickLaunch:
     """Each created server gets its own Prism auto-join instance."""
 
     @staticmethod
-    def _template(home, instance_id="vemberos-server"):
+    def _template(home, instance_id="minecraft-server"):
         root = home / ".local/share/PrismLauncher/instances" / instance_id
         (root / "minecraft" / "mods").mkdir(parents=True)
         (root / "minecraft" / "mods" / "controlify.jar").write_text("jar")
@@ -696,7 +727,10 @@ class TestOneClickLaunch:
 
     def test_instance_id_is_stable_and_reserves_hub_instances(self, js):
         assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("My Cool Server!")))') == "my-cool-server"
-        assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("vemberos-server")))') == "server-vemberos-server"
+        for reserved in ("minecraft-server", "minecraft-join", "minecraft-vanilla",
+                         "vemberos-server", "vemberos-vanilla"):
+            assert js("console.log(JSON.stringify(Gaming.minecraftInstanceId("
+                      + __import__("json").dumps(reserved) + ")))") == "server-" + reserved
         assert js('console.log(JSON.stringify(Gaming.minecraftInstanceId("  ")))') == "vember-server"
 
     def test_unsafe_inputs_are_rejected(self, js):
@@ -725,8 +759,8 @@ class TestOneClickLaunch:
                             '"localhost:25566", "Second Server")))'))
         assert (dst / "minecraft/servers.dat").read_bytes() == expected
         meta = json.loads((dst / "vember-hub.json").read_text())
-        assert meta == {"container": "Second Server", "sourceId": "vemberos-server",
-                        "address": "localhost:25566"}
+        assert meta == {"container": "Second Server", "sourceId": "minecraft-server",
+                        "address": "localhost:25566", "client": "prism"}
         assert template.exists()
 
     def test_prepare_is_idempotent_and_keeps_the_source(self, js, tmp_path):
@@ -811,3 +845,106 @@ class TestTotalInstalledGameCount:
 
     def test_empty_input_is_zero(self, js):
         assert js("console.log(Gaming.totalInstalledGameCount())") == 0
+
+
+class TestMinecraftTemplateAndClients:
+    """Hub-owned template, keybinding clones and per-server client choice."""
+
+    @staticmethod
+    def _run(cmd):
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+
+    @staticmethod
+    def _setup_cmd(js, home, seed=""):
+        return js("console.log(JSON.stringify(Gaming.minecraftPrismSetupCommand("
+                  + json.dumps(str(home)) + ", " + json.dumps(str(seed)) + ")))")
+
+    def test_setup_seeds_template_and_two_keybinding_clones(self, js, tmp_path):
+        root = tmp_path / ".local/share/PrismLauncher/instances"
+        seed = tmp_path / "seed"
+        (seed / "minecraft" / "mods").mkdir(parents=True)
+        (seed / "minecraft" / "mods" / "controlify.jar").write_text("jar")
+        (seed / "instance.cfg").write_text("[General]\nname=Old\n")
+        (seed / "mmc-pack.json").write_text('{"components":[],"formatVersion":1}')
+        cmd = self._setup_cmd(js, tmp_path, seed)
+        run = self._run(cmd)
+        assert run.returncode == 0, run.stderr
+        assert run.stdout.strip() == "minecraft-server,minecraft-join,minecraft-vanilla"
+        for iid in ("minecraft-server", "minecraft-join", "minecraft-vanilla"):
+            assert (root / iid / "instance.cfg").is_file()
+        assert "name=Vember Minecraft Template" in (
+            root / "minecraft-server" / "instance.cfg").read_text()
+        join_cfg = (root / "minecraft-join" / "instance.cfg").read_text()
+        assert "JoinServerOnLaunch=true" in join_cfg
+        assert "JoinServerOnLaunchAddress=vemberos:25565" in join_cfg
+        assert "JoinServerOnLaunch" not in (
+            root / "minecraft-vanilla" / "instance.cfg").read_text()
+        assert (root / "minecraft-join" / "minecraft" / "mods" / "controlify.jar").exists()
+        again = self._run(cmd)
+        assert again.returncode == 0 and again.stdout.strip() == "ready"
+
+    def test_setup_without_seed_builds_a_usable_template(self, js, tmp_path):
+        run = self._run(self._setup_cmd(js, tmp_path))
+        assert run.returncode == 0, run.stderr
+        root = tmp_path / ".local/share/PrismLauncher/instances"
+        pack = json.loads((root / "minecraft-server" / "mmc-pack.json").read_text())
+        versions = [c["version"] for c in pack["components"]
+                    if c["uid"] == "net.minecraft"]
+        assert versions == ["26.3"]
+
+    def test_setup_rejects_relative_paths(self, js):
+        assert self._setup_cmd(js, "relative/home") == ["sh", "-c", "exit 1"]
+        assert self._setup_cmd(js, "/tmp/home", "relative/seed") == [
+            "sh", "-c", "exit 1"]
+
+    def test_client_defaults_are_read_from_sidecars(self, js, tmp_path):
+        root = tmp_path / ".local/share/PrismLauncher/instances"
+        for name, client in (("One", "prism"), ("Two", "official")):
+            instance = root / name
+            instance.mkdir(parents=True)
+            (instance / "vember-hub.json").write_text(
+                json.dumps({"container": name, "client": client}))
+        cmd = js("console.log(JSON.stringify(Gaming.minecraftClientDefaultsCommand("
+                 + json.dumps(str(tmp_path)) + ")))")
+        run = self._run(cmd)
+        assert run.returncode == 0, run.stderr
+        parsed = js("console.log(JSON.stringify(Gaming.parseMinecraftClientDefaults("
+                    + json.dumps(run.stdout) + ")))")
+        assert parsed == {"One": "prism", "Two": "official"}
+
+    def test_official_list_merges_and_is_idempotent(self, js, tmp_path):
+        def add(addr, name):
+            cmd = js("console.log(JSON.stringify(Gaming.minecraftOfficialServerListCommand("
+                     + json.dumps(str(tmp_path)) + ", " + json.dumps(addr) + ", "
+                     + json.dumps(name) + ")))")
+            run = self._run(cmd)
+            assert run.returncode == 0, run.stderr
+            return run
+
+        add("vemberos:25565", "First")
+        add("vemberos:25566", "Second")
+        again = add("vemberos:25566", "Second")
+        assert again.stdout.strip() == "2"
+        raw = (tmp_path / ".minecraft" / "servers.dat").read_bytes()
+        assert b"vemberos:25565" in raw and b"First" in raw
+        assert b"vemberos:25566" in raw and b"Second" in raw
+        assert struct.unpack_from(">i", raw, 14)[0] == 2
+
+    def test_official_launch_uses_the_installed_launcher(self, js):
+        cmd = js("console.log(JSON.stringify(Gaming.minecraftOfficialLaunchCommand()))")
+        assert cmd[:2] == ["sh", "-c"]
+        assert "minecraft-launcher" in cmd[2]
+        assert "flatpak" in cmd[2]
+
+    def test_instance_sidecar_records_the_official_choice(self, js, tmp_path):
+        template = tmp_path / ".local/share/PrismLauncher/instances" / "minecraft-server"
+        template.mkdir(parents=True)
+        (template / "instance.cfg").write_text("[General]\nname=Template\n")
+        opts = {"homeDir": str(tmp_path), "id": "official-server", "name": "Official",
+                "address": "vemberos:25590", "client": "official"}
+        cmd = js("console.log(JSON.stringify(Gaming.minecraftServerInstanceCommand("
+                 + json.dumps(opts) + ")))")
+        run = self._run(cmd)
+        assert run.returncode == 0, run.stderr
+        sidecar = tmp_path / ".local/share/PrismLauncher/instances" / "official-server" / "vember-hub.json"
+        assert json.loads(sidecar.read_text())["client"] == "official"

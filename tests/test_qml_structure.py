@@ -2845,13 +2845,13 @@ class TestMinecraftDirectLaunch:
         assert "handOffToExternalSurface()" in body
         assert "id: mcClientLaunchProc" in panel
 
-    def test_both_buttons_exist_and_are_gated(self):
+    def test_join_buttons_are_dynamic_and_vanilla_is_kept(self):
         tabs = read(REPO / "ui/tabs/GamesTab.qml")
-        assert 'hub.launchMinecraftClient("server")' in tabs
+        assert "hub.launchMinecraftServer(modelData.name, modelData.port" in tabs
         assert 'hub.launchMinecraftClient("vanilla")' in tabs
         assert "Gaming.minecraftClientInstalled(hub.extraApps" in tabs
-        assert 'text: "Join Vember server"' in tabs
         assert 'text: "Plain vanilla"' in tabs
+        assert "Join Vember server" not in tabs
 
     def test_status_exposes_launch_state(self):
         panel = read(REPO / "Panel.qml")
@@ -2949,7 +2949,7 @@ class TestOneClickLaunchWiring:
     def test_panel_chains_prepare_start_wait_and_join(self):
         panel = read(REPO / "Panel.qml")
         for name in (
-            "function launchMinecraftServer(name, port, sourceId)",
+            "function launchMinecraftServer(name, port, sourceId, clientOverride)",
             "function prepareServerInstance()",
             "function refreshServerInstanceList()",
             "id: mcServerLaunchProc",
@@ -3090,3 +3090,157 @@ class TestGameServerRemoval:
             "enabled: !panel.hub.dockerBusy",
         ):
             assert needle in text, needle + " missing from removal dialog"
+
+
+class TestMinecraftServerEditing:
+    """Name, port and mod changes recreate the container around the same data dir."""
+
+    @staticmethod
+    def _body(text, name):
+        match = re.search(r"function\s+" + name + r"\s*\([^)]*\)\s*\{", text)
+        assert match, name + " not found"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start:i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    def test_backend_declares_edit_state_and_all_five_processes(self):
+        panel = read(REPO / "Panel.qml")
+        for needle in (
+            'property string mcEditOldName: ""',
+            'property string mcEditNameDraft: ""',
+            'property int mcEditPortDraft: 0',
+            'property string mcEditStatus: ""',
+            'property string mcEditResult: ""',
+            "id: mcEditInspectProc", "id: mcEditModpackScanProc",
+            "id: mcEditModsProc", "id: mcEditRecreateProc", "id: mcEditWaitProc",
+        ):
+            assert needle in panel, needle + " missing from backend"
+
+    def test_open_inspects_the_container_and_scans_modpacks(self):
+        body = self._body(read(REPO / "Panel.qml"), "openMinecraftServerEditDialog")
+        assert "Docker.inspectMinecraftServerCommand(old)" in body
+        assert "Wizard.modpackScanCommand(homeDir)" in body
+        assert "mcEditNameDraft = old" in body
+        assert "mcEditResult = \"\"" in body
+
+    def test_save_validates_before_refresh_and_recreate(self):
+        body = self._body(read(REPO / "Panel.qml"), "saveMinecraftServerEdit")
+        assert "Docker.recreateMinecraftServerCommand(old, opts)" in body
+        assert "Docker.refreshMinecraftModsCommand(" in body
+        assert "return false" in body  # validation keeps the dialog open
+        assert "return true" in body   # a started edit closes it
+
+    def test_recreate_waits_for_a_real_status_ping(self):
+        panel = read(REPO / "Panel.qml")
+        assert "mcEditWaitProc.command = Gaming.minecraftPortWaitCommand(root.mcEditPortDraft, 90)" in panel
+        assert 'var ready = Shell.trim(stdout.text) === "ready"' in panel
+        assert "root.refreshDocker();" in panel
+        assert "root.refreshGameServerSizes();" in panel
+
+    def test_dialog_uses_the_backend_and_keeps_validation_errors_visible(self):
+        dialog = read(REPO / "ui" / "MinecraftServerEditDialog.qml")
+        for needle in (
+            "visible: panel.confirmEditMinecraftServer",
+            "if (panel.hub.saveMinecraftServerEdit())",
+            "panel.confirmEditMinecraftServer = false",
+            "panel.hub.mcEditSetName(text)",
+            "panel.hub.mcEditSetPort(value)",
+            "panel.hub.mcEditChooseModpack(value)",
+            "Pull mods from Prism instance",
+            "Docker cannot rename or republish a container in place",
+        ):
+            assert needle in dialog, needle + " missing from edit dialog"
+
+    def test_row_edit_button_is_minecraft_only(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert "Gaming.isMinecraftContainer(modelData)" in tab
+        assert "hub.openMinecraftServerEditDialog(" in tab
+        assert 'text: "Edit"' in tab
+
+    def test_hubpanel_declares_resets_and_instantiates_the_dialog(self):
+        hubpanel = read(REPO / "HubPanel.qml")
+        assert "property bool confirmEditMinecraftServer: false" in hubpanel
+        assert "panel.confirmEditMinecraftServer = false" in hubpanel
+        assert "hub.closeMinecraftServerEditDialog()" in hubpanel
+        assert "MinecraftServerEditDialog { panel: panel; cardRadius: card.radius }" in hubpanel
+
+
+class TestDynamicMinecraftClientBar:
+    """The Servers card builds join actions from detected servers, not literals."""
+
+    def test_no_hardcoded_launcher_or_address(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert "Prism · clean" not in tab
+        assert "vemberos:25565" not in tab
+        assert "Join Vember server" not in tab
+
+    def test_join_buttons_come_from_the_detected_server_list(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert "property var minecraftJoinServers: Gaming.minecraftServers(hub.dockerContainers || [])" in tab
+        assert "model: gamesTabRoot.minecraftJoinServers || []" in tab
+        assert '"Join " + (modelData.name || "server")' in tab
+        assert "hub.launchMinecraftServer(modelData.name, modelData.port" in tab
+
+    def test_plain_vanilla_still_opens_the_main_menu(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert 'text: "Plain vanilla"' in tab
+        assert 'hub.launchMinecraftClient("vanilla")' in tab
+
+
+class TestMinecraftClientTemplateWiring:
+    """Template setup lives in the hub; the client choice is visible in the UI."""
+
+    def test_panel_sets_up_template_and_supports_client_override(self):
+        panel = read(REPO / "Panel.qml")
+        for name in (
+            "function setupMinecraftPrism()",
+            "function refreshMinecraftClientDefaults()",
+            "function launchMinecraftServer(name, port, sourceId, clientOverride)",
+            "function launchMinecraftOfficial()",
+            "function saveMinecraftEditClient()",
+            "id: mcPrismSetupProc",
+            "id: mcClientDefaultsProc",
+            'step = "official-list"',
+            "Gaming.minecraftOfficialServerListCommand(",
+            "Gaming.minecraftOfficialLaunchCommand(",
+            "setupMinecraftPrism();",
+        ):
+            assert name in panel, name + " is missing"
+
+    def test_gaming_tab_has_client_picker_and_official_button(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        for name in (
+            'property string clientChoice: ""',
+            '{ value: "", label: "Server default" }',
+            '{ value: "prism", label: "Prism" }',
+            '{ value: "official", label: "Official" }',
+            'label: "Join with"',
+            'text: "Official launcher"',
+            "hub.launchMinecraftOfficial()",
+            "gamesTabRoot.clientChoice)",
+        ):
+            assert name in tab, name + " is missing"
+
+    def test_edit_dialog_has_join_from_dropdown(self):
+        dialog = read(REPO / "ui" / "MinecraftServerEditDialog.qml")
+        for name in (
+            'label: "Join from"',
+            "options: Wizard.clientOptions()",
+            "onChanged: panel.hub.mcEditSetClient(value)",
+        ):
+            assert name in dialog, name + " is missing"
+
+    def test_reserved_instance_ids_are_not_user_facing(self):
+        model = read(REPO / "model" / "Gaming.mjs")
+        for name in (
+            '"minecraft-server", "minecraft-join", "minecraft-vanilla",',
+            '"server" ? "minecraft-join" : "minecraft-vanilla";',
+        ):
+            assert name in model, name + " is missing"

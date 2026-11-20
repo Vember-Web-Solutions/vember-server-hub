@@ -61,6 +61,134 @@ class TestRemoveGameServer:
         assert out[4] == ""
 
 
+class TestMinecraftServerEditing:
+    """Inspect, refresh and recreate keep the data dir and validate before acting."""
+
+    def test_inspect_targets_one_container(self, js):
+        out = js('console.log(JSON.stringify(Docker.inspectMinecraftServerCommand("RPG")))')
+        assert out == ["docker", "inspect", "--format", "json", "RPG"]
+
+    def test_parse_inspection_reads_env_image_and_mounts(self, js):
+        raw = json.dumps({
+            "Name": "/RPG",
+            "Config": {
+                "Image": "itzg/minecraft-server:java17",
+                "Env": ["TYPE=FABRIC", "VERSION=1.20.1", "MEMORY=4G",
+                        "DIFFICULTY=NORMAL", "SERVER_PORT=25570"],
+            },
+            "NetworkSettings": {"Ports": {"25570/tcp": [{"HostPort": "25570"}]}},
+            "Mounts": [
+                {"Destination": "/data", "Source": "/mnt/games/GameServers/RPG-data"},
+                {"Destination": "/mods", "Source": "/home/elena/prism/mods"},
+                {"Destination": "/worlds/source", "Source": "/home/elena/prism/saves/World"},
+            ],
+        })
+        out = js("console.log(JSON.stringify(Docker.parseMinecraftServerInspection("
+                 + json.dumps(raw) + ")))")
+        assert out == {
+            "name": "RPG", "image": "itzg/minecraft-server:java17",
+            "type": "FABRIC", "version": "1.20.1", "memory": "4G",
+            "difficulty": "NORMAL", "port": 25570,
+            "dataDir": "/mnt/games/GameServers/RPG-data",
+            "modsDir": "/home/elena/prism/mods",
+            "worldDir": "/home/elena/prism/saves/World",
+        }
+
+    def test_parse_inspection_falls_back_to_published_port(self, js):
+        raw = json.dumps({
+            "Name": "/RPG", "Config": {"Image": "itzg/minecraft-server:latest", "Env": []},
+            "NetworkSettings": {"Ports": {"25572/tcp": [{"HostPort": "25572"}]}},
+            "Mounts": [],
+        })
+        out = js("console.log(JSON.stringify(Docker.parseMinecraftServerInspection("
+                 + json.dumps(raw) + ")))")
+        assert out["port"] == 25572
+
+    def test_bad_inspection_is_empty_not_partial(self, js):
+        out = js('console.log(JSON.stringify(Docker.parseMinecraftServerInspection("not json")))')
+        assert out["name"] == "" and out["port"] == 0 and out["dataDir"] == ""
+
+    def test_refresh_mods_is_positional_and_copies_support_dirs(self, js):
+        data = "/mnt/games/GameServers/RPG-data"
+        mods = "/home/elena/prism/mods"
+        src = "/home/elena/prism/minecraft"
+        out = js("console.log(JSON.stringify(Docker.refreshMinecraftModsCommand("
+                 + json.dumps(data) + ", " + json.dumps(mods) + ", "
+                 + json.dumps(src) + ")))")
+        assert out[0] == "sh" and out[1] == "-c" and out[3] == "sh"
+        assert out[4:7] == [data, mods, src]
+        script = out[2]
+        subprocess.run(["sh", "-n"], input=script, text=True, check=True)
+        for needle in (
+            "rm -rf --", 'cp -a "$mods"/.', "kubejs config defaultconfigs",
+            "Refusing to refresh into reserved path",
+            "Refusing to refresh into path with traversal",
+        ):
+            assert needle in script, needle + " missing from refresh script"
+
+    def test_refresh_refuses_reserved_target_in_the_script(self, js):
+        # Absolute reserved paths get a command, but the shell guard refuses
+        # before any copy happens.
+        cmd = js("console.log(JSON.stringify(Docker.refreshMinecraftModsCommand("
+                 '"/mnt/games/GameServers", "/tmp/mods", "")))')
+        assert cmd[:2] == ["sh", "-c"]
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        assert run.returncode == 2
+        assert "Refusing to refresh into reserved path" in run.stderr
+
+    def test_refresh_refuses_relative_target_in_the_model(self, js):
+        # Non-absolute targets never become a command at all.
+        out = js('console.log(JSON.stringify(Docker.refreshMinecraftModsCommand('
+                 '"relative", "/tmp/mods", "")))')
+        assert out == []
+
+    @staticmethod
+    def _recreate_out(js, name="bigheads", port=25571, data="/mnt/games/GameServers/RPG-data"):
+        opts = {"name": name, "port": port, "type": "FABRIC", "version": "1.20.1",
+                "memory": "4G", "difficulty": "NORMAL", "dataDir": data,
+                "image": "itzg/minecraft-server:java17", "modsDir": "", "worldDir": ""}
+        return js("console.log(JSON.stringify(Docker.recreateMinecraftServerCommand("
+                  + json.dumps("RPG") + ", " + json.dumps(opts) + ")))")
+
+    def test_recreate_is_positional_preserves_data_and_sets_server_port(self, js):
+        out = self._recreate_out(js)
+        assert out[0] == "sh" and out[1] == "-c" and out[3] == "sh"
+        assert out[4:7] == ["RPG", "bigheads", "25571"]
+        assert out[12] == "itzg/minecraft-server:java17"
+        script = out[2]
+        subprocess.run(["sh", "-n"], input=script, text=True, check=True)
+        for needle in (
+            'docker rm -f "$old"', 'docker run -d -it --name "$new"',
+            '-p "$port:$port"', '-v "$data:/data"', '-e SERVER_PORT="$port"',
+            'docker inspect "$new"', "Invalid container name", "Invalid Minecraft port",
+            "Refusing to recreate against reserved data dir",
+        ):
+            assert needle in script, needle + " missing from recreate script"
+
+    def test_recreate_defaults_image_from_version_when_none_supplied(self, js):
+        opts = {"name": "bigheads", "port": 25571, "version": "1.20.1",
+                "dataDir": "/mnt/games/GameServers/RPG-data"}
+        out = js("console.log(JSON.stringify(Docker.recreateMinecraftServerCommand("
+                 '"RPG", ' + json.dumps(opts) + ")))")
+        assert out[12] == "itzg/minecraft-server:java17"
+
+    def test_recreate_normalizes_unsafe_names_in_the_model(self, js):
+        for bad_name in ("-bad", "bad;name", "bad name"):
+            out = self._recreate_out(js, name=bad_name)
+            assert out[5] == "vember-minecraft", bad_name + " was not normalized"
+
+    def test_recreate_script_refuses_unsafe_args_before_docker(self, js):
+        # Drive the shell guard directly, bypassing model normalization. This is
+        # the defence-in-depth layer that protects a hand-built QML call.
+        script = self._recreate_out(js)[2]
+        bad_args = ["-bad", "RPG-new", "25571", "FABRIC", "1.20.1", "4G", "NORMAL",
+                    "/mnt/games/GameServers/RPG-data", "itzg/minecraft-server:java17", "", ""]
+        run = subprocess.run(["sh", "-c", script, "sh"] + bad_args,
+                             capture_output=True, text=True, timeout=30)
+        assert run.returncode == 2
+        assert "Invalid container name" in run.stderr
+
+
 class TestParsePs:
     def test_running_container(self, js):
         out = js(

@@ -356,6 +356,148 @@ export class Docker {
   return ["sh", "-c", lines.join("\n")];
   }
 
+  // Read back the settings a server was created with. Editing cannot assume
+  // the wizard defaults: a modpack on 1.20.1 must stay on 1.20.1/java17.
+  inspectMinecraftServerCommand(name) {
+    return ["docker", "inspect", "--format", "json", shell.trim(String(name || ""))];
+  }
+
+  parseMinecraftServerInspection(text) {
+    var out = {
+      name: "", image: "", type: "", version: "", memory: "", difficulty: "",
+      port: 0, dataDir: "", modsDir: "", worldDir: ""
+    };
+    var obj;
+    try {
+      obj = JSON.parse(shell.trim(String(text || "")));
+    } catch (e) {
+      return out;
+    }
+    if (!obj || typeof obj !== "object") return out;
+    out.name = String(obj.Name || "").replace(/^\//, "");
+    var config = obj.Config || {};
+    out.image = shell.trim(String(config.Image || ""));
+    var env = {};
+    var vars = Array.isArray(config.Env) ? config.Env : [];
+    for (var i = 0; i < vars.length; i++) {
+      var line = String(vars[i] || "");
+      var at = line.indexOf("=");
+      if (at > 0) env[line.slice(0, at)] = line.slice(at + 1);
+    }
+    out.type = shell.trim(String(env.TYPE || ""));
+    out.version = shell.trim(String(env.VERSION || ""));
+    out.memory = shell.trim(String(env.MEMORY || ""));
+    out.difficulty = shell.trim(String(env.DIFFICULTY || ""));
+    var port = parseInt(env.SERVER_PORT, 10);
+    if (!(port > 0 && port <= 65535)) {
+      var published = (obj.NetworkSettings && obj.NetworkSettings.Ports) || {};
+      for (var key in published) {
+        if (!/\/tcp$/.test(key) || !Array.isArray(published[key]) ||
+            !published[key].length) continue;
+        var hostPort = parseInt(published[key][0].HostPort, 10);
+        if (hostPort > 0 && hostPort <= 65535) { port = hostPort; break; }
+      }
+    }
+    out.port = isFinite(port) ? port : 0;
+    var mounts = Array.isArray(obj.Mounts) ? obj.Mounts : [];
+    for (var j = 0; j < mounts.length; j++) {
+      var m = mounts[j] || {};
+      if (m.Destination === "/data") out.dataDir = shell.trim(String(m.Source || ""));
+      else if (m.Destination === "/mods") out.modsDir = shell.trim(String(m.Source || ""));
+      else if (m.Destination === "/worlds/source") out.worldDir = shell.trim(String(m.Source || ""));
+    }
+    return out;
+  }
+
+  // Replace the server's mods folder from a chosen Prism instance. The source
+  // is never written to; KubeJS/config files are copied alongside mods so a
+  // custom world still has the registries it needs after a pack switch.
+  refreshMinecraftModsCommand(dataDir, modsDir, supportDir) {
+    var data = shell.trim(String(dataDir || ""));
+    var mods = shell.trim(String(modsDir || ""));
+    var src = shell.trim(String(supportDir || ""));
+    if (data.charAt(0) !== "/" || data.indexOf("\n") !== -1 ||
+        mods.charAt(0) !== "/" || mods.indexOf("\n") !== -1)
+      return [];
+    var script = [
+      "set -eu",
+      "data=$1", "mods=$2", "support=$3",
+      'case "$data" in',
+      '  /|/home|/root|/mnt|/mnt/games|/mnt/games/GameServers)',
+      '    echo "Refusing to refresh into reserved path: $data" >&2; exit 2 ;;',
+      'esac',
+      'case "$data" in',
+      '  *"/.."|*"/../*"|*"/."|*"/./*"|*//*)',
+      '    echo "Refusing to refresh into path with traversal: $data" >&2; exit 2 ;;',
+      'esac',
+      'if [ ! -d "$mods" ]; then echo "Mods source not found: $mods" >&2; exit 2; fi',
+      'rm -rf -- "$data/mods"',
+      'mkdir -p "$data/mods"',
+      'cp -a "$mods"/. "$data/mods"/',
+      'if [ -n "$support" ]; then',
+      '  for part in kubejs config defaultconfigs; do',
+      '    if [ -d "$support/$part" ]; then',
+      '      mkdir -p "$data/$part"; cp -a "$support/$part"/. "$data/$part"/',
+      '    fi',
+      '  done',
+      'fi',
+      'echo "Refreshed mods from $mods"'
+    ].join("\n");
+    return ["sh", "-c", script, "sh", data, mods, src];
+  }
+
+  // Docker cannot rename a container or change its published port in place.
+  // Save removes the old container and runs a new one against the same /data
+  // bind, so the world and configs survive the name/port change.
+  recreateMinecraftServerCommand(oldName, opts) {
+    var o = this.normalizeMinecraftServerOptions(opts);
+    var old = shell.trim(String(oldName || ""));
+    var image = shell.trim(String((opts && opts.image) || "")) ||
+      this.minecraftServerImage(o.version);
+    var script = [
+      "set -eu",
+      "old=$1", "new=$2", "port=$3", "type=$4", "version=$5",
+      "memory=$6", "difficulty=$7", "data=$8", "image=$9",
+      "mods=${10}", "world=${11}",
+      'for n in "$old" "$new"; do',
+      '  case "$n" in',
+      '    [A-Za-z0-9]*) ;;',
+      '    *) echo "Invalid container name: $n" >&2; exit 2 ;;',
+      '  esac',
+      '  case "$n" in',
+      '    *[!A-Za-z0-9_.-]*) echo "Invalid container name: $n" >&2; exit 2 ;;',
+      '  esac',
+      'done',
+      'case "$port" in',
+      '  ""|*[!0-9]*) echo "Invalid Minecraft port: $port" >&2; exit 2 ;;',
+      'esac',
+      'if [ "$port" -lt 1 ] || [ "$port" -gt 65535 ]; then echo "Invalid Minecraft port: $port" >&2; exit 2; fi',
+      'case "$data" in',
+      '  /*) ;;',
+      '  *) echo "Invalid data dir: $data" >&2; exit 2 ;;',
+      'esac',
+      'case "$data" in',
+      '  /|/home|/root|/mnt|/mnt/games|/mnt/games/GameServers)',
+      '    echo "Refusing to recreate against reserved data dir: $data" >&2; exit 2 ;;',
+      'esac',
+      'if [ "$new" != "$old" ] && docker inspect "$new" >/dev/null 2>&1; then',
+      '  echo "Container name already in use: $new" >&2; exit 2;',
+      'fi',
+      'docker rm -f "$old" >/dev/null 2>&1 || true',
+      'set -- docker run -d -it --name "$new" --restart unless-stopped',
+      'set -- "$@" -p "$port:$port" -v "$data:/data"',
+      'set -- "$@" -e EULA=TRUE -e TYPE="$type" -e VERSION="$version"',
+      'set -- "$@" -e MEMORY="$memory" -e DIFFICULTY="$difficulty" -e SERVER_PORT="$port"',
+      'if [ -n "$mods" ]; then set -- "$@" -v "$mods:/mods:ro"; fi',
+      'if [ -n "$world" ]; then set -- "$@" -v "$world:/worlds/source:ro" -e WORLD=/worlds/source; fi',
+      'set -- "$@" "$image"',
+      '"$@"'
+    ].join("\n");
+    return ["sh", "-c", script, "sh",
+      old, o.name, String(o.port), o.type, o.version, o.memory, o.difficulty,
+      o.dataDir, image, o.modsDir, o.worldDir];
+  }
+
   logsCommand(name, lines) {
   var n = Math.floor(Number(lines));
   if (!isFinite(n) || n < 1 || n > 2000) n = 200;
@@ -533,6 +675,10 @@ export function accumulateLayers(...args) { return impl.accumulateLayers(...args
 export function normalizeMinecraftServerOptions(...args) { return impl.normalizeMinecraftServerOptions(...args); }
 export function createMinecraftServerCommand(...args) { return impl.createMinecraftServerCommand(...args); }
 export function stageModpackDataCommand(...args) { return impl.stageModpackDataCommand(...args); }
+export function inspectMinecraftServerCommand(...args) { return impl.inspectMinecraftServerCommand(...args); }
+export function parseMinecraftServerInspection(...args) { return impl.parseMinecraftServerInspection(...args); }
+export function refreshMinecraftModsCommand(...args) { return impl.refreshMinecraftModsCommand(...args); }
+export function recreateMinecraftServerCommand(...args) { return impl.recreateMinecraftServerCommand(...args); }
 export function minecraftServerImage(...args) { return impl.minecraftServerImage(...args); }
 export function dockerReadyCommand(...args) { return impl.dockerReadyCommand(...args); }
 export function minecraftServerImageCheckCommand(...args) { return impl.minecraftServerImageCheckCommand(...args); }

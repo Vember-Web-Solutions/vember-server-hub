@@ -1,5 +1,6 @@
 """Guided Minecraft server wizard: option lists, client detection and wiring."""
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -171,7 +172,10 @@ class TestModpackRecipes:
                   '"\\njunk\\ta\\tb\\tVANILLA\\tx\\ty\\n")))') == []
 
     def test_hub_join_instances_are_not_offered_as_modpacks(self, js):
-        raw = ("vemberos-server\tVemberOS Server\tFABRIC\t26.3\t/mods\t\n"
+        raw = ("minecraft-server\tVember Minecraft Template\tFABRIC\t26.3\t/mods\t\n"
+               "minecraft-join\tVemberOS Server\tFABRIC\t26.3\t/mods\t\n"
+               "minecraft-vanilla\tPlain Vanilla\tFABRIC\t26.3\t/mods\t\n"
+               "vemberos-server\tVemberOS Server\tFABRIC\t26.3\t/mods\t\n"
                "CreateVerse\tCreateVerse\tFORGE\t1.20.1-47.4.28\t/mods\t/world")
         packs = js('console.log(JSON.stringify(MinecraftWizard.parseModpackScan('
                    + __import__("json").dumps(raw) + ')))')
@@ -242,3 +246,42 @@ class TestPortPool:
                    + __import__("json").dumps(run.stdout) + ")))")
         assert isinstance(ports, list)
         assert all(isinstance(p, int) and 1 <= p <= 65535 for p in ports)
+
+
+class TestEditPortPool:
+    """Editing keeps the server's own port; only other users of a port collide."""
+
+    @staticmethod
+    def _status(js, containers, listeners, old, port):
+        body = ("console.log(JSON.stringify(MinecraftWizard.editPortStatus("
+                + json.dumps(containers) + ", " + json.dumps(listeners) + ", "
+                + json.dumps(old) + ", " + str(port) + ")))")
+        return js(body)
+
+    def test_own_container_does_not_push_the_edit_off_its_port(self, js):
+        containers = [
+            {"name": "RPG", "ports": "0.0.0.0:25570->25570/tcp"},
+            {"name": "vember-minecraft", "ports": "0.0.0.0:25565->25565/tcp"},
+        ]
+        # The running server also appears as a host listener on its own port.
+        status = self._status(js, containers, "25565\n25570", "RPG", 25570)
+        assert status["port"] == 25570
+        assert 25570 in status["free"]
+        assert "Keeping current port 25570" in status["note"]
+        assert any(o["value"] == "25570" and "current" in o["label"]
+                   for o in status["options"])
+
+    def test_another_container_still_blocks_a_port(self, js):
+        containers = [
+            {"name": "RPG", "ports": "0.0.0.0:25570->25570/tcp"},
+            {"name": "bigheads", "ports": "0.0.0.0:25571->25571/tcp"},
+        ]
+        status = self._status(js, containers, "25570", "RPG", 25571)
+        assert 25571 not in status["free"]
+        assert status["port"] != 25571
+        assert "Assigned the next free port" in status["note"]
+
+    def test_port_outside_the_pool_is_replaced_with_a_free_one(self, js):
+        status = self._status(js, [], "", "RPG", 30000)
+        assert status["port"] == 25565
+        assert 30000 not in status["free"]
