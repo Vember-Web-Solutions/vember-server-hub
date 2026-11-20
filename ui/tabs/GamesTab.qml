@@ -14,6 +14,10 @@ import "../../model/Shell.mjs" as Shell
 Column {
   required property var panel
 
+  // One collapse state for both log panels, so switching between Launchers and
+  // Apps does not unexpectedly expand the log again.
+  property bool gameLogExpanded: true
+
   visible: panel.currentTab === "games"
   width: parent.width
   spacing: Style.spacing.md
@@ -143,8 +147,10 @@ Column {
           Text { Layout.fillWidth: true; textFormat: Text.PlainText; text: (Shell.trim(hub.installTitle).length > 0 ? hub.installTitle : "Install") + (hub.installRunning ? " • running" : " • log"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight }
           Button { visible: hub.installRunning; iconText: "󰓛"; text: "Stop"; tooltipText: "Stop tracking this install"; onClicked: hub.stopInstall() }
           Button { enabled: !hub.installRunning; iconText: "󰆴"; text: "Clear"; tooltipText: "Clear the install log"; onClicked: hub.clearInstallLog() }
+          Button { iconText: gameLogExpanded ? "󰅀" : "󰅁"; text: gameLogExpanded ? "Hide log" : "Show log"; tooltipText: gameLogExpanded ? "Collapse the live log" : "Expand the live log"; onClicked: gameLogExpanded = !gameLogExpanded }
         }
         Rectangle {
+          visible: gameLogExpanded
           width: parent.width
           height: 200
           radius: 8
@@ -193,8 +199,9 @@ Column {
         property int steamCount: hub.steamGameCount >= 0 ? hub.steamGameCount : 0
         property int bnetCount: hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0
         property int prismCount: hub.prismInstanceCount >= 0 ? hub.prismInstanceCount : 0
-        property int totalKnownGames: steamCount + bnetCount + prismCount
-        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0 || hub.prismInstanceCount >= 0
+        property int minecraftCount: hub.minecraftVersionCount >= 0 ? hub.minecraftVersionCount : 0
+        property int totalKnownGames: steamCount + bnetCount + prismCount + minecraftCount
+        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0 || hub.prismInstanceCount >= 0 || hub.minecraftVersionCount >= 0
         property var installedExtraLaunchers: {
           var out = [];
           var apps = hub.extraApps || [];
@@ -315,6 +322,35 @@ Column {
               }
             }
             Text { textFormat: Text.PlainText; text: "modpack instances"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+          }
+
+          // Vanilla Minecraft launcher versions
+          Column {
+            visible: hub.minecraftVersionCount >= 0
+            width: parent.width
+            spacing: 4
+            RowLayout {
+              width: parent.width
+              spacing: 8
+              Rectangle { width: 10; height: 10; radius: 2; color: "#e0a53c"; Layout.alignment: Qt.AlignVCenter }
+              Text { textFormat: Text.PlainText; text: "Minecraft Launcher"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: hub.minecraftVersionCount >= 0 ? String(hub.minecraftVersionCount) : "—"; color: "#e0a53c"; font.family: Style.font.family; font.bold: true }
+            }
+            Rectangle {
+              width: parent.width
+              height: 6
+              radius: 3
+              color: panel.softText(0.10)
+              clip: true
+              Rectangle {
+                height: parent.height
+                radius: 3
+                width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.minecraftCount / libraryCol.totalKnownGames) : 0
+                color: "#e0a53c"
+                Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+              }
+            }
+            Text { textFormat: Text.PlainText; text: "installed versions"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
           }
 
           Text {
@@ -449,8 +485,10 @@ Column {
           Text { Layout.fillWidth: true; textFormat: Text.PlainText; text: (Shell.trim(hub.installTitle).length > 0 ? hub.installTitle : "Install") + (hub.installRunning ? " • running" : " • log"); color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight }
           Button { visible: hub.installRunning; iconText: "󰓛"; text: "Stop"; tooltipText: "Stop tracking this install"; onClicked: hub.stopInstall() }
           Button { enabled: !hub.installRunning; iconText: "󰆴"; text: "Clear"; tooltipText: "Clear the install log"; onClicked: hub.clearInstallLog() }
+          Button { iconText: gameLogExpanded ? "󰅀" : "󰅁"; text: gameLogExpanded ? "Hide log" : "Show log"; tooltipText: gameLogExpanded ? "Collapse the live log" : "Expand the live log"; onClicked: gameLogExpanded = !gameLogExpanded }
         }
         Rectangle {
+          visible: gameLogExpanded
           width: parent.width
           height: 200
           radius: 8

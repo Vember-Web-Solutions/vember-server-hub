@@ -297,6 +297,36 @@ export class Gaming {
   parsePrismInstanceCount(text) {
   return shell.nonEmptyLines(text).length;
   }
+
+  // The vanilla launcher stores each installed version as
+  // <versions>/<name>/<name>.json. The two manifests at the top level are not
+  // versions, so only depth-2 files count. Flatpak keeps its data elsewhere.
+  minecraftVersionCountCommand(homeDir) {
+  var h = String(homeDir || "");
+  var roots = [
+    h + "/.minecraft/versions",
+    h + "/.var/app/com.mojang.Minecraft/.minecraft/versions"
+  ];
+  var cmd = ["sh", "-c",
+    "for d in \"$@\"; do [ -d \"$d\" ] || continue; " +
+    "find \"$d\" -mindepth 2 -maxdepth 2 -type f -name '*.json' -print; done",
+    "sh"];
+  for (var i = 0; i < roots.length; i++) cmd.push(roots[i]);
+  return cmd;
+  }
+
+  parseMinecraftVersionCount(text) {
+  var paths = shell.nonEmptyLines(text);
+  var dirs = {};
+  for (var i = 0; i < paths.length; i++) {
+    var p = shell.trim(paths[i]);
+    if (!p) continue;
+    // Count version folders, not json files: a version may ship more than one.
+    var dir = p.replace(/\/[^\/]+$/, "");
+    if (dir) dirs[dir] = true;
+  }
+  return Object.keys(dirs).length;
+  }
 }
 
 const impl = new Gaming();
@@ -319,3 +349,5 @@ export function parseSteamManifestScan(...args) { return impl.parseSteamManifest
 export function steamManifestCountCommandForDirs(...args) { return impl.steamManifestCountCommandForDirs(...args); }
 export function prismInstanceCountCommand(...args) { return impl.prismInstanceCountCommand(...args); }
 export function parsePrismInstanceCount(...args) { return impl.parsePrismInstanceCount(...args); }
+export function minecraftVersionCountCommand(...args) { return impl.minecraftVersionCountCommand(...args); }
+export function parseMinecraftVersionCount(...args) { return impl.parseMinecraftVersionCount(...args); }

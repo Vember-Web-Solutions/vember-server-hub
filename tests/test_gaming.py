@@ -283,3 +283,60 @@ class TestPrismInstanceCount:
             "console.log(JSON.stringify(Gaming.parsePrismInstanceCount("
             + json.dumps(result.stdout) + ")))"
         ) == 2
+
+
+class TestMinecraftVersionCount:
+    """Vanilla launcher versions feed the library total too.
+
+    The launcher stores each version as <versions>/<name>/<name>.json. The two
+    manifest files at the top level are not versions, so only depth-2 files
+    count, and folder count is used rather than file count.
+    """
+
+    def test_command_checks_native_and_flatpak_roots(self, js):
+        cmd = js('console.log(JSON.stringify(Gaming.minecraftVersionCountCommand("/h")))')
+        assert cmd[0] == "sh" and cmd[1] == "-c" and cmd[3] == "sh"
+        assert "/h/.minecraft/versions" in cmd
+        assert "/h/.var/app/com.mojang.Minecraft/.minecraft/versions" in cmd
+        assert 'for d in "$@"' in cmd[2]
+        assert '[ -d "$d" ]' in cmd[2]
+        assert "-mindepth 2 -maxdepth 2" in cmd[2]
+        assert "'*.json'" in cmd[2]
+
+    def test_parser_counts_folders_not_files(self, js):
+        out = js(
+            "console.log(JSON.stringify(Gaming.parseMinecraftVersionCount("
+            + json.dumps(
+                "/v/26.3/26.3.json\n/v/26.3/26.3-extra.json\n/v/26.4 snap/26.4 snap.json\n\n  \n"
+            )
+            + ")))"
+        )
+        assert out == 2, "two folders, three files — count folders"
+
+    def test_parser_returns_zero_for_empty_output(self, js):
+        assert js('console.log(JSON.stringify(Gaming.parseMinecraftVersionCount("")))') == 0
+
+    def test_real_scan_ignores_top_level_manifests(self, js, tmp_path):
+        root = tmp_path / ".minecraft" / "versions"
+        (root / "26.3").mkdir(parents=True)
+        (root / "26.3" / "26.3.json").write_text("{}")
+        (root / "26.4-snapshot").mkdir()
+        (root / "26.4-snapshot" / "26.4-snapshot.json").write_text("{}")
+        (root / "version_manifest_v2.json").write_text("{}")
+        (root / "jre_manifest.json").write_text("{}")
+        (root / "Orphan").mkdir()
+        (root / "Orphan" / "readme.txt").write_text("x")
+        too_deep = root / "Deep" / "nested"
+        too_deep.mkdir(parents=True)
+        (too_deep / "Deep.json").write_text("{}")
+
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.minecraftVersionCountCommand("
+            + json.dumps(str(tmp_path)) + ")))"
+        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert js(
+            "console.log(JSON.stringify(Gaming.parseMinecraftVersionCount("
+            + json.dumps(result.stdout) + ")))"
+        ) == 2

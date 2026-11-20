@@ -460,6 +460,15 @@ Work that fell out of the split, done in the same arc:
   as the Discord app row now: it is a Discord client, so detecting and launching
   it avoids offering to install a second one. Guards: TestPrismInstanceCount,
   TestPrismInstanceCountIsWired and TestVesktopIsDiscord.
+- **The gaming live log could not be collapsed and vanilla Minecraft was not
+  counted.** Both log panels now share one `gameLogExpanded` state with a
+  Hide/Show toggle, so switching between Launchers and Apps keeps the choice.
+  `minecraftVersionCountCommand()` counts depth-2 `<version>/<name>.json`
+  folders under `~/.minecraft/versions` (and the Flatpak root), so the two
+  top-level manifests are not miscounted; folder count is used, not file count.
+  The count gets a library-summary row and feeds the total. Guards:
+  TestMinecraftVersionCount, TestMinecraftVersionCountIsWired and
+  TestGameLogIsCollapsible. Four mutations were caught.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -484,16 +493,16 @@ plugin warnings in the journal.
 
 ## Result
 
-- 506 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 8,959 lines. The growth is comments, per-file
+- 516 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 9,039 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
-- The three monoliths went 7,694 → 3,251 lines: `HubPanel.qml` 4,376 → 424,
-  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,827. `Panel.qml` grew by the
+- The three monoliths went 7,694 → 3,261 lines: `HubPanel.qml` 4,376 → 424,
+  `HubModel.js` 825 → 0, and `Panel.qml` 2,493 → 2,837. `Panel.qml` grew by the
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,827, then `ui/tabs/GamesTab.qml` at 803.
-- The test suite is 4,561 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,837, then `ui/tabs/GamesTab.qml` at 872.
+- The test suite is 4,669 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.36, build 72 → 112.
+- Version 0.1.0 → 0.6.37, build 72 → 113.
