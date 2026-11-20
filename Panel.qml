@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.58"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 134
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.59"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 135
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -126,6 +126,8 @@ Item {
   property int mcWizardStep: 1
   property string mcWizardClient: "prism"
   property var mcWizardClientInstalled: ({ prism: false, official: false })
+  // The main launcher bar needs this before the wizard is ever opened.
+  property bool mcOfficialInstalled: false
   property string mcWizardRunMode: "docker"
   property string mcWizardJoinAddress: "localhost:25565"
   property bool mcWizardInstallBusy: false
@@ -2689,6 +2691,7 @@ Item {
       onStreamFinished: {
         var found = Wizard.parseClientScan(text);
         root.mcWizardClientInstalled = found;
+        root.mcOfficialInstalled = found.official === true;
         if (root.mcWizardInstallBusy && found[root.mcWizardClient]) {
           root.mcWizardInstallBusy = false;
           root.mcWizardInstallPolls = 0;
@@ -3791,6 +3794,7 @@ Item {
     loadOmarchyUpdateLog();
     loadInstallLog();
     setupMinecraftPrism();
+    mcWizardClientCheckProc.running = true;
     refreshMinecraftClientDefaults();
     refreshMinecraftServerList();
   }

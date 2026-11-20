@@ -373,6 +373,9 @@ export class Docker {
     } catch (e) {
       return out;
     }
+    // `docker inspect --format json NAME` wraps even a single result in an
+    // array. Accept both that shape and a bare object from older callers.
+    if (Array.isArray(obj)) obj = obj.length ? obj[0] : null;
     if (!obj || typeof obj !== "object") return out;
     out.name = String(obj.Name || "").replace(/^\//, "");
     var config = obj.Config || {};

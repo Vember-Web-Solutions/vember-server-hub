@@ -122,6 +122,13 @@ Column {
             tooltipText: hub.bnetRunning ? "Battle.net is running" : "Launch Battle.net"
             onClicked: hub.launchBattleNet()
           }
+          Button {
+            visible: hub.mcOfficialInstalled
+            iconText: "󰐊"
+            text: "Official launcher"
+            tooltipText: "Open the official Minecraft Launcher to the main menu"
+            onClicked: hub.launchMinecraftOfficial()
+          }
           Repeater {
             model: {
               var out = [];
@@ -802,11 +809,12 @@ Column {
 
     // Client quick launch. Join targets come from the detected Minecraft
     // containers, so a renamed server or a new port is reflected without a code
-    // change. Prism vanilla and official vanilla both open to the main menu.
+    // change. Plain vanilla opens Prism to the main menu; the official launcher
+    // has its own button on the main launcher bar.
     Rectangle {
       visible: serversSubTab === "list" &&
         (Gaming.minecraftClientInstalled(hub.extraApps || []) ||
-         hub.mcWizardClientInstalled.official)
+         hub.mcOfficialInstalled)
       width: parent.width
       radius: Style.cornerRadius
       color: panel.accentSoft(0.08)
@@ -862,12 +870,6 @@ Column {
             text: "Plain vanilla"
             tooltipText: "Open Prism to the main menu"
             onClicked: hub.launchMinecraftClient("vanilla")
-          }
-          Button {
-            iconText: "󰐊"
-            text: "Official launcher"
-            tooltipText: "Open the official Minecraft Launcher to the main menu"
-            onClicked: hub.launchMinecraftOfficial()
           }
         }
         Text {

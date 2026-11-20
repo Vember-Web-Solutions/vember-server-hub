@@ -3228,6 +3228,21 @@ class TestMinecraftClientTemplateWiring:
         ):
             assert name in tab, name + " is missing"
 
+    def test_official_launcher_button_is_on_the_main_launcher_bar(self):
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        bar = tab.split("// Launcher bar (installed launchers only)", 1)[1].split("Repeater {", 1)[0]
+        assert 'text: "Official launcher"' in bar
+        assert "hub.launchMinecraftOfficial()" in bar
+        client = tab.split("// Client quick launch.", 1)[1].split("// Guided server creation.", 1)[0]
+        assert 'text: "Official launcher"' not in client
+
+    def test_panel_checks_official_launcher_at_startup(self):
+        panel = read(REPO / "Panel.qml")
+        assert "property bool mcOfficialInstalled: false" in panel
+        assert "root.mcOfficialInstalled = found.official === true;" in panel
+        on_completed = panel.split("Component.onCompleted: {", 1)[1].split("}", 1)[0]
+        assert "mcWizardClientCheckProc.running = true;" in on_completed
+
     def test_edit_dialog_has_join_from_dropdown(self):
         dialog = read(REPO / "ui" / "MinecraftServerEditDialog.qml")
         for name in (

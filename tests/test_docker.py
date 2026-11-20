@@ -68,6 +68,31 @@ class TestMinecraftServerEditing:
         out = js('console.log(JSON.stringify(Docker.inspectMinecraftServerCommand("RPG")))')
         assert out == ["docker", "inspect", "--format", "json", "RPG"]
 
+    def test_parse_inspection_accepts_docker_format_json_array(self, js):
+        # This is the shape `docker inspect --format json NAME` actually emits.
+        raw = json.dumps([{
+            "Name": "/bigheads",
+            "Config": {
+                "Image": "itzg/minecraft-server:latest",
+                "Env": ["TYPE=PAPER", "VERSION=26.3", "SERVER_PORT=25580"],
+            },
+            "NetworkSettings": {"Ports": {"25580/tcp": [{"HostPort": "25580"}]}},
+            "Mounts": [
+                {"Destination": "/data",
+                 "Source": "/mnt/games/GameServers/bigheads-data"},
+            ],
+        }])
+        out = js("console.log(JSON.stringify(Docker.parseMinecraftServerInspection("
+                 + json.dumps(raw) + ")))")
+        assert out == {
+            "name": "bigheads", "image": "itzg/minecraft-server:latest",
+            "type": "PAPER", "version": "26.3", "memory": "", "difficulty": "",
+            "port": 25580, "dataDir": "/mnt/games/GameServers/bigheads-data",
+            "modsDir": "", "worldDir": "",
+        }
+        empty = js('console.log(JSON.stringify(Docker.parseMinecraftServerInspection("[]")))')
+        assert empty["name"] == "" and empty["port"] == 0
+
     def test_parse_inspection_reads_env_image_and_mounts(self, js):
         raw = json.dumps({
             "Name": "/RPG",
