@@ -15,6 +15,10 @@ import "../../model/DevTools.mjs" as DevTools
 Column {
   required property var panel
 
+  // The Omarchy update live log starts collapsed; the status line and buttons
+  // stay visible, and the log is shown on demand.
+  property bool omarchyLogExpanded: false
+
   visible: panel.currentTab === "overview"
   width: parent.width
   spacing: Style.spacing.md
@@ -499,11 +503,18 @@ Column {
             enabled: !hub.omarchyUpdateRunning && Shell.trim(hub.omarchyUpdateLog).length > 0
             onClicked: hub.clearOmarchyUpdateLog()
           }
+          Button {
+            iconText: omarchyLogExpanded ? "󰅀" : "󰅁"
+            text: omarchyLogExpanded ? "Hide log" : "Show log"
+            tooltipText: omarchyLogExpanded ? "Collapse the live log" : "Expand the live log"
+            onClicked: omarchyLogExpanded = !omarchyLogExpanded
+          }
         }
       }
     }
 
     Rectangle {
+      visible: omarchyLogExpanded
       width: parent.width
       radius: Style.cornerRadius
       color: panel.softText(0.04)

@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.37"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 113
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.38"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 114
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -87,6 +87,8 @@ Item {
   property int prismInstanceCount: -1
   // Installed vanilla Minecraft versions, from ~/.minecraft/versions.
   property int minecraftVersionCount: -1
+  // Installed Heroic games (Epic/GOG/Amazon), from Heroic's install-info files.
+  property int heroicGameCount: -1
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
@@ -812,6 +814,7 @@ Item {
       bnetGameCount = -1;
       prismInstanceCount = -1;
       minecraftVersionCount = -1;
+      heroicGameCount = -1;
     }
     var steamRoot = Gaming.steamRootPath(homeDir);
     if (!steamPgrepProc.running) steamPgrepProc.running = true;
@@ -844,6 +847,8 @@ Item {
     if (!prismInstanceCountProc.running) prismInstanceCountProc.running = true;
     minecraftVersionCountProc.command = Gaming.minecraftVersionCountCommand(homeDir);
     if (!minecraftVersionCountProc.running) minecraftVersionCountProc.running = true;
+    heroicGameCountProc.command = Gaming.heroicGameCountCommand(homeDir);
+    if (!heroicGameCountProc.running) heroicGameCountProc.running = true;
 
     // Only start a scan when none is in flight. refreshGames runs on the 15s
     // poll, and the scan shells out to flatpak info for each catalog entry;
@@ -1843,6 +1848,11 @@ Item {
   Process {
     id: minecraftVersionCountProc
     stdout: StdioCollector { onStreamFinished: root.minecraftVersionCount = Gaming.parseMinecraftVersionCount(text) }
+    stderr: StdioCollector {}
+  }
+  Process {
+    id: heroicGameCountProc
+    stdout: StdioCollector { onStreamFinished: root.heroicGameCount = Gaming.parseHeroicGameCount(text) }
     stderr: StdioCollector {}
   }
   Process {

@@ -15,8 +15,9 @@ Column {
   required property var panel
 
   // One collapse state for both log panels, so switching between Launchers and
-  // Apps does not unexpectedly expand the log again.
-  property bool gameLogExpanded: true
+  // Apps does not unexpectedly expand the log again. Starts collapsed; the log
+  // is secondary to the launcher/app lists and can be shown on demand.
+  property bool gameLogExpanded: false
 
   visible: panel.currentTab === "games"
   width: parent.width
@@ -200,8 +201,9 @@ Column {
         property int bnetCount: hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0
         property int prismCount: hub.prismInstanceCount >= 0 ? hub.prismInstanceCount : 0
         property int minecraftCount: hub.minecraftVersionCount >= 0 ? hub.minecraftVersionCount : 0
-        property int totalKnownGames: steamCount + bnetCount + prismCount + minecraftCount
-        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0 || hub.prismInstanceCount >= 0 || hub.minecraftVersionCount >= 0
+        property int heroicCount: hub.heroicGameCount >= 0 ? hub.heroicGameCount : 0
+        property int totalKnownGames: steamCount + bnetCount + prismCount + minecraftCount + heroicCount
+        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0 || hub.prismInstanceCount >= 0 || hub.minecraftVersionCount >= 0 || hub.heroicGameCount >= 0
         property var installedExtraLaunchers: {
           var out = [];
           var apps = hub.extraApps || [];
@@ -351,6 +353,34 @@ Column {
               }
             }
             Text { textFormat: Text.PlainText; text: "installed versions"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
+          }
+
+          // Heroic (Epic / GOG / Amazon) games
+          Column {
+            visible: hub.heroicGameCount >= 0
+            width: parent.width
+            spacing: 4
+            RowLayout {
+              width: parent.width
+              spacing: 8
+              Rectangle { width: 10; height: 10; radius: 2; color: "#e43357"; Layout.alignment: Qt.AlignVCenter }
+              Text { textFormat: Text.PlainText; text: "Heroic Games"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: hub.heroicGameCount >= 0 ? String(hub.heroicGameCount) : "—"; color: "#e43357"; font.family: Style.font.family; font.bold: true }
+            }
+            Rectangle {
+              width: parent.width
+              height: 6
+              radius: 3
+              color: panel.softText(0.10)
+              clip: true
+              Rectangle {
+                height: parent.height
+                width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.heroicCount / libraryCol.totalKnownGames) : 0
+                color: "#e43357"
+                Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+              }
+            }
+            Text { textFormat: Text.PlainText; text: "installed games"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
           }
 
           Text {

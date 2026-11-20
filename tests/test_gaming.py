@@ -340,3 +340,61 @@ class TestMinecraftVersionCount:
             "console.log(JSON.stringify(Gaming.parseMinecraftVersionCount("
             + json.dumps(result.stdout) + ")))"
         ) == 2
+
+
+class TestHeroicGameCount:
+    """Heroic's install-info registries are its own list of installed games."""
+
+    def test_command_checks_native_and_flatpak_roots_and_all_stores(self, js):
+        cmd = js('console.log(JSON.stringify(Gaming.heroicGameCountCommand("/h")))')
+        assert cmd[0] == "python3" and cmd[1] == "-c"
+        script = cmd[2]
+        assert "legendary" in script and "gog" in script and "nile" in script
+        assert "install_info.json" in script
+        assert "'__timestamp'" in script, "the timestamp bookkeeping key is not a game"
+        assert "/h/.config/heroic" in cmd
+        assert "/h/.var/app/com.heroicgameslauncher.hgl/config/heroic" in cmd
+
+    def test_parser_reads_a_count_and_rejects_garbage(self, js):
+        assert js('console.log(JSON.stringify(Gaming.parseHeroicGameCount("3\\n")))') == 3
+        assert js('console.log(JSON.stringify(Gaming.parseHeroicGameCount("oops")))') == 0
+        assert js('console.log(JSON.stringify(Gaming.parseHeroicGameCount("")))') == 0
+
+    def test_real_scan_counts_distinct_games_across_stores(self, js, tmp_path):
+        cache = tmp_path / ".config" / "heroic" / "store_cache"
+        cache.mkdir(parents=True)
+        (cache / "legendary_install_info.json").write_text(json.dumps({
+            "app-one": {"install": {"installPath": "/games/one"}},
+            "app-shared": {"install": {"installPath": "/games/shared"}},
+            "__timestamp": {"app-one": "now"},
+        }))
+        (cache / "gog_install_info.json").write_text(json.dumps({
+            "app-shared": {"install": {"installPath": "/games/shared"}},
+            "app-two": {"install": {"installPath": "/games/two"}},
+            "__timestamp": {},
+        }))
+        (cache / "nile_install_info.json").write_text(json.dumps({"__timestamp": {}}))
+
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.heroicGameCountCommand("
+            + json.dumps(str(tmp_path)) + ")))"
+        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        # app-one, app-shared (deduped across stores), app-two; not __timestamp.
+        assert js(
+            "console.log(JSON.stringify(Gaming.parseHeroicGameCount("
+            + json.dumps(result.stdout) + ")))"
+        ) == 3
+
+    def test_missing_registries_yield_zero(self, js, tmp_path):
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.heroicGameCountCommand("
+            + json.dumps(str(tmp_path)) + ")))"
+        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert js(
+            "console.log(JSON.stringify(Gaming.parseHeroicGameCount("
+            + json.dumps(result.stdout) + ")))"
+        ) == 0

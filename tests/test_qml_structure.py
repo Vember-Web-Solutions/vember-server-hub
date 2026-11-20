@@ -364,7 +364,7 @@ class TestGameLogIsCollapsible:
 
     def test_shared_state_and_toggle_exist(self):
         text = read(REPO / "ui/tabs/GamesTab.qml")
-        assert "property bool gameLogExpanded: true" in text
+        assert "property bool gameLogExpanded:" in text
         assert text.count("onClicked: gameLogExpanded = !gameLogExpanded") == 2, (
             "both the Launchers and Apps log panels need the toggle"
         )
@@ -373,6 +373,49 @@ class TestGameLogIsCollapsible:
         text = read(REPO / "ui/tabs/GamesTab.qml")
         assert text.count("visible: gameLogExpanded") == 2, (
             "both log bodies must collapse; a half-wired toggle leaves one open"
+        )
+
+
+class TestHeroicGameCountIsWired:
+    """The Heroic count must reach the library total."""
+
+    def test_panel_defines_and_resets_the_count(self):
+        text = read(REPO / "Panel.qml")
+        assert "property int heroicGameCount: -1" in text
+        assert "heroicGameCount = -1;" in text
+
+    def test_panel_starts_the_scan_with_a_poll_guard(self):
+        text = read(REPO / "Panel.qml")
+        assert "heroicGameCountProc.command = Gaming.heroicGameCountCommand(homeDir);" in text
+        assert "if (!heroicGameCountProc.running) heroicGameCountProc.running = true;" in text
+
+    def test_the_process_writes_the_property(self):
+        text = read(REPO / "Panel.qml")
+        block = re.search(r"id:\s*heroicGameCountProc(.*?)\n  \}", text, re.S)
+        assert block, "heroicGameCountProc not found in Panel.qml"
+        assert "root.heroicGameCount = Gaming.parseHeroicGameCount(text)" in block.group(1)
+
+    def test_summary_includes_it_in_total_and_known_counts(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        assert "property int heroicCount: hub.heroicGameCount >= 0 ? hub.heroicGameCount : 0" in text
+        assert "property int totalKnownGames: steamCount + bnetCount + prismCount + minecraftCount + heroicCount" in text
+        assert "hub.heroicGameCount >= 0" in text
+
+
+class TestLogsStartCollapsed:
+    """Both live logs default to collapsed but remain expandable."""
+
+    def test_gaming_log_starts_collapsed_with_toggle(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        assert "property bool gameLogExpanded: false" in text
+        assert "onClicked: gameLogExpanded = !gameLogExpanded" in text
+
+    def test_omarchy_update_log_starts_collapsed_with_toggle(self):
+        text = read(REPO / "ui/tabs/OverviewTab.qml")
+        assert "property bool omarchyLogExpanded: false" in text
+        assert "onClicked: omarchyLogExpanded = !omarchyLogExpanded" in text
+        assert "visible: omarchyLogExpanded" in text, (
+            "the update log body must be gated by the collapse state"
         )
 
 

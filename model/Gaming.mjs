@@ -327,6 +327,39 @@ export class Gaming {
   }
   return Object.keys(dirs).length;
   }
+
+  // Heroic keeps one install-info file per store. Each installed game is a key
+  // in that JSON; "__timestamp" is bookkeeping, not a game. A game still being
+  // installed is already listed (its installPath fills in when it finishes),
+  // so counting keys reflects what Heroic considers installed. Native config is
+  // ~/.config/heroic; Flatpak keeps it under ~/.var/app/<id>/config/heroic.
+  heroicGameCountCommand(homeDir) {
+  var h = String(homeDir || "");
+  var script = "import sys,os,json\n" +
+    "seen=set()\n" +
+    "for base in sys.argv[1:]:\n" +
+    "  for store in ('legendary','gog','nile'):\n" +
+    "    p=os.path.join(base,'store_cache',store+'_install_info.json')\n" +
+    "    try:\n" +
+    "      d=json.load(open(p,errors='ignore'))\n" +
+    "    except Exception:\n" +
+    "      continue\n" +
+    "    if not isinstance(d,dict):\n" +
+    "      continue\n" +
+    "    for k in d:\n" +
+    "      if k!='__timestamp':\n" +
+    "        seen.add(k)\n" +
+    "print(len(seen))\n";
+  var cmd = ["python3", "-c", script];
+  cmd.push(h + "/.config/heroic");
+  cmd.push(h + "/.var/app/com.heroicgameslauncher.hgl/config/heroic");
+  return cmd;
+  }
+
+  parseHeroicGameCount(text) {
+  var t = shell.trim(text);
+  return /^\d+$/.test(t) ? Number(t) : 0;
+  }
 }
 
 const impl = new Gaming();
@@ -351,3 +384,5 @@ export function prismInstanceCountCommand(...args) { return impl.prismInstanceCo
 export function parsePrismInstanceCount(...args) { return impl.parsePrismInstanceCount(...args); }
 export function minecraftVersionCountCommand(...args) { return impl.minecraftVersionCountCommand(...args); }
 export function parseMinecraftVersionCount(...args) { return impl.parseMinecraftVersionCount(...args); }
+export function heroicGameCountCommand(...args) { return impl.heroicGameCountCommand(...args); }
+export function parseHeroicGameCount(...args) { return impl.parseHeroicGameCount(...args); }
