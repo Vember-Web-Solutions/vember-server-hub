@@ -291,6 +291,40 @@ class TestPanelReopenGoesThroughShell:
         )
 
 
+class TestPrismInstanceCountIsWired:
+    """The Prism count must reach the library summary, not sit as dead state."""
+
+    def test_panel_defines_and_resets_the_count(self):
+        text = read(REPO / "Panel.qml")
+        assert "property int prismInstanceCount: -1" in text
+        assert "prismInstanceCount = -1;" in text, (
+            "a full refresh must clear the old count before rescanning"
+        )
+
+    def test_panel_starts_the_scan_with_a_poll_guard(self):
+        text = read(REPO / "Panel.qml")
+        assert "prismInstanceCountProc.command = Gaming.prismInstanceCountCommand(homeDir);" in text
+        assert "if (!prismInstanceCountProc.running) prismInstanceCountProc.running = true;" in text, (
+            "the 15s poll must not restart a find still in flight"
+        )
+
+    def test_the_process_writes_the_property(self):
+        text = read(REPO / "Panel.qml")
+        block = re.search(
+            r"id:\s*prismInstanceCountProc(.*?)\n  \}", text, re.S
+        )
+        assert block, "prismInstanceCountProc not found in Panel.qml"
+        assert "root.prismInstanceCount = Gaming.parsePrismInstanceCount(text)" in block.group(1)
+
+    def test_summary_includes_it_in_total_and_known_counts(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        assert "property int prismCount: hub.prismInstanceCount >= 0 ? hub.prismInstanceCount : 0" in text
+        assert "property int totalKnownGames: steamCount + bnetCount + prismCount" in text
+        assert "hub.prismInstanceCount >= 0" in text, (
+            "the summary must treat a measured zero as known, and -1 as unknown"
+        )
+
+
 class TestBackendReferences:
     """Cross-file references must resolve to something that exists.
 

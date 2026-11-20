@@ -56,11 +56,13 @@ export class Gaming {
     },
     {
       id: "discord",
-      name: "Discord",
-      description: "Voice, video, and text chat.",
+      name: "Discord / Vesktop",
+      description: "Voice, video, and text chat — Discord or the Vesktop client.",
       category: "apps",
       icon: "file:///usr/share/icons/hicolor/256x256/apps/discord.png",
-      launchCmd: ["sh", "-c", "command -v discord >/dev/null 2>&1 && exec discord || command -v Discord >/dev/null 2>&1 && exec Discord || exec flatpak run com.discordapp.Discord"],
+      // Vesktop is a Discord client, so it satisfies this row. Try the native
+      // Discord binaries first, then Vesktop, then the Flatpak builds.
+      launchCmd: ["sh", "-c", "command -v discord >/dev/null 2>&1 && exec discord || command -v Discord >/dev/null 2>&1 && exec Discord || command -v vesktop >/dev/null 2>&1 && exec vesktop || command -v Vesktop >/dev/null 2>&1 && exec Vesktop || exec flatpak run com.discordapp.Discord || exec flatpak run dev.vencord.Vesktop"],
       installCmd: "if command -v pacman >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm discord; elif command -v flatpak >/dev/null 2>&1; then flatpak install -y flathub com.discordapp.Discord; else echo 'No supported installer found for Discord.'; exit 1; fi"
     }
   ];
@@ -85,7 +87,8 @@ export class Gaming {
     // curseforge
     "cf_app=$(ls \"$HOME\"/Applications/CurseForge*.AppImage \"$HOME\"/Applications/curseforge*.AppImage 2>/dev/null | head -n1 || true); if has_cmd curseforge || [ -n \"$cf_app\" ] || has_flatpak com.curseforge.curseforge; then ic=1; else ic=0; fi; if running_any curseforge CurseForge; then rc=1; else rc=0; fi; emit curseforge \"$ic\" \"$rc\" \"$cf_app\"",
     // discord
-    "if has_cmd discord || has_cmd Discord || has_flatpak com.discordapp.Discord; then idc=1; else idc=0; fi; if running_any discord Discord; then rdc=1; else rdc=0; fi; emit discord \"$idc\" \"$rdc\" ''"
+    // Vesktop counts as a Discord client, in native or Flatpak form.
+    "if has_cmd discord || has_cmd Discord || has_cmd vesktop || has_cmd Vesktop || has_flatpak com.discordapp.Discord || has_flatpak dev.vencord.Vesktop; then idc=1; else idc=0; fi; if running_any discord Discord vesktop Vesktop; then rdc=1; else rdc=0; fi; emit discord \"$idc\" \"$rdc\" ''"
   ].join("\n");
   return ["sh", "-c", script];
   }
@@ -272,6 +275,28 @@ export class Gaming {
   for (var j = 0; j < filtered.length; j++) cmd.push(filtered[j]);
   return cmd;
   }
+
+  // Prism stores each modpack as a directory containing instance.cfg. Instance
+  // names can contain spaces ("Create- Astral"), so count with find over quoted
+  // roots rather than interpolating a glob into a shell string. Both the native
+  // and Flatpak data roots are checked; a missing root simply contributes none.
+  prismInstanceCountCommand(homeDir) {
+  var h = String(homeDir || "");
+  var roots = [
+    h + "/.local/share/PrismLauncher/instances",
+    h + "/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances"
+  ];
+  var cmd = ["sh", "-c",
+    "for d in \"$@\"; do [ -d \"$d\" ] || continue; " +
+    "find \"$d\" -mindepth 2 -maxdepth 2 -type f -name instance.cfg -print; done",
+    "sh"];
+  for (var i = 0; i < roots.length; i++) cmd.push(roots[i]);
+  return cmd;
+  }
+
+  parsePrismInstanceCount(text) {
+  return shell.nonEmptyLines(text).length;
+  }
 }
 
 const impl = new Gaming();
@@ -292,3 +317,5 @@ export function steamRootPath(...args) { return impl.steamRootPath(...args); }
 export function parseLibraryPaths(...args) { return impl.parseLibraryPaths(...args); }
 export function parseSteamManifestScan(...args) { return impl.parseSteamManifestScan(...args); }
 export function steamManifestCountCommandForDirs(...args) { return impl.steamManifestCountCommandForDirs(...args); }
+export function prismInstanceCountCommand(...args) { return impl.prismInstanceCountCommand(...args); }
+export function parsePrismInstanceCount(...args) { return impl.parsePrismInstanceCount(...args); }

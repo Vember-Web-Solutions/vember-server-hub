@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.35"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 111
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.36"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 112
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -82,6 +82,9 @@ Item {
   property bool bnetInstalled: false
   property bool bnetRunning: false
   property int bnetGameCount: -1
+  // Number of Prism modpack instances. -1 means the scan has not run yet,
+  // which keeps the library summary from claiming a zero it has not measured.
+  property int prismInstanceCount: -1
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
@@ -805,6 +808,7 @@ Item {
       steamGameCount = -1;
       steamDedicatedServers = [];
       bnetGameCount = -1;
+      prismInstanceCount = -1;
     }
     var steamRoot = Gaming.steamRootPath(homeDir);
     if (!steamPgrepProc.running) steamPgrepProc.running = true;
@@ -831,6 +835,10 @@ Item {
     }
     bnetGameCountProc.command = Gaming.battlenetGameCountCommand(homeDir);
     if (!bnetGameCountProc.running) bnetGameCountProc.running = true;
+    // Instance folders only change when a modpack is added or removed, but the
+    // 15s poll is cheap and the guard keeps a slow find from being restarted.
+    prismInstanceCountProc.command = Gaming.prismInstanceCountCommand(homeDir);
+    if (!prismInstanceCountProc.running) prismInstanceCountProc.running = true;
 
     // Only start a scan when none is in flight. refreshGames runs on the 15s
     // poll, and the scan shells out to flatpak info for each catalog entry;
@@ -1818,6 +1826,13 @@ Item {
   Process {
     id: bnetGameCountProc
     stdout: StdioCollector { onStreamFinished: root.bnetGameCount = Gaming.parseBattlenetGameCount(text) }
+    stderr: StdioCollector {}
+  }
+  Process {
+    id: prismInstanceCountProc
+    stdout: StdioCollector { onStreamFinished: root.prismInstanceCount = Gaming.parsePrismInstanceCount(text) }
+    // A missing instances dir makes find complain; that is not a plugin error,
+    // and the count of zero is still the right answer.
     stderr: StdioCollector {}
   }
   Process {

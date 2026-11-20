@@ -192,8 +192,9 @@ Column {
 
         property int steamCount: hub.steamGameCount >= 0 ? hub.steamGameCount : 0
         property int bnetCount: hub.bnetGameCount >= 0 ? hub.bnetGameCount : 0
-        property int totalKnownGames: steamCount + bnetCount
-        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0
+        property int prismCount: hub.prismInstanceCount >= 0 ? hub.prismInstanceCount : 0
+        property int totalKnownGames: steamCount + bnetCount + prismCount
+        property bool hasKnownCounts: hub.steamGameCount >= 0 || hub.bnetGameCount >= 0 || hub.prismInstanceCount >= 0
         property var installedExtraLaunchers: {
           var out = [];
           var apps = hub.extraApps || [];
@@ -285,6 +286,35 @@ Column {
                 Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
               }
             }
+          }
+
+          // Prism modpack instances
+          Column {
+            visible: hub.prismInstanceCount >= 0
+            width: parent.width
+            spacing: 4
+            RowLayout {
+              width: parent.width
+              spacing: 8
+              Rectangle { width: 10; height: 10; radius: 2; color: "#7ac74f"; Layout.alignment: Qt.AlignVCenter }
+              Text { textFormat: Text.PlainText; text: "Prism Launcher"; color: Color.menu.text; font.family: Style.font.family; font.bold: true; Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: hub.prismInstanceCount >= 0 ? String(hub.prismInstanceCount) : "—"; color: "#7ac74f"; font.family: Style.font.family; font.bold: true }
+            }
+            Rectangle {
+              width: parent.width
+              height: 6
+              radius: 3
+              color: panel.softText(0.10)
+              clip: true
+              Rectangle {
+                height: parent.height
+                radius: 3
+                width: libraryCol.totalKnownGames > 0 ? parent.width * (libraryCol.prismCount / libraryCol.totalKnownGames) : 0
+                color: "#7ac74f"
+                Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+              }
+            }
+            Text { textFormat: Text.PlainText; text: "modpack instances"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
           }
 
           Text {

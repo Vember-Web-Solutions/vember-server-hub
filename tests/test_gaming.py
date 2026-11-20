@@ -1,5 +1,6 @@
 """Tests for model/Gaming.mjs: catalog, Steam and Battle.net helpers."""
 
+import json
 import subprocess
 
 
@@ -189,3 +190,96 @@ class TestPaths:
             "/h/.local/share/Steam/steamapps/libraryfolders.vdf",
             "/h/Games/battlenet",
         ]
+
+
+class TestVesktopIsDiscord:
+    """Vesktop is a Discord client, not a separate thing to install."""
+
+    def test_catalog_row_launches_vesktop(self, js):
+        app = js('console.log(JSON.stringify(Gaming.defById("discord")))')
+        assert "Vesktop" in app["name"]
+        launch = app["launchCmd"][-1]
+        assert "vesktop" in launch
+        assert "Vesktop" in launch
+        assert "dev.vencord.Vesktop" in launch
+        assert app["installCmd"], "the row must still offer to install Discord"
+
+    def test_scan_detects_native_and_flatpak_vesktop(self, js):
+        script = js("console.log(JSON.stringify(Gaming.scanCommand()[2]))")
+        assert "has_cmd vesktop" in script
+        assert "has_cmd Vesktop" in script
+        assert "has_flatpak dev.vencord.Vesktop" in script
+        assert "running_any discord Discord vesktop Vesktop" in script
+
+    def test_scan_emits_discord_as_installed_with_a_vesktop_stub(self, js, tmp_path):
+        bindir = tmp_path / "bin"
+        bindir.mkdir()
+        stub = bindir / "vesktop"
+        stub.write_text("#!/bin/sh\nexit 0\n")
+        stub.chmod(0o755)
+        env_path = str(bindir) + ":/usr/bin:/bin"
+        cmd = js("console.log(JSON.stringify(Gaming.scanCommand()))")
+        import os
+
+        result = subprocess.run(
+            cmd, capture_output=True, text=True,
+            env=dict(os.environ, PATH=env_path),
+        )
+        assert result.returncode == 0, result.stderr
+        row = next(line for line in result.stdout.splitlines() if line.startswith("discord\t"))
+        assert row.split("\t")[1] == "1", "Vesktop should mark the Discord row installed"
+
+
+class TestPrismInstanceCount:
+    """Prism modpacks are a real part of the game library.
+
+    Instance names contain spaces, so a glob interpolated into a shell string
+    splits them. The scan has to quote its roots and let find walk them.
+    """
+
+    def test_command_checks_native_and_flatpak_roots(self, js):
+        cmd = js('console.log(JSON.stringify(Gaming.prismInstanceCountCommand("/h")))')
+        assert cmd[0:3] == ["sh", "-c", cmd[2]]
+        assert cmd[3] == "sh"
+        assert "/h/.local/share/PrismLauncher/instances" in cmd
+        assert "/h/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances" in cmd
+        assert 'for d in "$@"' in cmd[2]
+        assert '[ -d "$d" ]' in cmd[2]
+        assert 'find "$d"' in cmd[2]
+        assert "-mindepth 2 -maxdepth 2" in cmd[2]
+        assert "instance.cfg" in cmd[2]
+
+    def test_parser_counts_paths_with_spaces_and_skips_blanks(self, js):
+        out = js(
+            "console.log(JSON.stringify(Gaming.parsePrismInstanceCount("
+            '"/i/Create- Astral/instance.cfg\\n\\n  \\n/i/Another One/instance.cfg\\n")))'
+        )
+        assert out == 2
+
+    def test_parser_returns_zero_for_empty_output(self, js):
+        assert js('console.log(JSON.stringify(Gaming.parsePrismInstanceCount("")))') == 0
+
+    def test_real_scan_ignores_tmp_strays_and_nested_files(self, js, tmp_path):
+        root = tmp_path / ".local" / "share" / "PrismLauncher" / "instances"
+        (root / "Create- Astral").mkdir(parents=True)
+        (root / "Create- Astral" / "instance.cfg").write_text("[General]\n")
+        (root / "Vanilla").mkdir()
+        (root / "Vanilla" / "instance.cfg").write_text("[General]\n")
+        (root / ".tmp").mkdir()
+        (root / "instgroups.json").write_text("{}")
+        (root / "NotAnInstance").mkdir()
+        (root / "NotAnInstance" / "other.cfg").write_text("x")
+        too_deep = root / "Deep" / "nested"
+        too_deep.mkdir(parents=True)
+        (too_deep / "instance.cfg").write_text("x")
+
+        cmd = js(
+            "console.log(JSON.stringify(Gaming.prismInstanceCountCommand("
+            + json.dumps(str(tmp_path)) + ")))"
+        )
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert js(
+            "console.log(JSON.stringify(Gaming.parsePrismInstanceCount("
+            + json.dumps(result.stdout) + ")))"
+        ) == 2
