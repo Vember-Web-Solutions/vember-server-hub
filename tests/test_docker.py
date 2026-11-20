@@ -255,7 +255,7 @@ class TestMinecraftServerCommands:
         assert opts == {
             "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
             "memory": "4G", "difficulty": "NORMAL",
-            "dataDir": "/var/minecraft-servers", "port": 25565,
+            "dataDir": "/mnt/games/GameServers/Minecraft", "port": 25565,
             "modsDir": "", "worldDir": "",
         }
         cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
@@ -263,7 +263,7 @@ class TestMinecraftServerCommands:
         assert cmd[cmd.index("--name") + 1] == "vember-minecraft"
         assert cmd[cmd.index("--restart") + 1] == "unless-stopped"
         assert "25565:25565" in cmd
-        assert "/var/minecraft-servers:/data" in cmd
+        assert "/mnt/games/GameServers/Minecraft:/data" in cmd
         for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G",
                     "DIFFICULTY=NORMAL"):
             assert env in cmd
@@ -291,7 +291,7 @@ class TestMinecraftServerCommands:
         assert opts["version"] == "LATEST"
         assert opts["memory"] == "4G"
         assert opts["difficulty"] == "NORMAL"
-        assert opts["dataDir"] == "/var/minecraft-servers"
+        assert opts["dataDir"] == "/mnt/games/GameServers/Minecraft"
         assert opts["port"] == 25565
         cmd = js(
             "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"

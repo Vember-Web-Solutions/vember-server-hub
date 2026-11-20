@@ -182,12 +182,12 @@ export class Docker {
   if (["PEACEFUL", "EASY", "NORMAL", "HARD"].indexOf(difficulty) === -1)
     difficulty = "NORMAL";
 
-  // A caller with a real home directory passes defaultDataDir; the built-in
-  // fallback stays portable so another user's hub does not depend on Elena's
-  // games mount.
+  // Server worlds live on the games mount next to the other game data. A
+  // caller can override this; the fallback keeps the same home for hand-built
+  // commands that omit defaultDataDir.
   var defaultDataDir = shell.trim(String(o.defaultDataDir || ""));
   if (defaultDataDir.charAt(0) !== "/" || defaultDataDir.indexOf("\n") !== -1)
-    defaultDataDir = "/var/minecraft-servers";
+    defaultDataDir = "/mnt/games/GameServers/Minecraft";
   var dataDir = shell.trim(String(o.dataDir || ""));
   if (dataDir.charAt(0) !== "/" || dataDir.indexOf("\n") !== -1)
     dataDir = defaultDataDir;

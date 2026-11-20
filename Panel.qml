@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.48"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 124
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.49"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 125
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -87,7 +87,7 @@ Item {
   property string mcServerMemoryDraft: "4G"
   property string mcServerDifficultyDraft: "NORMAL"
   property int mcServerPortDraft: 25565
-  property string mcServerDataDirDraft: homeDir + "/minecraft-servers"
+  property string mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"
   // Guided Minecraft server wizard: client → runtime → options → review.
   property bool mcWizardOpen: false
   property int mcWizardStep: 1
@@ -1578,7 +1578,7 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: homeDir + "/minecraft-servers",
+      defaultDataDir: gameMount + "/GameServers/Minecraft",
       modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     }).join(" ");
   }
@@ -1608,7 +1608,7 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: homeDir + "/minecraft-servers",
+      defaultDataDir: gameMount + "/GameServers/Minecraft",
       modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     };
     // Reflect the normalised values back into the form so the operator sees

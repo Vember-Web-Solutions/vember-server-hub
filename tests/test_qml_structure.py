@@ -2686,14 +2686,14 @@ class TestGameServersLayoutAndBlueSlice:
         text = read(REPO / "ui/tabs/GamesTab.qml")
         return text[text.index('visible: panel.gamesSubTab === "storage"'):]
 
-    def test_new_servers_default_to_a_portable_path(self):
+    def test_wizard_defaults_worlds_to_the_games_mount(self):
         docker = read(REPO / "model/Docker.mjs")
         panel = read(REPO / "Panel.qml")
-        assert "/var/minecraft-servers" in docker
-        assert "defaultDataDir: homeDir + \"/minecraft-servers\"" in panel
-        assert 'mcServerDataDirDraft: homeDir + "/minecraft-servers"' in panel
-        assert "/mnt/games/GameServers/Minecraft" not in docker, "old hardcoded fallback still live"
-        assert "/mnt/games/GameServers/Minecraft" not in panel, "form still defaults to the old path"
+        assert "/mnt/games/GameServers/Minecraft" in docker
+        assert 'mcServerDataDirDraft: gameMount + "/GameServers/Minecraft"' in panel
+        assert panel.count('defaultDataDir: gameMount + "/GameServers/Minecraft"') == 2
+        assert "minecraft-servers" not in panel
+        assert "/var/minecraft-servers" not in docker
 
     def test_panel_tracks_total_server_bytes(self):
         panel = read(REPO / "Panel.qml")
