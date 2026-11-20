@@ -46,6 +46,35 @@ export class Docker {
   }).filter(function (row) { return row.name.length > 0; });
   }
 
+  // One-shot memory snapshot. `docker stats --no-stream` exits, so it fits the
+  // hub's process model without holding a stream open.
+  statsCommand() {
+  return ["docker", "stats", "--no-stream", "--format", "{{.Name}}\t{{.MemUsage}}"];
+  }
+
+  // MemUsage is "<used> / <limit>" per row. Only the used half is summed; a
+  // row that cannot be parsed is skipped rather than blanking the whole card.
+  parseStats(text) {
+  var units = {
+    b: 1, kib: 1024, mib: 1024 * 1024,
+    gib: 1024 * 1024 * 1024, tib: 1024 * 1024 * 1024 * 1024
+  };
+  var bytes = 0;
+  var count = 0;
+  var rows = shell.nonEmptyLines(text);
+  for (var i = 0; i < rows.length; i++) {
+    var parts = rows[i].split("\t");
+    var m = shell.trim(parts[1] || "").match(/^([\d.]+)\s*([A-Za-z]+)/);
+    if (!m) continue;
+    var factor = units[String(m[2]).toLowerCase()];
+    var n = parseFloat(m[1]);
+    if (!factor || !isFinite(n) || n < 0) continue;
+    bytes += n * factor;
+    count++;
+  }
+  return { totalBytes: Math.round(bytes), containers: count };
+  }
+
   // Services that are never a browser page. Matching both the published and
   // the container-side port keeps a Minecraft/RDS container from growing a
   // misleading "Open" button while still allowing an arbitrary host port in
@@ -387,6 +416,8 @@ export function actionCommand(...args) { return impl.actionCommand(...args); }
 export function pullCommand(...args) { return impl.pullCommand(...args); }
 export function pruneCommand(...args) { return impl.pruneCommand(...args); }
 export function parsePs(...args) { return impl.parsePs(...args); }
+export function statsCommand(...args) { return impl.statsCommand(...args); }
+export function parseStats(...args) { return impl.parseStats(...args); }
 export function publishedPorts(...args) { return impl.publishedPorts(...args); }
 export function webUrlFromPorts(...args) { return impl.webUrlFromPorts(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }

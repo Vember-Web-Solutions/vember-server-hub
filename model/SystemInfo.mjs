@@ -54,6 +54,45 @@ export class SystemInfo {
   pgrepExactCommand(name) {
   return ["pgrep", "-x", String(name)];
   }
+  // Host CPU utilisation from /proc/stat. Two samples 0.4s apart make a
+  // percentage; psutil would do the same but is not installed here and a
+  // dependency would break the portable hub on another user's machine.
+  hostMetricsCommand() {
+  var py = [
+    "import json, time",
+    "def sample():",
+    "    vals = []",
+    "    for line in open('/proc/stat'):",
+    "        f = line.split()",
+    "        if f and f[0] == 'cpu' and len(f) >= 5:",
+    "            vals = [int(x) for x in f[1:5]]",
+    "            break",
+    "    return vals",
+    "a = sample()",
+    "time.sleep(0.4)",
+    "b = sample()",
+    "if len(a) < 4 or len(b) < 4:",
+    "    print(json.dumps({'cpuPercent': -1}))",
+    "else:",
+    "    d = [max(0, y - x) for x, y in zip(a[:4], b[:4])]",
+    "    total = sum(d)",
+    "    pct = (100.0 * (total - d[3]) / total) if total > 0 else -1",
+    "    print(json.dumps({'cpuPercent': round(pct, 1)}))"
+  ].join("\n");
+  return ["python3", "-c", py];
+  }
+
+  parseHostMetrics(text) {
+  try {
+    var m = JSON.parse(shell.trim(String(text || "")));
+    var p = Number(m && m.cpuPercent);
+    if (!isFinite(p) || p < 0 || p > 100) return { cpuPercent: -1 };
+    return { cpuPercent: Math.round(p * 10) / 10 };
+  } catch (e) {
+    return { cpuPercent: -1 };
+  }
+  }
+
   // Storage pressure colour: green below 75%, amber from 75%, red from 90%.
   // A missing or unparseable ratio reads as 0% rather than as an error.
   storageUseColor(ratio) {
@@ -74,4 +113,6 @@ export function dfBytesCommand(...args) { return impl.dfBytesCommand(...args); }
 export function parseFindmnt(...args) { return impl.parseFindmnt(...args); }
 export function parseDfBytes(...args) { return impl.parseDfBytes(...args); }
 export function pgrepExactCommand(...args) { return impl.pgrepExactCommand(...args); }
+export function hostMetricsCommand(...args) { return impl.hostMetricsCommand(...args); }
+export function parseHostMetrics(...args) { return impl.parseHostMetrics(...args); }
 export function storageUseColor(...args) { return impl.storageUseColor(...args); }

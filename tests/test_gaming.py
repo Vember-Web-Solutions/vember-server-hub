@@ -750,3 +750,20 @@ class TestOneClickLaunch:
             assert run.stdout.strip() == "ready", run.stdout
         finally:
             server.close()
+
+
+class TestTotalInstalledGameCount:
+    def test_sums_every_library(self, js):
+        opts = {"steam": 83, "bnet": 3, "prism": 5, "heroic": 2, "minecraft": 3}
+        cmd = js("console.log(JSON.stringify(Gaming.totalInstalledGameCount("
+                 + __import__("json").dumps(opts) + ")))")
+        assert cmd == 96
+
+    def test_skips_unavailable_and_missing(self, js):
+        opts = {"steam": 4, "bnet": -1, "minecraft": "nope"}
+        cmd = js("console.log(JSON.stringify(Gaming.totalInstalledGameCount("
+                 + __import__("json").dumps(opts) + ")))")
+        assert cmd == 4
+
+    def test_empty_input_is_zero(self, js):
+        assert js("console.log(Gaming.totalInstalledGameCount())") == 0

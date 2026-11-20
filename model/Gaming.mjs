@@ -699,6 +699,19 @@ export class Gaming {
   }
   return total;
   }
+
+  // One installed-game number for the Overview. Each library reports -1 until
+  // its scan finishes, and a missing scan should not count as a game.
+  totalInstalledGameCount(counts) {
+  var c = counts || {};
+  var keys = ["steam", "bnet", "prism", "heroic", "minecraft"];
+  var total = 0;
+  for (var i = 0; i < keys.length; i++) {
+    var n = Number(c[keys[i]]);
+    if (isFinite(n) && n > 0) total += Math.floor(n);
+  }
+  return total;
+  }
 }
 
 const impl = new Gaming();
@@ -730,6 +743,7 @@ export function gameServerContainers(...args) { return impl.gameServerContainers
 export function gameServerSizeCommand(...args) { return impl.gameServerSizeCommand(...args); }
 export function parseGameServerSizes(...args) { return impl.parseGameServerSizes(...args); }
 export function gameServerTotalBytes(...args) { return impl.gameServerTotalBytes(...args); }
+export function totalInstalledGameCount(...args) { return impl.totalInstalledGameCount(...args); }
 export function utf8Bytes(...args) { return impl.utf8Bytes(...args); }
 export function minecraftServerListBytes(...args) { return impl.minecraftServerListBytes(...args); }
 export function minecraftServerListCommand(...args) { return impl.minecraftServerListCommand(...args); }

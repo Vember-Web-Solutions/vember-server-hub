@@ -1,5 +1,6 @@
 """Tests for model/Docker.mjs: command construction and `docker ps` parsing."""
 
+import json
 import subprocess
 
 
@@ -526,3 +527,26 @@ class TestDockerPublishedPorts:
         ports = js("console.log(JSON.stringify(Docker.publishedPorts("
                    + __import__("json").dumps(text) + ")))")
         assert ports == [8610, 25565, 25575]
+
+
+class TestStats:
+    def test_command_is_one_shot_with_name_and_memory(self, js):
+        out = js("console.log(JSON.stringify(Docker.statsCommand()))")
+        assert out[:2] == ["docker", "stats"]
+        assert "--no-stream" in out
+        assert "{{.Name}}\t{{.MemUsage}}" in out
+
+    def test_sums_used_memory_across_rows(self, js):
+        text = "web\t1.5GiB / 8GiB\ndb\t256MiB / 8GiB\nodd\tno memory here"
+        out = js("console.log(JSON.stringify(Docker.parseStats(" + json.dumps(text) + ")))")
+        assert out == {"totalBytes": int(1.5 * 1024 ** 3 + 256 * 1024 ** 2), "containers": 2}
+
+    def test_empty_and_unparseable_input(self, js):
+        for text in ("", "\n\n", "web\tunknown / 8GiB"):
+            out = js("console.log(JSON.stringify(Docker.parseStats(" + json.dumps(text) + ")))")
+            assert out == {"totalBytes": 0, "containers": 0}
+
+    def test_small_units_are_parsed(self, js):
+        out = js("console.log(JSON.stringify(Docker.parseStats("
+                 + json.dumps("web\t2.5KiB / 8GiB") + ")))")
+        assert out == {"totalBytes": 2560, "containers": 1}

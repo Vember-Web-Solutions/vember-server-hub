@@ -2933,3 +2933,52 @@ class TestOneClickLaunchWiring:
             "id: mcServerEntryDelayTimer",
         ):
             assert name in panel, name + " is missing"
+
+
+class TestOverviewRedesign:
+    """Overview's Docker and Games cards are quick-launch surfaces, not lists."""
+
+    @staticmethod
+    def _overview():
+        return read(REPO / "ui/tabs/OverviewTab.qml")
+
+    def test_docker_card_has_ui_pills_and_metrics(self):
+        text = self._overview()
+        for name in (
+            "property var overviewWebUis",
+            "panel.hub.openContainerWebUrl(ui.url, ui.name)",
+            "Container RAM:",
+            "Host CPU:",
+            "GPU: n/a",
+        ):
+            assert name in text, name + " is missing"
+
+    def test_games_card_has_launch_slices_and_one_count(self):
+        text = self._overview()
+        for name in (
+            "Quick launch",
+            "property var overviewLaunchServers",
+            'panel.hub.launchMinecraftServer(server.name, server.port, "")',
+            'overviewInstalledGames + " games installed"',
+        ):
+            assert name in text, name + " is missing"
+        assert "Steam: " not in text and "Battle.net: " not in text
+
+    def test_storage_is_its_own_card(self):
+        text = self._overview()
+        assert "Games storage" in text
+        assert "id: glanceSt" in text
+        assert "Shell.humanBytes(hub.gameMountTotalBytes)" in text
+
+    def test_panel_samples_docker_stats_and_host_cpu(self):
+        panel = read(REPO / "Panel.qml")
+        for name in (
+            "property real containerRamBytes: -1",
+            "property real hostCpuPercent: -1",
+            "function refreshMetrics()",
+            "id: dockerStatsProc",
+            "id: hostMetricsProc",
+            "Docker.statsCommand()",
+            "SystemInfo.hostMetricsCommand()",
+        ):
+            assert name in panel, name + " is missing"

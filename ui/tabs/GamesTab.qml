@@ -98,14 +98,14 @@ Column {
             visible: hub.steamInstalled
             iconText: "󰓓"
             text: "Steam"
-            tooltipText: "Launch Steam"
+            tooltipText: hub.steamRunning ? "Steam is running" : "Launch Steam"
             onClicked: hub.launchSteam()
           }
           Button {
             visible: hub.bnetInstalled
             iconText: "󰖺"
             text: "Battle.net"
-            tooltipText: "Launch Battle.net"
+            tooltipText: hub.bnetRunning ? "Battle.net is running" : "Launch Battle.net"
             onClicked: hub.launchBattleNet()
           }
           Repeater {

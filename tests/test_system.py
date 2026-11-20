@@ -119,3 +119,26 @@ class TestStorageUseColor:
             "SystemInfo.storageUseColor('nope')]))"
         )
         assert out == ["#22c55e"] * 3
+
+
+class TestHostMetrics:
+    def test_command_samples_proc_stat_twice(self, js):
+        out = js("console.log(JSON.stringify(SystemInfo.hostMetricsCommand()))")
+        assert out[0] == "python3"
+        assert "/proc/stat" in out[2]
+        assert "time.sleep" in out[2]
+
+    def test_parses_a_valid_sample(self, js):
+        out = js(
+            'console.log(JSON.stringify(SystemInfo.parseHostMetrics('
+            '\'{"cpuPercent":12.9}\')))'
+        )
+        assert out == {"cpuPercent": 12.9}
+
+    def test_rejects_bad_samples(self, js):
+        for text in ("", "not json", '{"cpuPercent":-1}', '{"cpuPercent":150}'):
+            out = js(
+                "console.log(JSON.stringify(SystemInfo.parseHostMetrics("
+                + __import__("json").dumps(text) + ")))"
+            )
+            assert out == {"cpuPercent": -1}

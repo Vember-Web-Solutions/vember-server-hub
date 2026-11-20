@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.51"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 127
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.52"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 128
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -61,6 +61,10 @@ Item {
   property var dockerContainers: []
   property string dockerError: ""
   property bool dockerBusy: false
+  // Overview Docker card. -1 means "not measured yet", not a zero reading.
+  property real containerRamBytes: -1
+  property int containerStatsCount: 0
+  property real hostCpuPercent: -1
   property string dockerBusyName: ""
   property bool dockerPullActive: false
   property string dockerPullingName: ""
@@ -289,6 +293,9 @@ Item {
       serverName: root.serverName,
       tailscaleActive: root.tailscaleActive,
       dockerContainers: root.dockerContainers.length,
+      containerRamBytes: root.containerRamBytes,
+      containerStatsCount: root.containerStatsCount,
+      hostCpuPercent: root.hostCpuPercent,
       gameMountPresent: root.gameMountPresent,
       steamInstalled: root.steamInstalled,
       bnetInstalled: root.bnetInstalled,
@@ -448,6 +455,7 @@ Item {
       lastActionMessage = "";
     refreshTailscale();
     refreshDocker();
+    refreshMetrics();
     refreshGames(preserveSelection === true);
     refreshGameMount();
     refreshSsh();
@@ -897,6 +905,13 @@ Item {
   function refreshDocker() {
     dockerError = "";
     if (!dockerPsProc.running) dockerPsProc.running = true;
+  }
+
+  // Both commands exit quickly, so the 15s poll can own them. Never restart a
+  // sample that is still in flight: the CPU reading needs two /proc/stat reads.
+  function refreshMetrics() {
+    if (!dockerStatsProc.running) dockerStatsProc.running = true;
+    if (!hostMetricsProc.running) hostMetricsProc.running = true;
   }
 
   function refreshDockerDetailSize(name) {
@@ -2200,6 +2215,32 @@ Item {
     onExited: function(code) {
       if (code !== 0 && root.dockerContainers.length === 0 && root.dockerError.length === 0)
         root.dockerError = "docker ps failed (code " + code + "). Is Docker available?"
+    }
+  }
+  Process {
+    id: dockerStatsProc
+    command: Docker.statsCommand()
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var s = Docker.parseStats(text);
+        root.containerRamBytes = s.totalBytes;
+        root.containerStatsCount = s.containers;
+      }
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) root.containerRamBytes = -1;
+    }
+  }
+  Process {
+    id: hostMetricsProc
+    command: SystemInfo.hostMetricsCommand()
+    stdout: StdioCollector {
+      onStreamFinished: root.hostCpuPercent = SystemInfo.parseHostMetrics(text).cpuPercent
+    }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (code !== 0) root.hostCpuPercent = -1;
     }
   }
   Process {

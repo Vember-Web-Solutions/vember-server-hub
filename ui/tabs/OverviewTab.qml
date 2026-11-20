@@ -11,6 +11,8 @@ import qs.Ui
 import qs.Commons
 import "../../model/Shell.mjs" as Shell
 import "../../model/DevTools.mjs" as DevTools
+import "../../model/Gaming.mjs" as Gaming
+import "../../model/Docker.mjs" as Docker
 
 Column {
   required property var panel
@@ -18,6 +20,48 @@ Column {
   // The Omarchy update live log starts collapsed; the status line and buttons
   // stay visible, and the log is shown on demand.
   property bool omarchyLogExpanded: false
+
+  // One quick-launch pill per detected game server that publishes a port.
+  // The published-port lookup reuses the same rule as the Servers list.
+  property var overviewLaunchServers: {
+    var out = [];
+    var containers = hub.dockerContainers || [];
+    var servers = Gaming.gameServerContainers(containers, hub.steamDedicatedServers || []);
+    for (var i = 0; i < servers.length; i++) {
+      var s = servers[i] || {};
+      var ports = "";
+      for (var j = 0; j < containers.length; j++) {
+        var c = containers[j] || {};
+        if (c.name === s.name) { ports = c.ports || ""; break; }
+      }
+      var published = Docker.publishedPorts(ports);
+      out.push({
+        name: s.name || "unknown",
+        port: published.length > 0 ? published[0] : 0,
+        state: s.state || ""
+      });
+    }
+    return out;
+  }
+
+  // Browser UIs published by running containers, for the Docker card.
+  property var overviewWebUis: {
+    var out = [];
+    var containers = hub.dockerContainers || [];
+    for (var i = 0; i < containers.length; i++) {
+      var c = containers[i] || {};
+      if (c.running && Shell.trim(c.webUrl || "").length > 0)
+        out.push({ name: c.name || "container", url: c.webUrl });
+    }
+    return out;
+  }
+
+  // One installed-game number across every library that reports one.
+  property int overviewInstalledGames: Gaming.totalInstalledGameCount({
+    steam: hub.steamGameCount, bnet: hub.bnetGameCount,
+    prism: hub.prismInstanceCount, heroic: hub.heroicGameCount,
+    minecraft: hub.minecraftVersionCount
+  })
 
   visible: panel.currentTab === "overview"
   width: parent.width
@@ -225,7 +269,7 @@ Column {
         }
       }
 
-      // Containers glance
+      // Containers glance: published web UIs and live resource numbers.
       Rectangle {
         width: 320
         radius: 14
@@ -255,52 +299,80 @@ Column {
 
           Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
 
-          Column {
+          Text {
+            visible: Shell.trim(hub.dockerError).length > 0
+            textFormat: Text.PlainText
+            text: hub.dockerError
+            color: "#ef4444"
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
             width: parent.width
-            spacing: 6
-            Text { visible: Shell.trim(hub.dockerError).length > 0; textFormat: Text.PlainText; text: hub.dockerError; color: "#ef4444"; font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-            Text { visible: Shell.trim(hub.dockerError).length === 0 && hub.dockerContainers.length === 0; textFormat: Text.PlainText; text: "No containers found."; color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; width: parent.width }
-            Column {
-              visible: Shell.trim(hub.dockerError).length === 0 && hub.dockerContainers.length > 0
-              width: parent.width
-              spacing: 4
-              Repeater {
-                model: Math.min(hub.dockerContainers.length, 5)
-                delegate: RowLayout {
-                  required property int index
-                  width: parent ? parent.width : 0
-                  spacing: 8
-                  Rectangle {
-                    width: 8; height: 8; radius: 4
-                    color: panel.dockerStateTone(hub.dockerContainers[index].state)
-                    Layout.alignment: Qt.AlignVCenter
-                  }
+          }
+          Text {
+            visible: Shell.trim(hub.dockerError).length === 0 && overviewWebUis.length === 0
+            textFormat: Text.PlainText
+            text: "No web interfaces published."
+            color: panel.softText(0.78)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+          Flow {
+            visible: Shell.trim(hub.dockerError).length === 0 && overviewWebUis.length > 0
+            width: parent.width
+            spacing: 8
+            Repeater {
+              model: overviewWebUis
+              delegate: Rectangle {
+                property var ui: modelData
+                radius: 9
+                color: panel.accentSoft(0.16)
+                border.color: panel.accentSoft(0.38)
+                border.width: 1
+                implicitWidth: uiText.implicitWidth + 22
+                implicitHeight: uiText.implicitHeight + 12
+                MouseArea {
+                  anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor
+                  onClicked: panel.hub.openContainerWebUrl(ui.url, ui.name)
+                }
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 6
+                  Rectangle { width: 7; height: 7; radius: 3.5; color: "#22c55e"; anchors.verticalCenter: parent.verticalCenter }
                   Text {
+                    id: uiText
+                    anchors.verticalCenter: parent.verticalCenter
                     textFormat: Text.PlainText
-                    text: hub.dockerContainers[index].name || "unknown"
+                    text: ui.name
                     color: Color.menu.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                  }
-                  Text {
-                    textFormat: Text.PlainText
-                    text: hub.dockerContainers[index].state || ""
-                    color: panel.dockerStateTone(hub.dockerContainers[index].state)
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
                   }
                 }
               }
-              Text {
-                visible: hub.dockerContainers.length > 5
-                textFormat: Text.PlainText
-                text: "+" + (hub.dockerContainers.length - 5) + " more"
-                color: panel.softText(0.7)
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-              }
+            }
+          }
+
+          Column {
+            width: parent.width
+            spacing: 4
+            Text {
+              textFormat: Text.PlainText
+              text: "Container RAM: " + (hub.containerRamBytes >= 0
+                ? Shell.humanBytes(hub.containerRamBytes) + " across " + hub.containerStatsCount
+                : "—")
+              color: Color.menu.text
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+            }
+            Text {
+              textFormat: Text.PlainText
+              text: "Host CPU: " + (hub.hostCpuPercent >= 0 ? hub.hostCpuPercent + "%" : "—") + " • GPU: n/a"
+              color: panel.softText(0.78)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
             }
           }
 
@@ -353,25 +425,115 @@ Column {
         }
       }
 
-      // Games & storage glance
+      // Quick launch: one slice per detected game server.
       Rectangle {
         width: 320
         radius: 14
         color: panel.softText(0.045)
         border.color: panel.accentSoft(0.18)
         border.width: 1
-        implicitHeight: glanceGm.implicitHeight + 24
+        implicitHeight: quickCol.implicitHeight + 24
         MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: panel.currentTab = "games" }
         Column {
-          id: glanceGm
+          id: quickCol
           anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
           anchors.margins: 14; spacing: 10
           RowLayout {
             width: parent.width; spacing: 10
-            Text { textFormat: Text.PlainText; text: "󰊴"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            Text { textFormat: Text.PlainText; text: "󰐊"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
             ColumnLayout {
               Layout.fillWidth: true; spacing: 2
-              Text { textFormat: Text.PlainText; text: "Games & storage"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
+              Text { textFormat: Text.PlainText; text: "Quick launch"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
+              Text { textFormat: Text.PlainText; text: overviewInstalledGames + " games installed"; color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+            }
+          }
+
+          Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
+
+          Text {
+            visible: overviewLaunchServers.length === 0
+            textFormat: Text.PlainText
+            text: "No game servers detected yet."
+            color: panel.softText(0.78)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+          Flow {
+            width: parent.width
+            spacing: 8
+            Repeater {
+              model: overviewLaunchServers
+              delegate: Rectangle {
+                property var server: modelData
+                radius: 9
+                color: server.port > 0 ? panel.accentSoft(0.16) : panel.softText(0.08)
+                border.color: server.port > 0 ? panel.accentSoft(0.38) : panel.softText(0.12)
+                border.width: 1
+                opacity: hub.mcServerLaunchBusy ? 0.55 : 1
+                implicitWidth: serverText.implicitWidth + 22
+                implicitHeight: serverText.implicitHeight + 12
+                MouseArea {
+                  anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor
+                  enabled: server.port > 0 && !hub.mcServerLaunchBusy
+                  onClicked: panel.hub.launchMinecraftServer(server.name, server.port, "")
+                }
+                Row {
+                  anchors.centerIn: parent
+                  spacing: 6
+                  Rectangle {
+                    width: 7; height: 7; radius: 3.5
+                    color: panel.dockerStateTone(server.state)
+                    anchors.verticalCenter: parent.verticalCenter
+                  }
+                  Text {
+                    id: serverText
+                    anchors.verticalCenter: parent.verticalCenter
+                    textFormat: Text.PlainText
+                    text: server.name + (server.port > 0 ? (" • " + server.port) : " • no port")
+                    color: Color.menu.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                  }
+                }
+              }
+            }
+          }
+          Text {
+            visible: Shell.trim(hub.mcServerLaunchStatus).length > 0
+            textFormat: Text.PlainText
+            text: hub.mcServerLaunchStatus
+            color: panel.softText(0.8)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.caption
+            wrapMode: Text.Wrap
+            width: parent.width
+          }
+
+          Text { textFormat: Text.PlainText; text: "Open Gaming tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+        }
+      }
+
+      // Storage amounts, in its own box next to the launch slices.
+      Rectangle {
+        width: 320
+        radius: 14
+        color: panel.softText(0.045)
+        border.color: panel.accentSoft(0.18)
+        border.width: 1
+        implicitHeight: glanceSt.implicitHeight + 24
+        MouseArea { anchors.fill: parent; z: 1; cursorShape: Qt.PointingHandCursor; onClicked: { panel.currentTab = "games"; panel.gamesSubTab = "storage" } }
+        Column {
+          id: glanceSt
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 14; spacing: 10
+          RowLayout {
+            width: parent.width; spacing: 10
+            Text { textFormat: Text.PlainText; text: "󰋊"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.iconLarge }
+            ColumnLayout {
+              Layout.fillWidth: true; spacing: 2
+              Text { textFormat: Text.PlainText; text: "Games storage"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
               Text { textFormat: Text.PlainText; text: hub.gameMount; color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
             }
             Rectangle {
@@ -385,54 +547,44 @@ Column {
 
           Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
 
-          Column {
+          Text {
+            visible: !hub.gameMountPresent
+            textFormat: Text.PlainText
+            text: "Game partition not mounted"
+            color: panel.softText(0.8)
+            font.family: Style.font.family
+            wrapMode: Text.Wrap
             width: parent.width
-            spacing: 8
-            Text {
-              visible: !hub.gameMountPresent
-              textFormat: Text.PlainText
-              text: "Game partition not mounted"
-              color: panel.softText(0.8)
-              font.family: Style.font.family
-              wrapMode: Text.Wrap
+          }
+          Column {
+            visible: hub.gameMountPresent
+            width: parent.width
+            spacing: 6
+            Rectangle {
               width: parent.width
-            }
-            Column {
-              visible: hub.gameMountPresent
-              width: parent.width
-              spacing: 6
+              height: 10
+              radius: 5
+              color: panel.softText(0.12)
+              clip: true
               Rectangle {
-                width: parent.width
-                height: 10
+                height: parent.height
                 radius: 5
-                color: panel.softText(0.12)
-                clip: true
-                Rectangle {
-                  height: parent.height
-                  radius: 5
-                  width: parent.width * hub.gameMountUseRatio
-                  color: panel.storageUseColor(hub.gameMountUseRatio)
-                  Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
-                }
+                width: parent.width * hub.gameMountUseRatio
+                color: panel.storageUseColor(hub.gameMountUseRatio)
+                Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
               }
-              RowLayout {
-                width: parent.width
-                spacing: 8
-                Text { textFormat: Text.PlainText; text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"; color: panel.storageUseColor(hub.gameMountUseRatio); font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                Item { Layout.fillWidth: true }
-                Text { textFormat: Text.PlainText; text: Shell.humanBytes(hub.gameMountUsedBytes) + " / " + Shell.humanBytes(hub.gameMountTotalBytes); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-              }
-              Text { textFormat: Text.PlainText; text: Shell.humanBytes(hub.gameMountAvailBytes) + " free"; color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
             }
-            Column {
+            RowLayout {
               width: parent.width
-              spacing: 2
-              Text { textFormat: Text.PlainText; text: "Steam: " + (hub.steamRunning ? "running" : "stopped") + " • games: " + (hub.steamGameCount >= 0 ? hub.steamGameCount : "?"); color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
-              Text { textFormat: Text.PlainText; text: "Battle.net: " + (hub.bnetRunning ? "running" : "stopped") + " • games: " + (hub.bnetGameCount >= 0 ? hub.bnetGameCount : "?"); color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+              spacing: 8
+              Text { textFormat: Text.PlainText; text: (hub.gameMountUsePercentText.length > 0 ? hub.gameMountUsePercentText : Math.round(hub.gameMountUseRatio * 100) + "%") + " used"; color: panel.storageUseColor(hub.gameMountUseRatio); font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+              Item { Layout.fillWidth: true }
+              Text { textFormat: Text.PlainText; text: Shell.humanBytes(hub.gameMountUsedBytes) + " / " + Shell.humanBytes(hub.gameMountTotalBytes); color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.caption }
             }
+            Text { textFormat: Text.PlainText; text: Shell.humanBytes(hub.gameMountAvailBytes) + " free"; color: panel.softText(0.78); font.family: Style.font.family; font.pixelSize: Style.font.caption }
           }
 
-          Text { textFormat: Text.PlainText; text: "Open Gaming tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          Text { textFormat: Text.PlainText; text: "Open Storage tab →"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
         }
       }
     }
