@@ -106,3 +106,72 @@ class TestWizardWiring:
     def test_modal_is_instantiated_once(self):
         text = read("HubPanel.qml")
         assert "MinecraftServerWizard { panel: panel; cardRadius: card.radius }" in text
+
+
+class TestModpackRecipes:
+    def _scan(self, js, home):
+        cmd = js('console.log(JSON.stringify(MinecraftWizard.modpackScanCommand('
+                 + __import__("json").dumps(str(home)) + ')))')
+        assert cmd[0] == "python3" and cmd[1] == "-c"
+        run = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        assert run.returncode == 0, run.stderr
+        return js('console.log(JSON.stringify(MinecraftWizard.parseModpackScan('
+                  + __import__("json").dumps(run.stdout) + ')))')
+
+    def test_installed_modpacks_become_complete_recipes(self, js, tmp_path):
+        root = tmp_path / ".local/share/PrismLauncher/instances/MyPack"
+        game = root / "minecraft"
+        (game / "mods").mkdir(parents=True)
+        (game / "mods" / "jei.jar").write_text("jar")
+        (game / "saves" / "My World").mkdir(parents=True)
+        (game / "saves" / "My World" / "level.dat").write_text("nbt")
+        (root / "instance.cfg").write_text("name=My Pack: The Modpack\n")
+        (root / "mmc-pack.json").write_text(__import__("json").dumps({
+            "components": [
+                {"uid": "net.minecraft", "version": "1.20.1"},
+                {"uid": "net.minecraftforge", "version": "47.4.28"},
+            ]
+        }))
+
+        packs = self._scan(js, tmp_path)
+        assert len(packs) == 1
+        pack = packs[0]
+        assert pack["name"] == "My Pack: The Modpack"
+        assert pack["loader"] == "FORGE"
+        assert pack["version"] == "1.20.1-47.4.28"
+        assert pack["modsDir"] == str(game / "mods")
+        assert pack["worldDir"] == str(game / "saves" / "My World")
+
+        options = js('console.log(JSON.stringify(MinecraftWizard.modpackOptions('
+                     + __import__("json").dumps(packs) + ')))')
+        assert options[0]["value"] == ""
+        assert options[1]["value"] == "MyPack"
+        assert "FORGE" in options[1]["label"]
+
+    def test_fabric_pack_without_a_world_is_still_offered(self, js, tmp_path):
+        root = tmp_path / ".local/share/PrismLauncher/instances/FabPack"
+        mods = root / "minecraft" / "mods"
+        mods.mkdir(parents=True)
+        (root / "instance.cfg").write_text("name=Fab Pack\n")
+        (root / "mmc-pack.json").write_text(__import__("json").dumps({
+            "components": [
+                {"uid": "net.minecraft", "version": "1.20.1"},
+                {"uid": "net.fabricmc.fabric-loader", "version": "0.20.1"},
+            ]
+        }))
+        packs = self._scan(js, tmp_path)
+        assert len(packs) == 1
+        assert packs[0]["loader"] == "FABRIC"
+        assert packs[0]["version"] == "1.20.1"
+        assert packs[0]["worldDir"] == ""
+
+    def test_parse_ignores_garbage(self, js):
+        assert js('console.log(JSON.stringify(MinecraftWizard.parseModpackScan('
+                  '"\\njunk\\ta\\tb\\tVANILLA\\tx\\ty\\n")))') == []
+
+    def test_hub_join_instances_are_not_offered_as_modpacks(self, js):
+        raw = ("vemberos-server\tVemberOS Server\tFABRIC\t26.3\t/mods\t\n"
+               "CreateVerse\tCreateVerse\tFORGE\t1.20.1-47.4.28\t/mods\t/world")
+        packs = js('console.log(JSON.stringify(MinecraftWizard.parseModpackScan('
+                   + __import__("json").dumps(raw) + ')))')
+        assert [p["id"] for p in packs] == ["CreateVerse"]

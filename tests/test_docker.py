@@ -256,6 +256,7 @@ class TestMinecraftServerCommands:
             "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
             "memory": "4G", "difficulty": "NORMAL",
             "dataDir": "/var/minecraft-servers", "port": 25565,
+            "modsDir": "", "worldDir": "",
         }
         cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
         assert cmd[:4] == ["docker", "run", "-d", "-it"]
@@ -485,3 +486,33 @@ class TestComposeApply:
             "-p", "paperless-ngx", "up", "-d", "--no-deps", "webserver",
         ]
         assert js("console.log(JSON.stringify(Docker.applyComposeUpdateCommand(null)))") == []
+
+
+class TestModpackMounts:
+    def test_modpack_mods_and_world_are_mounted_read_only(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'name:"create-server", type:"FORGE", version:"1.20.1-47.4.28", '
+            'modsDir:"/home/someone/mods", worldDir:"/home/someone/saves/New World"'
+            "})))"
+        )
+        assert "-v" in cmd and "/home/someone/mods:/mods:ro" in cmd
+        assert "/home/someone/saves/New World:/worlds/source:ro" in cmd
+        assert "WORLD=/worlds/source" in cmd
+        assert cmd[-1] == "itzg/minecraft-server:latest"
+
+    def test_unsafe_mount_paths_are_dropped(self, js):
+        opts = js(
+            "console.log(JSON.stringify(Docker.normalizeMinecraftServerOptions({"
+            'modsDir:"relative/mods", worldDir:"/a/b:\\evil"'
+            "})))"
+        )
+        assert opts["modsDir"] == ""
+        assert opts["worldDir"] == ""
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'modsDir:"relative/mods", worldDir:"/a/b:\\evil"'
+            "})))"
+        )
+        assert "WORLD=" not in " ".join(cmd)
+        assert ":/mods:ro" not in " ".join(cmd)

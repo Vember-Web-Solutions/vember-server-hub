@@ -381,6 +381,25 @@ Rectangle {
           font.family: Style.font.family
           font.bold: true
         }
+        Dropdown {
+          width: parent.width
+          label: "Installed modpack"
+          value: panel.hub.mcWizardModpack
+          options: panel.hub.mcWizardModpackOptions
+          onChanged: panel.hub.mcWizardChooseModpack(value)
+        }
+        Text {
+          visible: Shell.trim(panel.hub.mcWizardModsDir).length > 0
+          textFormat: Text.PlainText
+          text: "Loaded from this modpack: " + panel.hub.mcServerTypeDraft + " " +
+            panel.hub.mcServerVersionDraft + (Shell.trim(panel.hub.mcWizardWorldDir).length > 0
+              ? " with its world save" : " with its mods")
+          color: panel.softText(0.75)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
         Text {
           textFormat: Text.PlainText
           text: "Container name"

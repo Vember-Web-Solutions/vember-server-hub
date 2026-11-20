@@ -457,6 +457,79 @@ export class Gaming {
   // Bytes across every detected server, for the blue slice of the partition
   // bar. This lives in the model so the arithmetic is tested alongside the
   // parser that produced the numbers.
+  // Minecraft's multiplayer list is a small uncompressed NBT file. Prism's
+  // JoinServerOnLaunch writes its own entry with hidden=1, which keeps the
+  // server out of the Multiplayer screen after a disconnect. Emitting the file
+  // here lets the hub keep one visible entry without an NBT parser in QML.
+  utf8Bytes(text) {
+    var s = String(text || "");
+    var out = [];
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i);
+      if (c < 0x80) out.push(c);
+      else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+    }
+    return out;
+  }
+
+  minecraftServerListBytes(address, name) {
+    var self = this;
+    var addr = shell.trim(String(address || "")) || "localhost:25565";
+    var label = shell.trim(String(name || "")) || "Vember OS";
+    var out = [];
+    function put() { for (var i = 0; i < arguments.length; i++) out.push(arguments[i]); }
+    function text(value) {
+      var bytes = self.utf8Bytes(value);
+      put((bytes.length >> 8) & 255, bytes.length & 255);
+      for (var i = 0; i < bytes.length; i++) put(bytes[i]);
+    }
+    put(0x0a); text("");                    // root TAG_Compound
+    put(0x09); text("servers");             // TAG_List of compounds
+    put(0x0a, 0x00, 0x00, 0x00, 0x01);      // element type + one entry
+    // List elements carry no tag/name header — their children start here.
+    put(0x01); text("hidden"); put(0x00);   // visible in the multiplayer list
+    put(0x08); text("ip"); text(addr);
+    put(0x08); text("name"); text(label);
+    put(0x00);                              // end entry
+    put(0x00);                              // end root
+    return out;
+  }
+
+  // POSIX printf writes the exact bytes, including NULs, straight to the file.
+  minecraftServerListCommand(gameDir, address, name) {
+    var dir = shell.trim(String(gameDir || ""));
+    if (dir.charAt(0) !== "/" || dir.indexOf("\n") !== -1)
+      return ["sh", "-c", "exit 1"];
+    var bytes = this.minecraftServerListBytes(address, name);
+    var esc = "";
+    for (var i = 0; i < bytes.length; i++) {
+      var oct = bytes[i].toString(8);
+      while (oct.length < 3) oct = "0" + oct;
+      esc += "\\" + oct;
+    }
+    // Skip layouts that are not installed instead of creating empty instances.
+    return ["sh", "-c", "[ -d " + shell.quote(dir) + " ] || exit 0; printf '" +
+      esc + "' > " + shell.quote(dir + "/servers.dat")];
+  }
+
+  // Both the native and Flatpak Prism layouts, for the two instances the hub
+  // launches. Other modpack instances keep their own server lists untouched.
+  minecraftJoinGameDirs(homeDir) {
+    var h = shell.trim(String(homeDir || ""));
+    if (!h) return [];
+    var roots = [
+      h + "/.local/share/PrismLauncher/instances",
+      h + "/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances"
+    ];
+    var out = [];
+    for (var i = 0; i < roots.length; i++) {
+      out.push(roots[i] + "/vemberos-server/minecraft");
+      out.push(roots[i] + "/vemberos-vanilla/minecraft");
+    }
+    return out;
+  }
+
   // Two clean Prism instances: one has JoinServerOnLaunchAddress set to the
   // local server, the other opens to the main menu. Prism's --server CLI flag
   // does not pass the address to modern (26.3) game arguments, so the address
@@ -516,5 +589,9 @@ export function gameServerContainers(...args) { return impl.gameServerContainers
 export function gameServerSizeCommand(...args) { return impl.gameServerSizeCommand(...args); }
 export function parseGameServerSizes(...args) { return impl.parseGameServerSizes(...args); }
 export function gameServerTotalBytes(...args) { return impl.gameServerTotalBytes(...args); }
+export function utf8Bytes(...args) { return impl.utf8Bytes(...args); }
+export function minecraftServerListBytes(...args) { return impl.minecraftServerListBytes(...args); }
+export function minecraftServerListCommand(...args) { return impl.minecraftServerListCommand(...args); }
+export function minecraftJoinGameDirs(...args) { return impl.minecraftJoinGameDirs(...args); }
 export function minecraftClientLaunchCommand(...args) { return impl.minecraftClientLaunchCommand(...args); }
 export function minecraftClientInstalled(...args) { return impl.minecraftClientInstalled(...args); }

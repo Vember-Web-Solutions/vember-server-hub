@@ -196,9 +196,21 @@ export class Docker {
   if (!isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
     port = 25565;
 
+  // Optional modpack sources. They are bind-mounted read-only by itzg: /mods
+  // is copied into /data/mods, and WORLD clones the save into the data dir.
+  // A colon would be read as a mount separator, so reject it here.
+  function safeMountPath(value) {
+    var p = shell.trim(String(value || ""));
+    return (p.charAt(0) === "/" && p.indexOf("\n") === -1 && p.indexOf(":") === -1)
+      ? p : "";
+  }
+  var modsDir = safeMountPath(o.modsDir);
+  var worldDir = safeMountPath(o.worldDir);
+
   return {
     name: name, type: type, version: version,
-    memory: memory, difficulty: difficulty, dataDir: dataDir, port: port
+    memory: memory, difficulty: difficulty, dataDir: dataDir, port: port,
+    modsDir: modsDir, worldDir: worldDir
   };
   }
 
@@ -224,7 +236,7 @@ export class Docker {
   // RCON stays inside the container; only the game port is published.
   createMinecraftServerCommand(opts) {
   var o = this.normalizeMinecraftServerOptions(opts);
-  return [
+  var cmd = [
     "docker", "run", "-d", "-it",
     "--name", o.name,
     "--restart", "unless-stopped",
@@ -234,9 +246,14 @@ export class Docker {
     "-e", "TYPE=" + o.type,
     "-e", "VERSION=" + o.version,
     "-e", "MEMORY=" + o.memory,
-    "-e", "DIFFICULTY=" + o.difficulty,
-    this.minecraftServerImage()
+    "-e", "DIFFICULTY=" + o.difficulty
   ];
+  if (o.modsDir)
+    cmd.push("-v", o.modsDir + ":/mods:ro");
+  if (o.worldDir)
+    cmd.push("-v", o.worldDir + ":/worlds/source:ro", "-e", "WORLD=/worlds/source");
+  cmd.push(this.minecraftServerImage());
+  return cmd;
   }
 
   logsCommand(name, lines) {

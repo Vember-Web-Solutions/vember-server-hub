@@ -2847,3 +2847,28 @@ class TestMinecraftDirectLaunch:
     def test_status_exposes_launch_state(self):
         panel = read(REPO / "Panel.qml")
         assert "mcClientLaunchStatus: root.mcClientLaunchStatus" in panel
+
+
+class TestModpackAndServerListWiring:
+    def test_wizard_offers_installed_modpacks(self):
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        assert 'label: "Installed modpack"' in wizard
+        assert "options: panel.hub.mcWizardModpackOptions" in wizard
+        assert "onChanged: panel.hub.mcWizardChooseModpack(value)" in wizard
+
+    def test_panel_wires_modpack_scan_and_server_list(self):
+        text = read(REPO / "Panel.qml")
+        for name in (
+            "id: mcWizardModpackScanProc", "id: mcServerListProc",
+            "id: mcServerListDelayTimer", "function refreshMinecraftServerList(address)",
+            "function mcWizardChooseModpack(id)",
+            "Gaming.minecraftJoinGameDirs(homeDir)",
+            "Wizard.modpackScanCommand(homeDir)",
+        ):
+            assert name in text, name + " is missing"
+        assert "modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir" in text
+
+    def test_gaming_model_exports_the_server_list_helpers(self):
+        text = read(REPO / "model/Gaming.mjs")
+        assert "export function minecraftServerListCommand" in text
+        assert "export function minecraftJoinGameDirs" in text

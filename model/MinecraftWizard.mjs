@@ -106,6 +106,84 @@ export class MinecraftWizard {
   clientName(client) {
     return client === "official" ? "Official Minecraft Launcher" : "Prism Launcher";
   }
+
+  // An installed Prism modpack is a complete server recipe: its loader/version,
+  // mods and (when present) its save. Read both Prism layouts so a Flatpak
+  // install is offered alongside a native one. Output is tab-separated rows:
+  // id, name, loader, version, mods dir, world dir.
+  modpackScanCommand(homeDir) {
+    var h = shell.trim(String(homeDir || ""));
+    var roots = [
+      h + "/.local/share/PrismLauncher/instances",
+      h + "/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/instances"
+    ];
+    var py = [
+      "import glob, json, os, sys",
+      "for root in sys.argv[1:]:",
+      "    for cfg in sorted(glob.glob(os.path.join(root, '*', 'instance.cfg'))):",
+      "        d = os.path.dirname(cfg)",
+      "        pack = os.path.join(d, 'mmc-pack.json')",
+      "        if not os.path.isfile(pack):",
+      "            continue",
+      "        name = os.path.basename(d)",
+      "        for line in open(cfg, errors='replace'):",
+      "            if line.startswith('name='):",
+      "                name = line[5:].strip()",
+      "                break",
+      "        try:",
+      "            comps = {c.get('uid', ''): c.get('version', '') for c in json.load(open(pack)).get('components', [])}",
+      "        except Exception:",
+      "            continue",
+      "        mc = comps.get('net.minecraft', '')",
+      "        if comps.get('net.minecraftforge'):",
+      "            loader, version = 'FORGE', mc + '-' + comps['net.minecraftforge']",
+      "        elif comps.get('net.fabricmc.fabric-loader'):",
+      "            loader, version = 'FABRIC', mc",
+      "        else:",
+      "            continue",
+      "        mods = os.path.join(d, 'minecraft', 'mods')",
+      "        if not os.path.isdir(mods):",
+      "            continue",
+      "        saves = sorted(glob.glob(os.path.join(d, 'minecraft', 'saves', '*', 'level.dat')))",
+      "        world = os.path.dirname(saves[0]) if saves else ''",
+      "        print('\\t'.join([os.path.basename(d), name, loader, version, mods, world]))"
+    ].join("\n");
+    return ["python3", "-c", py].concat(roots);
+  }
+
+  parseModpackScan(text) {
+    return shell.nonEmptyLines(text).map(function (line) {
+      var parts = line.split("\t");
+      return {
+        id: shell.trim(parts[0] || ""),
+        name: shell.trim(parts[1] || ""),
+        loader: shell.trim(parts[2] || ""),
+        version: shell.trim(parts[3] || ""),
+        modsDir: shell.trim(parts[4] || ""),
+        worldDir: shell.trim(parts[5] || "")
+      };
+    }).filter(function (m) {
+      // The hub's own join instance carries Fabric mods but is not a modpack.
+      var managed = m.id === "vemberos-server" || m.id === "vemberos-vanilla";
+      return !managed && m.id.length > 0 && m.modsDir.length > 0 &&
+        (m.loader === "FORGE" || m.loader === "FABRIC");
+    });
+  }
+
+  modpackOptions(modpacks) {
+    var options = [{ value: "", label: "None — choose the options below",
+      detail: "Start from a plain server" }];
+    var list = Array.isArray(modpacks) ? modpacks : [];
+    for (var i = 0; i < list.length; i++) {
+      var m = list[i] || {};
+      options.push({
+        value: m.id || "",
+        label: (m.name || m.id || "Modpack") + " · " + (m.loader || "") + " " + (m.version || ""),
+        detail: "Use its installed mods" + (m.worldDir ? " and world save" : "")
+      });
+    }
+    return options;
+  }
 }
 
 export function clientOptions(...args) { return new MinecraftWizard().clientOptions(...args); }
@@ -118,3 +196,6 @@ export function clientCheckCommand(...args) { return new MinecraftWizard().clien
 export function parseClientScan(...args) { return new MinecraftWizard().parseClientScan(...args); }
 export function clientInstallCommand(...args) { return new MinecraftWizard().clientInstallCommand(...args); }
 export function clientName(...args) { return new MinecraftWizard().clientName(...args); }
+export function modpackScanCommand(...args) { return new MinecraftWizard().modpackScanCommand(...args); }
+export function parseModpackScan(...args) { return new MinecraftWizard().parseModpackScan(...args); }
+export function modpackOptions(...args) { return new MinecraftWizard().modpackOptions(...args); }

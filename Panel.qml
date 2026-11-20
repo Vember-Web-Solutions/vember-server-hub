@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.47"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 123
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.48"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 124
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -98,6 +98,12 @@ Item {
   property bool mcWizardInstallBusy: false
   property string mcWizardInstallStatus: ""
   property int mcWizardInstallPolls: 0
+  // Installed Prism modpacks are offered as a complete server recipe.
+  property var mcWizardModpacks: []
+  property var mcWizardModpackOptions: []
+  property string mcWizardModpack: ""
+  property string mcWizardModsDir: ""
+  property string mcWizardWorldDir: ""
   // Preflight: Docker daemon, image availability and guided pull.
   property string mcWizardDockerReady: "checking"
   property bool mcWizardImageReady: false
@@ -1025,6 +1031,10 @@ Item {
     lastActionMessage = mcClientLaunchStatus;
     mcClientLaunchProc.running = true;
     handOffToExternalSurface();
+    // Prism's auto-join writes a hidden list entry at startup. Put the visible
+    // one back before launching and again once the game has had time to write.
+    refreshMinecraftServerList();
+    mcServerListDelayTimer.restart();
   }
 
   function launchExtraApp(appId) {
@@ -1449,6 +1459,11 @@ Item {
     mcWizardPullStatus = "";
     mcWizardPullPercent = -1;
     _mcWizardPullLayers = ({});
+    mcWizardModpack = "";
+    mcWizardModpacks = [];
+    mcWizardModpackOptions = [];
+    mcWizardModsDir = "";
+    mcWizardWorldDir = "";
     var host = Shell.trim(tailscaleIp).split(/[\s,]+/)[0] || "localhost";
     mcWizardJoinAddress = host + ":" + mcServerPortDraft;
 
@@ -1456,6 +1471,9 @@ Item {
     mcWizardClientCheckProc.running = true;
     mcWizardDockerCheckProc.running = false;
     mcWizardDockerCheckProc.running = true;
+    mcWizardModpackScanProc.running = false;
+    mcWizardModpackScanProc.running = true;
+    refreshMinecraftServerList();
   }
 
   function closeMinecraftServerWizard() {
@@ -1468,6 +1486,44 @@ Item {
     mcWizardInstallProc.running = false;
     mcWizardInstallBusy = false;
     mcWizardOpen = false;
+  }
+
+  // Prism writes its auto-join entry as hidden, which hides the server from
+  // Multiplayer after a disconnect. Rewriting the list here keeps one visible
+  // entry in both hub-managed instances. Called from the wizard and on launch.
+  function refreshMinecraftServerList(address) {
+    var addr = Shell.trim(String(address || "")) || "vemberos:25565";
+    var dirs = Gaming.minecraftJoinGameDirs(homeDir);
+    var script = [];
+    for (var i = 0; i < dirs.length; i++) {
+      var cmd = Gaming.minecraftServerListCommand(dirs[i], addr, "Vember OS");
+      if (cmd.length === 3) script.push(cmd[2]);
+    }
+    if (!script.length) return;
+    mcServerListProc.command = ["sh", "-c", script.join("\n")];
+    mcServerListProc.running = false;
+    mcServerListProc.running = true;
+  }
+
+  // Selecting an installed modpack fills in the loader, exact version and a
+  // memory size that suits it, and remembers the read-only mod/world mounts.
+  function mcWizardChooseModpack(id) {
+    mcWizardModpack = String(id || "");
+    mcWizardModsDir = "";
+    mcWizardWorldDir = "";
+    if (!mcWizardModpack)
+      return;
+    for (var i = 0; i < mcWizardModpacks.length; i++) {
+      var m = mcWizardModpacks[i] || {};
+      if (m.id !== mcWizardModpack)
+        continue;
+      mcServerTypeDraft = m.loader || "FORGE";
+      mcServerVersionDraft = m.version || "LATEST";
+      mcServerMemoryDraft = "6G";
+      mcWizardModsDir = m.modsDir || "";
+      mcWizardWorldDir = m.worldDir || "";
+      break;
+    }
   }
 
   function mcWizardNext() {
@@ -1522,7 +1578,8 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: homeDir + "/minecraft-servers"
+      defaultDataDir: homeDir + "/minecraft-servers",
+      modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     }).join(" ");
   }
 
@@ -1551,7 +1608,8 @@ Item {
       version: mcServerVersionDraft, memory: mcServerMemoryDraft,
       difficulty: mcServerDifficultyDraft,
       dataDir: mcServerDataDirDraft, port: mcServerPortDraft,
-      defaultDataDir: homeDir + "/minecraft-servers"
+      defaultDataDir: homeDir + "/minecraft-servers",
+      modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir
     };
     // Reflect the normalised values back into the form so the operator sees
     // exactly what was created when an input fell back to its default.
@@ -2050,6 +2108,37 @@ Item {
     }
   }
 
+  // Keeps the Vember server visible in Prism's Multiplayer list. Prism's
+  // auto-join entry is hidden by default, so a disconnect left no entry to
+  // click. Rewriting after launch puts it back.
+  Process {
+    id: mcServerListProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+  }
+
+  Timer {
+    id: mcServerListDelayTimer
+    interval: 6000
+    repeat: false
+    onTriggered: root.refreshMinecraftServerList()
+  }
+
+  // Installed Prism modpacks are scanned when the wizard opens, so the
+  // modpack dropdown reflects the current machine rather than a hardcoded list.
+  Process {
+    id: mcWizardModpackScanProc
+    command: Wizard.modpackScanCommand(homeDir)
+    stdout: StdioCollector {
+      onStreamFinished: {
+        var packs = Wizard.parseModpackScan(text);
+        root.mcWizardModpacks = packs;
+        root.mcWizardModpackOptions = Wizard.modpackOptions(packs);
+      }
+    }
+    stderr: StdioCollector {}
+  }
+
   // Wizard preflight and install. Each check is a separate process so the UI
   // can explain exactly which prerequisite is missing instead of failing at
   // `docker run` with an opaque exit code.
@@ -2215,6 +2304,7 @@ Item {
           (id ? " (" + id.slice(0, 12) + ")" : "") +
           " created. Connect on port 25565 once it is running; the server jar may still be downloading.";
         root.mcServerCreateStatus = "Created — starting.";
+        root.refreshMinecraftServerList(root.mcWizardJoinAddress);
       } else {
         root.mcServerCreateStatus = "Creation failed.";
         root.mcServerCreateResult = Shell.failureMessage(
@@ -2591,6 +2681,8 @@ Item {
     onExited: function(code) {
       if (code === 0) {
         root.mcClientLaunchStatus = "Closed " + modeLabel + ".";
+        // Prism may rewrite its list on exit; restore the visible entry.
+        root.refreshMinecraftServerList();
       } else {
         var err = Shell.trim(stderr.text || "");
         root.mcClientLaunchStatus = "Could not launch " + modeLabel +
@@ -2873,6 +2965,7 @@ Item {
     loadHubConfig();
     loadOmarchyUpdateLog();
     loadInstallLog();
+    refreshMinecraftServerList();
   }
 
   Process {

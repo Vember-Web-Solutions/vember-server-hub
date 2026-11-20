@@ -565,3 +565,102 @@ class TestMinecraftClientLaunch:
         assert js("console.log(JSON.stringify(Gaming.minecraftClientInstalled("
                   + __import__("json").dumps(apps) + ")))") is True
         assert js("console.log(JSON.stringify(Gaming.minecraftClientInstalled(null)))") is False
+
+
+class TestMinecraftServerList:
+    """The hub keeps one visible server entry in Prism's multiplayer list."""
+
+    @staticmethod
+    def _nbt(data):
+        pos = 0
+
+        def u1():
+            nonlocal pos
+            value = data[pos]
+            pos += 1
+            return value
+
+        def u2():
+            nonlocal pos
+            value = int.from_bytes(data[pos:pos + 2], "big")
+            pos += 2
+            return value
+
+        def u4():
+            nonlocal pos
+            value = int.from_bytes(data[pos:pos + 4], "big")
+            pos += 4
+            return value
+
+        def string():
+            nonlocal pos
+            length = u2()
+            value = data[pos:pos + length].decode("utf-8")
+            pos += length
+            return value
+
+        def payload(tag):
+            if tag == 1:
+                return u1()
+            if tag == 8:
+                return string()
+            if tag == 9:
+                item_type = u1()
+                return [payload(item_type) for _ in range(u4())]
+            if tag == 10:
+                out = {}
+                while True:
+                    child = u1()
+                    if child == 0:
+                        return out
+                    name = string()
+                    out[name] = payload(child)
+            raise AssertionError("unexpected tag " + str(tag))
+
+        assert u1() == 10  # root compound
+        assert string() == ""
+        return payload(10)
+
+    def test_generated_entry_is_visible(self, js):
+        data = bytes(js(
+            'console.log(JSON.stringify(Gaming.minecraftServerListBytes('
+            '"vemberos:25565", "Vember OS")))'
+        ))
+        servers = self._nbt(data)["servers"]
+        assert servers == [{"hidden": 0, "ip": "vemberos:25565", "name": "Vember OS"}]
+
+    def test_command_writes_a_real_file(self, js, tmp_path):
+        cmd = js(
+            'console.log(JSON.stringify(Gaming.minecraftServerListCommand('
+            + __import__("json").dumps(str(tmp_path / "join")) + ', "mc.local:25565", "My Server")))'
+        )
+        assert cmd[0] == "sh" and cmd[1] == "-c"
+        (tmp_path / "join").mkdir()
+        assert subprocess.run(cmd, capture_output=True, text=True).returncode == 0
+        data = (tmp_path / "join" / "servers.dat").read_bytes()
+        assert self._nbt(data)["servers"][0]["ip"] == "mc.local:25565"
+        assert self._nbt(data)["servers"][0]["hidden"] == 0
+
+    def test_command_skips_layouts_that_are_not_installed(self, js, tmp_path):
+        missing = tmp_path / "not-installed"
+        cmd = js(
+            'console.log(JSON.stringify(Gaming.minecraftServerListCommand('
+            + __import__("json").dumps(str(missing)) + ', "mc:25565", "Name")))'
+        )
+        assert subprocess.run(cmd, capture_output=True, text=True).returncode == 0
+        assert not missing.exists()
+
+    def test_command_rejects_relative_paths(self, js):
+        cmd = js(
+            'console.log(JSON.stringify(Gaming.minecraftServerListCommand('
+            '"relative/path", "mc:25565", "Name")))'
+        )
+        assert cmd == ["sh", "-c", "exit 1"]
+
+    def test_join_dirs_cover_both_prism_layouts(self, js):
+        dirs = js(
+            'console.log(JSON.stringify(Gaming.minecraftJoinGameDirs("/home/someone")))'
+        )
+        assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-server/minecraft" in dirs
+        assert "/home/someone/.local/share/PrismLauncher/instances/vemberos-vanilla/minecraft" in dirs
+        assert any(".var/app/org.prismlauncher.PrismLauncher" in d for d in dirs)
