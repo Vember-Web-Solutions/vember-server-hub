@@ -409,6 +409,10 @@ export class Gaming {
   // into the script text. A missing mount or a stopped container shows "-".
   gameServerSizeCommand(servers) {
   var list = Array.isArray(servers) ? servers : [];
+  // One process returns both human figures plus raw bytes. `du -sh` is what
+  // the Storage card prints; `du -sb` feeds the proportional blue slice. The
+  // byte count is apparent size, so it can differ a little from the allocated
+  // `-sh` value — the bar and the label are allowed that small disagreement.
   var script = "while [ $# -ge 3 ]; do\n" +
     "  name=$1; kind=$2; path=$3; shift 3\n" +
     "  csize='-'\n" +
@@ -417,12 +421,14 @@ export class Gaming {
     "    csize=$(docker ps -a -s --no-trunc --filter \"name=^/${name}$\" --format '{{.Size}}' 2>/dev/null)\n" +
     "    [ -n \"$csize\" ] || csize='-'\n" +
     "  fi\n" +
-    "  dsize='-'\n" +
+    "  dsize='-'; dbytes=0\n" +
     "  if [ -n \"$path\" ] && [ -d \"$path\" ]; then\n" +
     "    dsize=$(du -sh \"$path\" 2>/dev/null | cut -f1)\n" +
     "    [ -n \"$dsize\" ] || dsize='-'\n" +
+    "    dbytes=$(du -sb \"$path\" 2>/dev/null | cut -f1)\n" +
+    "    case \"$dbytes\" in ''|*[!0-9]*) dbytes=0 ;; esac\n" +
     "  fi\n" +
-    "  printf '%s\\t%s\\t%s\\t%s\\n' \"$name\" \"$path\" \"$dsize\" \"$csize\"\n" +
+    "  printf '%s\\t%s\\t%s\\t%s\\t%s\\n' \"$name\" \"$path\" \"$dsize\" \"$csize\" \"$dbytes\"\n" +
     "done\n";
   var cmd = ["sh", "-c", script, "sh"];
   for (var i = 0; i < list.length; i++) {
@@ -444,14 +450,32 @@ export class Gaming {
     if (parts.length < 4) continue;
     var name = shell.trim(parts[0]);
     if (name.length === 0) continue;
+    // The byte field is optional so an older four-column response still parses;
+    // it simply contributes zero to the bar.
+    var bytes = parts.length > 4 ? parseInt(parts[4], 10) : 0;
+    if (!isFinite(bytes) || bytes < 0) bytes = 0;
     out.push({
       name: name,
       path: shell.trim(parts[1]),
       dataSize: shell.trim(parts[2]) || "-",
-      containerSize: shell.trim(parts[3]) || "-"
+      containerSize: shell.trim(parts[3]) || "-",
+      dataBytes: bytes
     });
   }
   return out;
+  }
+
+  // Bytes across every detected server, for the blue slice of the partition
+  // bar. This lives in the model so the arithmetic is tested alongside the
+  // parser that produced the numbers.
+  gameServerTotalBytes(sizes) {
+  var list = Array.isArray(sizes) ? sizes : [];
+  var total = 0;
+  for (var i = 0; i < list.length; i++) {
+    var n = Number((list[i] || {}).dataBytes);
+    if (isFinite(n) && n > 0) total += n;
+  }
+  return total;
   }
 }
 
@@ -483,3 +507,4 @@ export function gameServerKeywords(...args) { return impl.gameServerKeywords(...
 export function gameServerContainers(...args) { return impl.gameServerContainers(...args); }
 export function gameServerSizeCommand(...args) { return impl.gameServerSizeCommand(...args); }
 export function parseGameServerSizes(...args) { return impl.parseGameServerSizes(...args); }
+export function gameServerTotalBytes(...args) { return impl.gameServerTotalBytes(...args); }

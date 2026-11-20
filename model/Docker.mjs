@@ -8,7 +8,10 @@ import { shell } from './Shell.mjs';
 
 export class Docker {
   psCommand() {
-  return ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}"];
+  // Ports are in the same poll as names/states, so a container's web UI costs
+  // no extra process. Labels are deliberately absent: they are long, noisy and
+  // none of the local containers use reverse-proxy host rules.
+  return ["docker", "ps", "-a", "--format", "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}\t{{.Ports}}"];
   }
 
   actionCommand(action, name) {
@@ -24,6 +27,7 @@ export class Docker {
   }
 
   parsePs(text) {
+  var self = this;
   return shell.nonEmptyLines(text).map(function (line) {
     var parts = line.split("\t");
     var name = shell.trim(parts[0] || "");
@@ -35,9 +39,60 @@ export class Docker {
       image: image,
       state: state || "unknown",
       status: status || state || "unknown",
-      running: state === "running"
+      running: state === "running",
+      ports: shell.trim(parts[4] || ""),
+      webUrl: self.webUrlFromPorts(shell.trim(parts[4] || ""))
     };
   }).filter(function (row) { return row.name.length > 0; });
+  }
+
+  // Services that are never a browser page. Matching both the published and
+  // the container-side port keeps a Minecraft/RDS container from growing a
+  // misleading "Open" button while still allowing an arbitrary host port in
+  // front of a real web app (15000->8000, 8610->8000, ...).
+  nonWebPorts() {
+  return [22, 25, 53, 110, 143, 1194, 3306, 3389, 5432, 5900, 6379, 25565, 27017, 51820];
+  }
+
+  // Derive one browser URL from Docker's `Ports` column. Only published TCP
+  // ports count; a bare "5432/tcp" is not reachable. Bind addresses are kept
+  // only when they are literal IPs — wildcard and loopback become localhost,
+  // and any other text is rejected rather than turned into a URL.
+  webUrlFromPorts(portsText) {
+  var text = shell.trim(String(portsText || ""));
+  if (text.length === 0) return "";
+  var blocked = this.nonWebPorts();
+  var preferred = [443, 8443, 80, 8000, 8080, 3000, 5000];
+  var entries = text.split(",");
+  var fallback = "";
+  var best = "";
+  var bestRank = 99;
+  for (var i = 0; i < entries.length; i++) {
+    var part = shell.trim(entries[i]);
+    var m = part.match(/^(?:\[([^\]]+)\]|([^:]+)):(\d+)->(\d+)\/(tcp|udp)$/i);
+    if (!m || m[5].toLowerCase() !== "tcp") continue;
+    var bind = m[1] || m[2] || "";
+    var hostPort = parseInt(m[3], 10);
+    var containerPort = parseInt(m[4], 10);
+    if (!(hostPort > 0 && hostPort <= 65535)) continue;
+    if (blocked.indexOf(hostPort) !== -1 || blocked.indexOf(containerPort) !== -1) continue;
+    var host = "localhost";
+    if (bind !== "0.0.0.0" && bind !== "::" && bind !== "127.0.0.1" && bind !== "::1") {
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(bind)) host = bind;
+      else if (/^[0-9a-fA-F:]+$/.test(bind)) host = "[" + bind + "]";
+      else continue;
+    }
+    var secure = containerPort === 443 || containerPort === 8443 ||
+      hostPort === 443 || hostPort === 8443;
+    var url = (secure ? "https" : "http") + "://" + host + ":" + hostPort;
+    if (!fallback) fallback = url;
+    var rank = preferred.indexOf(containerPort);
+    if (rank < 0) rank = preferred.indexOf(hostPort);
+    if (rank < 0) rank = 40;
+    if (secure) rank -= 1;
+    if (rank < bestRank) { bestRank = rank; best = url; }
+  }
+  return best || fallback;
   }
 
   // "12.3MB" / "1.5 GiB" / "900B" -> bytes. Returns NaN when unparseable so
@@ -125,7 +180,7 @@ export class Docker {
 
   var dataDir = shell.trim(String(o.dataDir || ""));
   if (dataDir.charAt(0) !== "/" || dataDir.indexOf("\n") !== -1)
-    dataDir = "/mnt/games/MinecraftServer";
+    dataDir = "/mnt/games/GameServers/Minecraft";
 
   var port = Number(o.port);
   if (!isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
@@ -212,6 +267,7 @@ export function actionCommand(...args) { return impl.actionCommand(...args); }
 export function pullCommand(...args) { return impl.pullCommand(...args); }
 export function pruneCommand(...args) { return impl.pruneCommand(...args); }
 export function parsePs(...args) { return impl.parsePs(...args); }
+export function webUrlFromPorts(...args) { return impl.webUrlFromPorts(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }
 export function parsePullLine(...args) { return impl.parsePullLine(...args); }
 export function accumulateLayers(...args) { return impl.accumulateLayers(...args); }

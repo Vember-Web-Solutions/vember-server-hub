@@ -454,6 +454,7 @@ class TestGameServerDetectionAndSizes:
         # Both figures come from one process.
         assert "du -sh" in cmd[2] and "docker ps -a -s" in cmd[2]
         assert "/data" in cmd[2]
+        assert "du -sb" in cmd[2], "the bar needs raw bytes, not just a label"
 
     def test_size_command_skips_blank_names(self, js):
         cmd = js(
@@ -464,21 +465,25 @@ class TestGameServerDetectionAndSizes:
 
     def test_size_parser_reads_both_figures_and_skips_junk(self, js):
         text = (
-            "vember-minecraft\t/mnt/games/MinecraftServer\t225M\t135kB (virtual 982MB)\n"
-            "CS2\t/mnt/games/cs2\t18G\t-\n"
+            "vember-minecraft\t/mnt/games/MinecraftServer\t225M\t135kB (virtual 982MB)\t235929600\n"
+            "CS2\t/mnt/games/cs2\t18G\t-\t19327352832\n"
             "malformed\n"
             "\t/path\t1G\t2G\n"
+            "legacy\t/old\t1M\t2M\n"
         )
         out = js(
             "console.log(JSON.stringify(Gaming.parseGameServerSizes("
             + json.dumps(text) + ")))"
         )
-        assert len(out) == 2
+        assert len(out) == 3
         assert out[0] == {
             "name": "vember-minecraft", "path": "/mnt/games/MinecraftServer",
             "dataSize": "225M", "containerSize": "135kB (virtual 982MB)",
+            "dataBytes": 235929600,
         }
         assert out[1]["containerSize"] == "-"
+        assert out[1]["dataBytes"] == 19327352832
+        assert out[2]["dataBytes"] == 0, "a four-column legacy row still parses"
 
     def test_size_command_round_trips_through_stubbed_tools(self, js, tmp_path, monkeypatch):
         bindir = tmp_path / "bin"
@@ -494,7 +499,11 @@ class TestGameServerDetectionAndSizes:
         )
         docker.chmod(0o755)
         du = bindir / "du"
-        du.write_text('#!/bin/sh\nprintf "42M\\t%s\\n" "$2"\n')
+        du.write_text(
+            "#!/bin/sh\n"
+            'if [ "$1" = "-sb" ]; then printf "44040192\\t%s\\n" "$2"; exit 0; fi\n'
+            'printf "42M\\t%s\\n" "$2"\n'
+        )
         du.chmod(0o755)
         monkeypatch.setenv("PATH", str(bindir) + ":/usr/bin:/bin")
 
@@ -511,4 +520,15 @@ class TestGameServerDetectionAndSizes:
         assert parsed == [{
             "name": "vember-minecraft", "path": str(data),
             "dataSize": "42M", "containerSize": "10kB (virtual 500MB)",
+            "dataBytes": 44040192,
         }]
+
+
+    def test_total_bytes_sums_servers_and_ignores_junk(self, js):
+        out = js(
+            "console.log(JSON.stringify(Gaming.gameServerTotalBytes("
+            '[{dataBytes:100},{dataBytes:"200"},{dataBytes:-5},{dataBytes:"junk"},'
+            "{},null])))"
+        )
+        assert out == 300
+        assert js("console.log(JSON.stringify(Gaming.gameServerTotalBytes(null)))") == 0

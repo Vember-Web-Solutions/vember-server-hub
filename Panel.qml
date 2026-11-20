@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.42"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 118
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.43"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 119
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -79,7 +79,7 @@ Item {
   property string mcServerTypeDraft: "PAPER"
   property string mcServerVersionDraft: "LATEST"
   property string mcServerMemoryDraft: "4G"
-  property string mcServerDataDirDraft: "/mnt/games/MinecraftServer"
+  property string mcServerDataDirDraft: "/mnt/games/GameServers/Minecraft"
   property bool mcServerCreateBusy: false
   property string mcServerCreateStatus: ""
   property string mcServerCreateResult: ""
@@ -110,6 +110,8 @@ Item {
   property var gameServerSizes: []
   property bool gameServerSizesBusy: false
   property string gameServerSizesError: ""
+  // Sum of the host /data folders. Drives the blue slice on the Storage bar.
+  property int gameServerDataBytes: 0
 
   property var extraApps: []
   property bool extraAppsScanBusy: false
@@ -255,7 +257,8 @@ Item {
       mcServerLogsBusy: root.mcServerLogsBusy,
       mcServerLogsLines: root.mcServerLogsText.length,
       gameServerSizesBusy: root.gameServerSizesBusy,
-      gameServerSizes: root.gameServerSizes
+      gameServerSizes: root.gameServerSizes,
+      gameServerDataBytes: root.gameServerDataBytes
     });
   }
 
@@ -688,6 +691,22 @@ Item {
     handOffToExternalSurface();
   }
 
+  // URLs are built by Docker.webUrlFromPorts from a numeric host port and a
+  // literal bind address. Check the scheme again here so no path can hand a
+  // file: or javascript: URL to the browser, then leave the panel as with any
+  // other external surface.
+  function openContainerWebUrl(url, name) {
+    var target = Shell.trim(String(url || ""));
+    if (!/^https?:\/\/[^\s]+$/.test(target)) {
+      lastActionMessage = "No web address is available for " + name + ".";
+      notify(lastActionMessage);
+      return;
+    }
+    if (!openExternalUrl(target, name + "'s web interface"))
+      return;
+    handOffToExternalSurface();
+  }
+
   // --- Developer tools and repos ---
   // Targeted refresh after installing a dev tool: re-check the tools and the
   // code-server status, but skip the full repo rescan. `devToolsOnlyRefresh`
@@ -949,6 +968,7 @@ Item {
     var servers = Gaming.gameServerContainers(dockerContainers, steamDedicatedServers);
     if (servers.length === 0) {
       gameServerSizes = [];
+      gameServerDataBytes = 0;
       gameServerSizesBusy = false;
       gameServerSizesError = "";
       return;
@@ -2096,7 +2116,10 @@ Item {
     id: gameServerSizesProc
     property string errText: ""
     stdout: StdioCollector {
-      onStreamFinished: root.gameServerSizes = Gaming.parseGameServerSizes(text)
+      onStreamFinished: function() {
+        root.gameServerSizes = Gaming.parseGameServerSizes(text);
+        root.gameServerDataBytes = Gaming.gameServerTotalBytes(root.gameServerSizes);
+      }
     }
     stderr: StdioCollector { onStreamFinished: gameServerSizesProc.errText = text }
     onExited: function(code) {

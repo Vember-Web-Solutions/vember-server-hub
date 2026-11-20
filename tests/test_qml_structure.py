@@ -2668,3 +2668,86 @@ class TestGameServerStorageCard:
         assert "modelData.dataSize" in body
         assert "modelData.containerSize" in body
         assert "modelData.path" in body
+
+
+class TestGameServersLayoutAndBlueSlice:
+    """Server data has one home; Storage shows it as a visible blue slice."""
+
+    def _storage_body(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        return text[text.index('visible: panel.gamesSubTab === "storage"'):]
+
+    def test_new_servers_default_under_game_servers(self):
+        docker = read(REPO / "model/Docker.mjs")
+        panel = read(REPO / "Panel.qml")
+        assert "/mnt/games/GameServers/Minecraft" in docker
+        assert 'mcServerDataDirDraft: "/mnt/games/GameServers/Minecraft"' in panel
+        assert "/mnt/games/MinecraftServer" not in docker, "old fallback still live"
+        assert "/mnt/games/MinecraftServer" not in panel, "form still defaults to the old path"
+
+    def test_panel_tracks_total_server_bytes(self):
+        panel = read(REPO / "Panel.qml")
+        assert "property int gameServerDataBytes: 0" in panel
+        assert "Gaming.gameServerTotalBytes(root.gameServerSizes)" in panel
+        assert "gameServerDataBytes = 0;" in panel, "clearing sizes must clear the bar"
+        assert "gameServerDataBytes: root.gameServerDataBytes" in panel
+
+    def test_size_query_emits_raw_bytes(self):
+        gaming = read(REPO / "model/Gaming.mjs")
+        assert "du -sb" in gaming
+        assert "dbytes=$(du -sb" in gaming, "the fifth field must reach the parser"
+        assert "export function gameServerTotalBytes" in gaming
+
+    def test_storage_bar_has_blue_slice_with_minimum(self):
+        body = self._storage_body()
+        assert 'color: "#3b82f6"' in body, "no blue slice on the partition bar"
+        assert "Math.max(6, usedPx * serverShare)" in body, "blue would be sub-pixel"
+        assert "partitionBar.usedPx - partitionBar.bluePx" in body, "rest of used space is not drawn"
+        assert "panel.storageUseColor(hub.gameMountUseRatio)" in body
+
+    def test_blue_legend_prints_real_size_and_percentage(self):
+        body = self._storage_body()
+        assert "Shell.humanBytes(hub.gameServerDataBytes)" in body
+        assert "(partitionBar.serverShare * 100).toFixed(2)" in body
+        assert "% of used space (blue)" in body
+        assert "visible: hub.gameServerDataBytes > 0" in body
+
+    def test_bar_widths_do_not_form_a_cycle(self):
+        body = self._storage_body()
+        assert "id: partitionBar" in body
+        assert "property real usedPx: partitionBar.width" in body, (
+            "segment widths must not feed back into the track"
+        )
+        match = re.search(r"property real usedPx: partitionBar\.width", body)
+        assert match, "no proportional width binding"
+        assert "width: parent.width\n                height: 12" in body, (
+            "track width must come from its layout parent"
+        )
+
+
+class TestContainerWebLinks:
+    """Containers with a published web port get a one-click browser button."""
+
+    def test_panel_opens_only_http_urls_and_hands_off(self):
+        panel = read(REPO / "Panel.qml")
+        assert "function openContainerWebUrl(url, name)" in panel
+        start = panel.index("function openContainerWebUrl(url, name)")
+        body = panel[start:start + 900]
+        assert "http" in body and "https" in body
+        assert "openExternalUrl(target" in body
+        assert "handOffToExternalSurface()" in body
+        assert "notify(lastActionMessage)" in body
+
+    def test_row_and_detail_buttons_are_wired(self):
+        text = read(REPO / "ui/tabs/ContainersTab.qml")
+        assert text.count("panel.hub.openContainerWebUrl(") >= 2, (
+            "both the row and the detail panel need a one-click action"
+        )
+        assert 'visible: Shell.trim(modelData.webUrl || "").length > 0' in text
+        assert "containerDetails.selected.webUrl" in text
+        assert "󰕮" in text
+
+    def test_ps_poll_supplies_the_ports(self):
+        docker = read(REPO / "model/Docker.mjs")
+        assert "{{.Ports}}" in docker
+        assert "webUrl: self.webUrlFromPorts(" in docker

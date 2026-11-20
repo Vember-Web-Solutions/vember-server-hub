@@ -9,7 +9,7 @@ class TestCommands:
         assert out[0] == "docker"
         assert out[1] == "ps"
         assert "-a" in out
-        assert "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}" in out
+        assert "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}\t{{.Ports}}" in out
 
     def test_action_command_passes_action_and_name(self, js):
         out = js('console.log(JSON.stringify(Docker.actionCommand("stop", "web")))')
@@ -39,6 +39,8 @@ class TestParsePs:
                 "state": "running",
                 "status": "Up 2 hours",
                 "running": True,
+                "ports": "",
+                "webUrl": "",
             }
         ]
 
@@ -252,14 +254,14 @@ class TestMinecraftServerCommands:
         )
         assert opts == {
             "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
-            "memory": "4G", "dataDir": "/mnt/games/MinecraftServer", "port": 25565,
+            "memory": "4G", "dataDir": "/mnt/games/GameServers/Minecraft", "port": 25565,
         }
         cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
         assert cmd[:4] == ["docker", "run", "-d", "-it"]
         assert cmd[cmd.index("--name") + 1] == "vember-minecraft"
         assert cmd[cmd.index("--restart") + 1] == "unless-stopped"
         assert "25565:25565" in cmd
-        assert "/mnt/games/MinecraftServer:/data" in cmd
+        assert "/mnt/games/GameServers/Minecraft:/data" in cmd
         for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G"):
             assert env in cmd
         assert cmd[-1] == "itzg/minecraft-server:latest"
@@ -285,7 +287,7 @@ class TestMinecraftServerCommands:
         assert opts["type"] == "PAPER"
         assert opts["version"] == "LATEST"
         assert opts["memory"] == "4G"
-        assert opts["dataDir"] == "/mnt/games/MinecraftServer"
+        assert opts["dataDir"] == "/mnt/games/GameServers/Minecraft"
         assert opts["port"] == 25565
         cmd = js(
             "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
@@ -343,3 +345,55 @@ class TestRunningCount:
             "[null,{running:true},{},{running:false}])))"
         )
         assert out == 1
+
+
+class TestContainerWebUrls:
+    """One-click browser open is derived from published ports, never labels."""
+
+    def test_wildcard_and_loopback_become_localhost(self, js):
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"0.0.0.0:14444->8080/tcp")))') == "http://localhost:14444"
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"127.0.0.1:8610->8000/tcp")))') == "http://localhost:8610"
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"[::]:14444->8080/tcp")))') == "http://localhost:14444"
+
+    def test_literal_lan_address_is_kept(self, js):
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"192.168.0.145:9999->8000/tcp")))') == "http://192.168.0.145:9999"
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"100.106.232.82:8580->8580/tcp")))') == "http://100.106.232.82:8580"
+
+    def test_ipv6_bind_is_bracketed(self, js):
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"[fd00::5]:8080->8080/tcp")))') == "http://[fd00::5]:8080"
+
+    def test_unpublished_and_non_web_ports_are_rejected(self, js):
+        for ports in (
+            "5432/tcp",                         # no host binding
+            "0.0.0.0:25565->25565/tcp",          # Minecraft
+            "0.0.0.0:5432->5432/tcp",            # postgres
+            "0.0.0.0:5353->53/udp",              # UDP is not a browser page
+            "evil.example.com:8080->8080/tcp",   # never trust a name
+            "",
+        ):
+            assert js("console.log(JSON.stringify(Docker.webUrlFromPorts("
+                      + __import__("json").dumps(ports) + ")))") == "", ports
+
+    def test_https_and_preferred_web_port_win(self, js):
+        # Two candidates: prefer the real web port over the game port, and
+        # prefer https when both are plausible.
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"0.0.0.0:25565->25565/tcp,0.0.0.0:18080->8080/tcp")))') == (
+            "http://localhost:18080")
+        assert js('console.log(JSON.stringify(Docker.webUrlFromPorts('
+                  '"0.0.0.0:10080->80/tcp,0.0.0.0:10443->443/tcp")))') == (
+            "https://localhost:10443")
+
+    def test_parse_ps_attaches_ports_and_url(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.parsePs("
+            '"web\tnginx\trunning\tUp 1 min\t192.168.0.145:9999->8000/tcp")))'
+        )
+        assert out[0]["ports"] == "192.168.0.145:9999->8000/tcp"
+        assert out[0]["webUrl"] == "http://192.168.0.145:9999"

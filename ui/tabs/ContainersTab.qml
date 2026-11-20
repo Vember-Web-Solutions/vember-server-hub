@@ -137,6 +137,16 @@ Column {
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
               }
+              Button {
+                // Present only when Docker publishes a browser-reachable port.
+                // One click opens it and hands the desktop to the browser.
+                visible: Shell.trim(modelData.webUrl || "").length > 0
+                iconText: "󰕮"
+                text: "Open"
+                tooltipText: modelData.webUrl ? ("Open " + modelData.webUrl + " in your browser") : ""
+                Layout.alignment: Qt.AlignVCenter
+                onClicked: panel.hub.openContainerWebUrl(modelData.webUrl, modelData.name)
+              }
             }
           }
         }
@@ -342,6 +352,14 @@ Column {
           Flow {
             width: parent.width
             spacing: 8
+            Button {
+              visible: !!containerDetails.selected && Shell.trim(containerDetails.selected.webUrl || "").length > 0
+              iconText: "󰕮"
+              text: "Open web UI"
+              tooltipText: containerDetails.selected ? ("Open " + (containerDetails.selected.webUrl || "")) : ""
+              enabled: !!containerDetails.selected
+              onClicked: if (containerDetails.selected) panel.hub.openContainerWebUrl(containerDetails.selected.webUrl, containerDetails.selected.name)
+            }
             Button {
               iconText: "󰐊"
               text: "Start"

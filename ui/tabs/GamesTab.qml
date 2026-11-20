@@ -1152,21 +1152,42 @@ Column {
             Layout.fillWidth: true; spacing: 2
             Text { textFormat: Text.PlainText; text: "Game partition • " + hub.gameMount; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
             Column {
+              id: partitionBar
               visible: hub.gameMountPresent
               Layout.fillWidth: true
               spacing: 6
+
+              // Blue marks game-server data inside the used portion of the
+              // partition. A 243M world on a 1.4T disk is ~0.02% — sub-pixel —
+              // so the slice has a 6px floor and the legend prints the honest
+              // percentage. Widths come from the track, never from its children,
+              // so there is no binding cycle.
+              property real serverShare: hub.gameMountUsedBytes > 0
+                ? Math.min(hub.gameServerDataBytes / hub.gameMountUsedBytes, 1) : 0
+              property real usedPx: partitionBar.width * Math.min(Math.max(hub.gameMountUseRatio, 0), 1)
+              property real bluePx: serverShare > 0
+                ? Math.min(usedPx, Math.max(6, usedPx * serverShare)) : 0
+
               Rectangle {
                 width: parent.width
                 height: 12
                 radius: 6
                 color: panel.softText(0.12)
                 clip: true
-                Rectangle {
-                  height: parent.height
-                  radius: 6
-                  width: parent.width * hub.gameMountUseRatio
-                  color: panel.storageUseColor(hub.gameMountUseRatio)
-                  Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                Row {
+                  anchors.fill: parent
+                  Rectangle {
+                    height: parent.height
+                    width: partitionBar.bluePx
+                    color: "#3b82f6"
+                    Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                  }
+                  Rectangle {
+                    height: parent.height
+                    width: Math.max(0, partitionBar.usedPx - partitionBar.bluePx)
+                    color: panel.storageUseColor(hub.gameMountUseRatio)
+                    Behavior on width { NumberAnimation { duration: Style.duration(180); easing.type: Easing.OutCubic } }
+                  }
                 }
               }
               RowLayout {
@@ -1187,6 +1208,22 @@ Column {
                   color: Color.menu.text
                   font.family: Style.font.family
                   font.pixelSize: Style.font.caption
+                }
+              }
+              RowLayout {
+                width: parent.width
+                spacing: 8
+                visible: hub.gameServerDataBytes > 0
+                Rectangle { width: 10; height: 10; radius: 3; color: "#3b82f6" }
+                Text {
+                  textFormat: Text.PlainText
+                  text: "Game servers " + Shell.humanBytes(hub.gameServerDataBytes) +
+                    " • " + (partitionBar.serverShare * 100).toFixed(2) + "% of used space (blue)"
+                  color: panel.softText(0.85)
+                  font.family: Style.font.family
+                  font.pixelSize: Style.font.caption
+                  wrapMode: Text.Wrap
+                  Layout.fillWidth: true
                 }
               }
             }

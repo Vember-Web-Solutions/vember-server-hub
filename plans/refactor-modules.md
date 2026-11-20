@@ -514,6 +514,20 @@ Work that fell out of the split, done in the same arc:
   TestServersSubTabs and TestGameServerStorageCard, plus a stubbed end-to-end
   size round trip; five mutations caught. Live: 225M data / 135kB (982MB virtual)
   container for vember-minecraft.
+- **Game servers have a home, the Storage bar shows them in blue, and
+  containers with a web port open in one click.** The live world moved from
+  `/mnt/games/MinecraftServer` to `/mnt/games/GameServers/Minecraft`; the model
+  fallback, the create form default and the container bind all changed with it.
+  The size query now emits `du -sb` bytes alongside `du -sh`, so the partition
+  bar can draw a blue slice for server data with a 6px floor — a 243M world is
+  only ~0.02% of a 1.4T disk and would otherwise be invisible — plus a legend
+  with the real size and percentage of *used* space. `docker ps` now carries
+  `{{.Ports}}`; Docker.webUrlFromPorts builds an http(s) URL from published TCP
+  ports, maps wildcard/loopback binds to localhost, rejects game and database
+  ports, and wires an Open button in both the container row and detail panel.
+  Panel.openContainerWebUrl rechecks the scheme and hands off to the browser.
+  Guards: TestGameServersLayoutAndBlueSlice and TestContainerWebLinks, plus a
+  stubbed du/docker round trip; seven mutations caught.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -538,8 +552,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 562 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 9,967 lines. The growth is comments, per-file
+- 578 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 10,126 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
 - The three monoliths went 7,694 → 3,271 lines: `HubPanel.qml` 4,376 → 424,
@@ -548,6 +562,6 @@ plugin warnings in the journal.
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
   largest file is now `Panel.qml` at 2,847, then `ui/tabs/GamesTab.qml` at 1,169.
-- The test suite is 5,226 lines across 12 files and drives the real modules
+- The test suite is 5,380 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.42, build 72 → 118.
+- Version 0.1.0 → 0.6.43, build 72 → 119.
