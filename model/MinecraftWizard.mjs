@@ -109,9 +109,10 @@ export class MinecraftWizard {
   }
 
   // An installed Prism modpack is a complete server recipe: its loader/version,
-  // mods and (when present) its save. Read both Prism layouts so a Flatpak
-  // install is offered alongside a native one. Output is tab-separated rows:
-  // id, name, loader, version, mods dir, world dir.
+  // mods, (when present) its save and the minecraft dir that holds kubejs and
+  // config. Read both Prism layouts so a Flatpak install is offered alongside
+  // a native one. Output is tab-separated rows:
+  // id, name, loader, version, mods dir, world dir, minecraft dir.
   modpackScanCommand(homeDir) {
     var h = shell.trim(String(homeDir || ""));
     var roots = [
@@ -147,7 +148,7 @@ export class MinecraftWizard {
       "            continue",
       "        saves = sorted(glob.glob(os.path.join(d, 'minecraft', 'saves', '*', 'level.dat')))",
       "        world = os.path.dirname(saves[0]) if saves else ''",
-      "        print('\\t'.join([os.path.basename(d), name, loader, version, mods, world]))"
+      "        print('\\t'.join([os.path.basename(d), name, loader, version, mods, world, os.path.join(d, 'minecraft')]))"
     ].join("\n");
     return ["python3", "-c", py].concat(roots);
   }
@@ -161,7 +162,8 @@ export class MinecraftWizard {
         loader: shell.trim(parts[2] || ""),
         version: shell.trim(parts[3] || ""),
         modsDir: shell.trim(parts[4] || ""),
-        worldDir: shell.trim(parts[5] || "")
+        worldDir: shell.trim(parts[5] || ""),
+        supportDir: shell.trim(parts[6] || "")
       };
     }).filter(function (m) {
       // The hub's own join instance carries Fabric mods but is not a modpack.

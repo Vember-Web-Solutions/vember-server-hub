@@ -141,6 +141,7 @@ class TestModpackRecipes:
         assert pack["version"] == "1.20.1-47.4.28"
         assert pack["modsDir"] == str(game / "mods")
         assert pack["worldDir"] == str(game / "saves" / "My World")
+        assert pack["supportDir"] == str(game)
 
         options = js('console.log(JSON.stringify(MinecraftWizard.modpackOptions('
                      + __import__("json").dumps(packs) + ')))')

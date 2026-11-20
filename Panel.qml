@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.54"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 130
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.55"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 131
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -125,6 +125,8 @@ Item {
   property string mcWizardModpack: ""
   property string mcWizardModsDir: ""
   property string mcWizardWorldDir: ""
+  // Installed modpacks also carry KubeJS/config folders the server needs.
+  property string mcWizardSupportDir: ""
   // Preflight: Docker daemon, image availability and guided pull.
   property string mcWizardDockerReady: "checking"
   property bool mcWizardImageReady: false
@@ -136,6 +138,7 @@ Item {
   property bool mcServerCreateBusy: false
   property string mcServerCreateStatus: ""
   property string mcServerCreateResult: ""
+  property var _mcPendingCreateCommand: []
   property string mcClientLaunchStatus: ""
   property string mcServerLogsName: ""
   property bool mcServerLogsBusy: false
@@ -1564,6 +1567,7 @@ Item {
     mcWizardModpackOptions = [];
     mcWizardModsDir = "";
     mcWizardWorldDir = "";
+    mcWizardSupportDir = "";
     mcWizardNameChanged(mcServerNameDraft);
     var host = defaultServerName();
     mcWizardJoinAddress = host + ":" + mcServerPortDraft;
@@ -1585,6 +1589,8 @@ Item {
     mcWizardPullProc.cancelled = true;
     mcWizardPullProc.running = false;
     mcWizardPullBusy = false;
+    mcServerStageProc.cancelled = true;
+    mcServerStageProc.running = false;
     mcWizardInstallProc.cancelled = true;
     mcWizardInstallProc.running = false;
     mcWizardInstallBusy = false;
@@ -1614,6 +1620,7 @@ Item {
     mcWizardModpack = String(id || "");
     mcWizardModsDir = "";
     mcWizardWorldDir = "";
+    mcWizardSupportDir = "";
     if (!mcWizardModpack)
       return;
     for (var i = 0; i < mcWizardModpacks.length; i++) {
@@ -1625,6 +1632,7 @@ Item {
       mcServerMemoryDraft = "6G";
       mcWizardModsDir = m.modsDir || "";
       mcWizardWorldDir = m.worldDir || "";
+      mcWizardSupportDir = m.supportDir || "";
       // The image depends on the game version (old modpacks need Java 17).
       // Re-check so the pull prompt matches the image create will actually use.
       if (mcWizardDockerReady === "ready") {
@@ -1778,11 +1786,24 @@ Item {
     mcServerPortDraft = normalized.port;
 
     mcServerCreateBusy = true;
-    mcServerCreateStatus = "Creating " + normalized.type + " server " + normalized.name + "…";
     mcServerCreateResult = "";
     mcServerCreateProc.cancelled = false;
-    mcServerCreateProc.command = Docker.createMinecraftServerCommand(opts);
-    mcServerCreateProc.running = true;
+    root._mcPendingCreateCommand = Docker.createMinecraftServerCommand(opts);
+    var stage = mcWizardSupportDir
+      ? Docker.stageModpackDataCommand(normalized.dataDir, mcWizardSupportDir)
+      : [];
+    if (stage.length > 0) {
+      // KubeJS modpacks need their generated config in /data before itzg boots
+      // or the world loads with unbound biome/dimension ids.
+      mcServerCreateStatus = "Staging modpack config for " + normalized.name + "…";
+      mcServerStageProc.cancelled = false;
+      mcServerStageProc.command = stage;
+      mcServerStageProc.running = true;
+    } else {
+      mcServerCreateStatus = "Creating " + normalized.type + " server " + normalized.name + "…";
+      mcServerCreateProc.command = root._mcPendingCreateCommand;
+      mcServerCreateProc.running = true;
+    }
   }
 
   // Escape hatch: a slow image pull is the operator's call to stop, not a
@@ -1793,6 +1814,8 @@ Item {
       return;
     mcServerCreateProc.cancelled = true;
     mcServerCreateProc.running = false;
+    mcServerStageProc.cancelled = true;
+    mcServerStageProc.running = false;
     mcServerCreateBusy = false;
     mcServerCreateStatus = "Server creation stopped by request.";
     mcServerCreateResult = "No container was created. You can try again.";
@@ -2506,10 +2529,10 @@ Item {
         return;
       if (code === 0) {
         var id = Shell.trim(stdout.text).split(/\s+/)[0] || "";
-        root.mcServerCreateResult = "Container " + root.mcServerNameDraft +
+        root.mcServerCreateResult = "Success: " + root.mcServerNameDraft +
           (id ? " (" + id.slice(0, 12) + ")" : "") +
           " created on port " + root.mcServerPortDraft +
-          ". Press Launch to start it and join from Prism.";
+          ". Use Games → Servers to Launch and join from Prism.";
         root.mcServerCreateStatus = "Created — starting.";
         var host = defaultServerName();
         root.mcServerLaunchName = root.mcServerNameDraft;
@@ -2521,6 +2544,10 @@ Item {
         // second server only changes the wizard's join address, not the
         // one-click launcher's destination.
         root.refreshMinecraftServerList();
+        // The wizard's job ends at a created container: confirm out loud, then
+        // close it so the operator lands back on the hub.
+        root.notify(root.mcServerCreateResult);
+        root.closeMinecraftServerWizard();
       } else {
         root.mcServerCreateStatus = "Creation failed.";
         root.mcServerCreateResult = Shell.failureMessage(
@@ -2530,6 +2557,34 @@ Item {
       root.notifyIfClosed(root.lastActionMessage);
       root.refreshDocker();
       root.refreshGames();
+    }
+  }
+
+  // KubeJS modpacks need their generated config copied into the server's data
+  // dir before itzg boots. Staging is a separate process so a copy failure is
+  // reported before a container is created.
+  Process {
+    id: mcServerStageProc
+    property bool cancelled: false
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      if (cancelled || !root.mcServerCreateBusy)
+        return;
+      if (code !== 0) {
+        root.mcServerCreateBusy = false;
+        root.mcServerCreateStatus = "Could not stage modpack config.";
+        root.mcServerCreateResult = Shell.failureMessage(
+          "Could not stage modpack configuration into " + root.mcServerDataDirDraft,
+          code, stderr.text);
+        root.lastActionMessage = root.mcServerCreateResult;
+        root.notify(root.lastActionMessage);
+        return;
+      }
+      root.mcServerCreateStatus = "Creating " + root.mcServerTypeDraft +
+        " server " + root.mcServerNameDraft + "…";
+      mcServerCreateProc.command = root._mcPendingCreateCommand;
+      mcServerCreateProc.running = true;
     }
   }
 

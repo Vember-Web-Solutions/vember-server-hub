@@ -573,6 +573,31 @@ class TestModpackMounts:
         assert "WORLD=" not in " ".join(cmd)
         assert ":/mods:ro" not in " ".join(cmd)
 
+    def test_kubejs_config_is_staged_into_the_server_data_dir(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Docker.stageModpackDataCommand("
+            '"/mnt/games/GameServers/nodecraft-data", '
+            '"/home/elena/.local/share/PrismLauncher/instances/Create- Astral/minecraft"'
+            ")))"
+        )
+        assert cmd[0] == "sh" and cmd[1] == "-c"
+        script = cmd[2]
+        for name in ("kubejs", "config", "defaultconfigs"):
+            assert name in script
+        assert "cp -a" in script
+        assert "'/mnt/games/GameServers/nodecraft-data/kubejs'" in script
+        # Spaces in "Create- Astral" survive the shell quoting.
+        assert "'/home/elena/.local/share/PrismLauncher/instances/Create- Astral/minecraft/kubejs'" in script
+
+    def test_unsafe_stage_paths_are_dropped(self, js):
+        for data, src in (("relative/data", "/ok/src"),
+                          ("/ok/data", "relative/src"),
+                          ("/ok/data\nx", "/ok/src")):
+            argv = js("console.log(JSON.stringify(Docker.stageModpackDataCommand("
+                      + __import__("json").dumps(data) + ", "
+                      + __import__("json").dumps(src) + ")))")
+            assert argv == []
+
 
 class TestDockerPublishedPorts:
     def test_only_published_host_ports_count(self, js):

@@ -332,6 +332,30 @@ export class Docker {
   return cmd;
   }
 
+  // KubeJS modpacks (Create:Astral and friends) register a world's custom
+  // biomes and dimensions from files under the instance's kubejs/config dirs.
+  // itzg only receives /mods and the world, so such a world fails to load with
+  // "Unbound values in registry ... worldgen/biome". Stage a copy into the
+  // server's writable /data before `docker run`. Copy rather than bind mount:
+  // KubeJS writes generated data back at boot, and the player's own instance
+  // must never be changed by the server.
+  stageModpackDataCommand(dataDir, supportDir) {
+  var data = shell.trim(String(dataDir || ""));
+  var src = shell.trim(String(supportDir || ""));
+  if (data.charAt(0) !== "/" || data.indexOf("\n") !== -1 ||
+      src.charAt(0) !== "/" || src.indexOf("\n") !== -1)
+    return [];
+  var lines = ["set -e"];
+  var names = ["kubejs", "config", "defaultconfigs"];
+  for (var i = 0; i < names.length; i++) {
+    var from = shell.quote(src + "/" + names[i]);
+    var to = shell.quote(data + "/" + names[i]);
+    lines.push("if [ -d " + from + " ]; then mkdir -p " + to +
+      "; cp -a " + from + "/. " + to + "/; fi");
+  }
+  return ["sh", "-c", lines.join("\n")];
+  }
+
   logsCommand(name, lines) {
   var n = Math.floor(Number(lines));
   if (!isFinite(n) || n < 1 || n > 2000) n = 200;
@@ -457,6 +481,7 @@ export function parsePullLine(...args) { return impl.parsePullLine(...args); }
 export function accumulateLayers(...args) { return impl.accumulateLayers(...args); }
 export function normalizeMinecraftServerOptions(...args) { return impl.normalizeMinecraftServerOptions(...args); }
 export function createMinecraftServerCommand(...args) { return impl.createMinecraftServerCommand(...args); }
+export function stageModpackDataCommand(...args) { return impl.stageModpackDataCommand(...args); }
 export function minecraftServerImage(...args) { return impl.minecraftServerImage(...args); }
 export function dockerReadyCommand(...args) { return impl.dockerReadyCommand(...args); }
 export function minecraftServerImageCheckCommand(...args) { return impl.minecraftServerImageCheckCommand(...args); }

@@ -572,6 +572,16 @@ Rectangle {
               wrapMode: Text.Wrap
               width: parent.width
             }
+            Text {
+              visible: Shell.trim(panel.hub.mcWizardSupportDir).length > 0
+              textFormat: Text.PlainText
+              text: "Includes the modpack's mods, world and KubeJS config."
+              color: panel.softText(0.85)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.Wrap
+              width: parent.width
+            }
           }
         }
         Rectangle {

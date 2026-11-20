@@ -2876,6 +2876,25 @@ class TestModpackAndServerListWiring:
             assert name in text, name + " is missing"
         assert "modsDir: mcWizardModsDir, worldDir: mcWizardWorldDir" in text
 
+    def test_modpack_config_is_staged_before_creation(self):
+        panel = read(REPO / "Panel.qml")
+        for name in (
+            "property string mcWizardSupportDir: \"\"",
+            "mcWizardSupportDir = m.supportDir || \"\"",
+            "Docker.stageModpackDataCommand(normalized.dataDir, mcWizardSupportDir)",
+            "id: mcServerStageProc",
+            "root._mcPendingCreateCommand",
+        ):
+            assert name in panel, name + " is missing"
+
+    def test_successful_creation_confirms_and_closes_the_wizard(self):
+        panel = read(REPO / "Panel.qml")
+        assert "\"Success: \" + root.mcServerNameDraft" in panel
+        assert "root.notify(root.mcServerCreateResult);" in panel
+        assert "root.closeMinecraftServerWizard();" in panel
+        wizard = read(REPO / "ui/MinecraftServerWizard.qml")
+        assert "panel.hub.mcWizardSupportDir" in wizard
+
     def test_gaming_model_exports_the_server_list_helpers(self):
         text = read(REPO / "model/Gaming.mjs")
         assert "export function minecraftServerListCommand" in text
