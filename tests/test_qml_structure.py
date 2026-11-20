@@ -451,6 +451,61 @@ class TestLogsStartCollapsed:
         )
 
 
+class TestMinecraftServerIsWired:
+    """Gaming → Servers can create a server and inspect an existing one."""
+
+    def test_panel_has_create_state_and_processes(self):
+        text = read(REPO / "Panel.qml")
+        assert "property bool mcServerCreateBusy: false" in text
+        assert "property string mcServerLogsText: \"\"" in text
+        assert "id: mcServerCreateProc" in text
+        assert "Docker.createMinecraftServerCommand(opts)" in text
+        assert "id: mcServerLogsProc" in text
+        assert "Docker.logsCommand(mcServerLogsName, 200)" in text
+        assert "id: mcDataDirProc" in text
+        assert "Docker.inspectDataDirCommand(mcDataDirName)" in text
+
+    def test_create_failure_notifies_and_refreshes(self):
+        text = read(REPO / "Panel.qml")
+        block = re.search(r"id:\s*mcServerCreateProc(.*?)\n  \}", text, re.S)
+        assert block, "mcServerCreateProc not found"
+        assert "root.notifyIfClosed(root.lastActionMessage)" in block.group(1)
+        assert "root.refreshDocker()" in block.group(1)
+        assert "root.refreshGames()" in block.group(1)
+        assert "if (cancelled)" in block.group(1), (
+            "a user-cancelled pull must not be reported as a failure"
+        )
+
+    def test_cancel_is_wired_to_the_process(self):
+        text = read(REPO / "Panel.qml")
+        assert "function cancelMinecraftServerCreate()" in text
+        assert "mcServerCreateProc.cancelled = true;" in text
+        assert "mcServerCreateProc.running = false;" in text
+
+    def test_servers_tab_has_type_selector_and_create_button(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        for kind in ("PAPER", "VANILLA", "FORGE", "FABRIC"):
+            assert 'hub.mcServerTypeDraft = "' + kind + '"' in text, (
+                kind + " is missing from the server type selector"
+            )
+        assert "hub.createMinecraftServer()" in text
+        assert "hub.cancelMinecraftServerCreate()" in text
+        assert "New Minecraft server" in text
+
+    def test_existing_servers_get_all_controls(self):
+        text = read(REPO / "ui/tabs/GamesTab.qml")
+        for call in (
+            'hub.runDockerAction("start", modelData.name)',
+            'hub.runDockerAction("stop", modelData.name)',
+            'hub.runDockerAction("restart", modelData.name)',
+            "hub.showMinecraftServerLogs(modelData.name)",
+            "hub.openMinecraftDataFolder(modelData.name)",
+        ):
+            assert call in text, call + " is not wired to a server row"
+        assert "hub.clearMinecraftServerLogs()" in text
+        assert "hub.mcServerLogsText" in text, "the log viewer has no content"
+
+
 class TestBackendReferences:
     """Cross-file references must resolve to something that exists.
 

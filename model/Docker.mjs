@@ -95,6 +95,82 @@ export class Docker {
     progress: total > 0 ? Math.max(0, Math.min(1, done / total)) : 0
   };
   }
+  // Normalise the Minecraft create form before it reaches `docker run`. Every
+  // field has a safe default so a blank or hand-edited input can never inject
+  // extra arguments into the command array.
+  normalizeMinecraftServerOptions(opts) {
+  var o = opts || {};
+  var name = shell.trim(String(o.name || ""));
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,62}$/.test(name))
+    name = "vember-minecraft";
+
+  var type = String(o.type || "PAPER").toUpperCase();
+  if (["VANILLA", "PAPER", "FORGE", "FABRIC"].indexOf(type) === -1)
+    type = "PAPER";
+
+  var version = shell.trim(String(o.version || "")).toUpperCase();
+  if (!/^(LATEST|\d+\.\d+(\.\d+)?(?:-[A-Z0-9.]+)?)$/.test(version))
+    version = "LATEST";
+
+  var memory = shell.trim(String(o.memory || "")).toUpperCase();
+  var mm = memory.match(/^(\d+)([MG])$/);
+  if (!mm) {
+    memory = "4G";
+  } else {
+    var amount = parseInt(mm[1], 10);
+    var limit = mm[2] === "G" ? 32 : 32768;
+    var floor = mm[2] === "G" ? 1 : 512;
+    memory = (amount >= floor && amount <= limit) ? (amount + mm[2]) : "4G";
+  }
+
+  var dataDir = shell.trim(String(o.dataDir || ""));
+  if (dataDir.charAt(0) !== "/" || dataDir.indexOf("\n") !== -1)
+    dataDir = "/mnt/games/MinecraftServer";
+
+  var port = Number(o.port);
+  if (!isFinite(port) || port < 1 || port > 65535 || Math.floor(port) !== port)
+    port = 25565;
+
+  return {
+    name: name, type: type, version: version,
+    memory: memory, dataDir: dataDir, port: port
+  };
+  }
+
+  // `docker run -d` prints the new container id and returns immediately. The
+  // image then downloads the server jar, so "created" is the honest status —
+  // the hub reports readiness from the container state on the next poll.
+  // RCON stays inside the container; only the game port is published.
+  createMinecraftServerCommand(opts) {
+  var o = this.normalizeMinecraftServerOptions(opts);
+  return [
+    "docker", "run", "-d", "-it",
+    "--name", o.name,
+    "--restart", "unless-stopped",
+    "-p", o.port + ":" + o.port,
+    "-v", o.dataDir + ":/data",
+    "-e", "EULA=TRUE",
+    "-e", "TYPE=" + o.type,
+    "-e", "VERSION=" + o.version,
+    "-e", "MEMORY=" + o.memory,
+    "itzg/minecraft-server:latest"
+  ];
+  }
+
+  logsCommand(name, lines) {
+  var n = Math.floor(Number(lines));
+  if (!isFinite(n) || n < 1 || n > 2000) n = 200;
+  return ["docker", "logs", "--tail", String(n), shell.trim(String(name || ""))];
+  }
+
+  // Resolve the host path mounted at /data so "Open data folder" works for a
+  // container created outside the hub too. Empty output means no such mount.
+  inspectDataDirCommand(name) {
+  return ["docker", "inspect", "--format",
+    "{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Source}}{{end}}{{end}}",
+    shell.trim(String(name || ""))];
+  }
+
   // Colour for a container state. Null means "no opinion", so the caller can
   // fall back to the theme's muted colour instead of a hardcoded grey.
   stateTone(state) {
@@ -139,6 +215,10 @@ export function parsePs(...args) { return impl.parsePs(...args); }
 export function parseSize(...args) { return impl.parseSize(...args); }
 export function parsePullLine(...args) { return impl.parsePullLine(...args); }
 export function accumulateLayers(...args) { return impl.accumulateLayers(...args); }
+export function normalizeMinecraftServerOptions(...args) { return impl.normalizeMinecraftServerOptions(...args); }
+export function createMinecraftServerCommand(...args) { return impl.createMinecraftServerCommand(...args); }
+export function logsCommand(...args) { return impl.logsCommand(...args); }
+export function inspectDataDirCommand(...args) { return impl.inspectDataDirCommand(...args); }
 export function stateTone(...args) { return impl.stateTone(...args); }
 export function stateBackground(...args) { return impl.stateBackground(...args); }
 export function runningCount(...args) { return impl.runningCount(...args); }

@@ -744,6 +744,157 @@ Column {
     width: parent.width
     spacing: Style.spacing.md
 
+    // Create a Minecraft server from the itzg image. The backend normalises
+    // every field before building the docker command, so the form is only a
+    // convenience — invalid input falls back to a safe default and the form
+    // is updated to show what was actually used.
+    Rectangle {
+      width: parent.width
+      radius: Style.cornerRadius
+      color: panel.softText(0.05)
+      border.color: panel.accentSoft(0.18)
+      border.width: 1
+      implicitHeight: mcCreateCol.implicitHeight + 24
+      Column {
+        id: mcCreateCol
+        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: 14
+        spacing: 10
+
+        RowLayout {
+          width: parent.width; spacing: 10
+          Text { textFormat: Text.PlainText; text: "󰍳"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+          ColumnLayout {
+            Layout.fillWidth: true; spacing: 2
+            Text { textFormat: Text.PlainText; text: "New Minecraft server"; color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true }
+            Text { textFormat: Text.PlainText; text: "Creates an itzg/minecraft-server container on LAN port 25565. World data lives on the games drive; RCON stays inside the container. Forge and Fabric start with no mods — add those on the host afterwards."; color: panel.softText(0.75); font.family: Style.font.family; font.pixelSize: Style.font.caption; wrapMode: Text.Wrap; Layout.fillWidth: true }
+          }
+        }
+
+        Text { textFormat: Text.PlainText; text: "Server type"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+        Flow {
+          width: parent.width
+          spacing: 8
+          Button { text: "Paper"; tooltipText: "Fast vanilla-compatible server with plugin support"; selected: hub.mcServerTypeDraft === "PAPER"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "PAPER" }
+          Button { text: "Vanilla"; tooltipText: "Plain Mojang server"; selected: hub.mcServerTypeDraft === "VANILLA"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "VANILLA" }
+          Button { text: "Forge"; tooltipText: "Forge modded server; add mods on the host after creation"; selected: hub.mcServerTypeDraft === "FORGE"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "FORGE" }
+          Button { text: "Fabric"; tooltipText: "Fabric modded server; add mods on the host after creation"; selected: hub.mcServerTypeDraft === "FABRIC"; enabled: !hub.mcServerCreateBusy; onClicked: hub.mcServerTypeDraft = "FABRIC" }
+        }
+
+        Text { textFormat: Text.PlainText; text: "Container name"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+        Rectangle {
+          width: parent.width
+          radius: 8
+          color: panel.softText(0.03)
+          border.color: panel.accentSoft(0.2)
+          border.width: 1
+          implicitHeight: 36
+          TextInput {
+            anchors.fill: parent; anchors.margins: 9
+            verticalAlignment: TextInput.AlignVCenter
+            color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
+            selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
+            text: hub.mcServerNameDraft
+            onTextChanged: hub.mcServerNameDraft = text
+          }
+        }
+
+        RowLayout {
+          width: parent.width
+          spacing: 10
+          ColumnLayout {
+            Layout.fillWidth: true; spacing: 4
+            Text { textFormat: Text.PlainText; text: "Version"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+            Rectangle {
+              Layout.fillWidth: true; radius: 8
+              color: panel.softText(0.03); border.color: panel.accentSoft(0.2); border.width: 1; implicitHeight: 36
+              TextInput {
+                anchors.fill: parent; anchors.margins: 9
+                verticalAlignment: TextInput.AlignVCenter
+                color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
+                selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
+                text: hub.mcServerVersionDraft
+                onTextChanged: hub.mcServerVersionDraft = text
+              }
+            }
+          }
+          ColumnLayout {
+            Layout.fillWidth: true; spacing: 4
+            Text { textFormat: Text.PlainText; text: "Memory"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+            Rectangle {
+              Layout.fillWidth: true; radius: 8
+              color: panel.softText(0.03); border.color: panel.accentSoft(0.2); border.width: 1; implicitHeight: 36
+              TextInput {
+                anchors.fill: parent; anchors.margins: 9
+                verticalAlignment: TextInput.AlignVCenter
+                color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
+                selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
+                text: hub.mcServerMemoryDraft
+                onTextChanged: hub.mcServerMemoryDraft = text
+              }
+            }
+          }
+        }
+
+        Text { textFormat: Text.PlainText; text: "World data directory"; color: Color.menu.text; font.family: Style.font.family; font.bold: true }
+        Rectangle {
+          width: parent.width
+          radius: 8
+          color: panel.softText(0.03)
+          border.color: panel.accentSoft(0.2)
+          border.width: 1
+          implicitHeight: 36
+          TextInput {
+            anchors.fill: parent; anchors.margins: 9
+            verticalAlignment: TextInput.AlignVCenter
+            color: Color.menu.text; font.family: Style.font.family; font.pixelSize: Style.font.body
+            selectByMouse: true; clip: true; enabled: !hub.mcServerCreateBusy
+            text: hub.mcServerDataDirDraft
+            onTextChanged: hub.mcServerDataDirDraft = text
+          }
+        }
+
+        Flow {
+          width: parent.width
+          spacing: 8
+          Button {
+            iconText: "󰐊"
+            text: hub.mcServerCreateBusy ? "Creating…" : "Create server"
+            enabled: !hub.mcServerCreateBusy
+            tooltipText: "Create and start the container (docker run -d)"
+            onClicked: hub.createMinecraftServer()
+          }
+          Button {
+            visible: hub.mcServerCreateBusy
+            iconText: "󰓛"
+            text: "Stop"
+            tooltipText: "Stop waiting for the image pull; layers already downloaded are kept"
+            onClicked: hub.cancelMinecraftServerCreate()
+          }
+        }
+
+        Text {
+          visible: Shell.trim(hub.mcServerCreateStatus).length > 0
+          textFormat: Text.PlainText
+          text: hub.mcServerCreateStatus
+          color: hub.mcServerCreateBusy ? panel.accentSoft(0.95) : panel.softText(0.85)
+          font.family: Style.font.family
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+        Text {
+          visible: Shell.trim(hub.mcServerCreateResult).length > 0
+          textFormat: Text.PlainText
+          text: hub.mcServerCreateResult
+          color: hub.mcServerCreateResult.indexOf("failed") !== -1 || hub.mcServerCreateResult.indexOf("Could not") === 0 ? "#ef4444" : panel.softText(0.78)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+      }
+    }
+
     Rectangle {
       width: parent.width
       radius: Style.cornerRadius
@@ -846,6 +997,19 @@ Column {
                   enabled: !hub.dockerBusy
                   onClicked: hub.runDockerAction("restart", modelData.name)
                 }
+                Button {
+                  iconText: "󰋽"
+                  text: "Logs"
+                  enabled: !hub.dockerBusy && !hub.mcServerLogsBusy
+                  tooltipText: "Show the last 200 lines of this container's log"
+                  onClicked: hub.showMinecraftServerLogs(modelData.name)
+                }
+                Button {
+                  iconText: "󰋊"
+                  text: "Data folder"
+                  tooltipText: "Open the host path mounted at /data in the file manager"
+                  onClicked: hub.openMinecraftDataFolder(modelData.name)
+                }
               }
               Text {
                 visible: modelData.serverType === "steam"
@@ -857,6 +1021,62 @@ Column {
                 wrapMode: Text.Wrap
                 width: parent.width
               }
+            }
+          }
+        }
+      }
+    }
+
+    // Recent container logs, opened by the Logs action on a server row. Not a
+    // live tail: a fixed snapshot so a busy server cannot flood the panel.
+    Rectangle {
+      visible: Shell.trim(hub.mcServerLogsName).length > 0
+      width: parent.width
+      radius: Style.cornerRadius
+      color: panel.softText(0.05)
+      border.color: panel.accentSoft(0.18)
+      border.width: 1
+      implicitHeight: mcLogsCol.implicitHeight + 24
+      Column {
+        id: mcLogsCol
+        anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: 14
+        spacing: 10
+        RowLayout {
+          width: parent.width; spacing: 10
+          Text { textFormat: Text.PlainText; text: "󰋽"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.icon }
+          ColumnLayout {
+            Layout.fillWidth: true; spacing: 2
+            Text { textFormat: Text.PlainText; text: "Log • " + hub.mcServerLogsName; color: Color.menu.text; font.family: Style.font.family; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true }
+            Text { textFormat: Text.PlainText; text: hub.mcServerLogsBusy ? "Loading…" : "Last 200 lines"; color: panel.softText(0.7); font.family: Style.font.family; font.pixelSize: Style.font.caption }
+          }
+          Button { iconText: "󰆴"; text: "Close"; enabled: !hub.mcServerLogsBusy; onClicked: hub.clearMinecraftServerLogs() }
+        }
+        Rectangle {
+          width: parent.width
+          height: 220
+          radius: 8
+          color: Qt.rgba(0, 0, 0, 0.18)
+          border.color: panel.softText(0.08)
+          border.width: 1
+          clip: true
+          Flickable {
+            id: mcLogsFlick
+            anchors.fill: parent
+            anchors.margins: 8
+            contentWidth: width
+            contentHeight: mcLogsText.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Text {
+              id: mcLogsText
+              width: mcLogsFlick.width
+              textFormat: Text.PlainText
+              text: Shell.trim(hub.mcServerLogsText).length > 0 ? hub.mcServerLogsText : "Waiting for output…"
+              color: panel.softText(0.92)
+              font.family: Style.font.family
+              font.pixelSize: Style.font.caption
+              wrapMode: Text.WrapAnywhere
             }
           }
         }

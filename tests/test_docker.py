@@ -245,6 +245,83 @@ class TestStateBackground:
             assert bg is not None
 
 
+class TestMinecraftServerCommands:
+    def test_default_is_paper_on_lan_with_persistent_data(self, js):
+        opts = js(
+            "console.log(JSON.stringify(Docker.normalizeMinecraftServerOptions({})))"
+        )
+        assert opts == {
+            "name": "vember-minecraft", "type": "PAPER", "version": "LATEST",
+            "memory": "4G", "dataDir": "/mnt/games/MinecraftServer", "port": 25565,
+        }
+        cmd = js("console.log(JSON.stringify(Docker.createMinecraftServerCommand({})))")
+        assert cmd[:4] == ["docker", "run", "-d", "-it"]
+        assert cmd[cmd.index("--name") + 1] == "vember-minecraft"
+        assert cmd[cmd.index("--restart") + 1] == "unless-stopped"
+        assert "25565:25565" in cmd
+        assert "/mnt/games/MinecraftServer:/data" in cmd
+        for env in ("EULA=TRUE", "TYPE=PAPER", "VERSION=LATEST", "MEMORY=4G"):
+            assert env in cmd
+        assert cmd[-1] == "itzg/minecraft-server:latest"
+        # RCON is enabled inside the container but must never reach the host.
+        assert not any("25575" in part for part in cmd)
+
+    def test_all_four_server_types_build_a_type_env(self, js):
+        for kind in ("VANILLA", "PAPER", "FORGE", "FABRIC"):
+            cmd = js(
+                "console.log(JSON.stringify(Docker.createMinecraftServerCommand("
+                '{{type:"{0}"}})))'.format(kind)
+            )
+            assert "TYPE=" + kind in cmd
+
+    def test_invalid_inputs_fall_back_to_safe_defaults(self, js):
+        opts = js(
+            "console.log(JSON.stringify(Docker.normalizeMinecraftServerOptions({"
+            'name:"bad name; rm -rf /", type:"EVIL", version:"../../etc",'
+            ' memory:"9999G", dataDir:"relative/path", port:99999'
+            "})))"
+        )
+        assert opts["name"] == "vember-minecraft"
+        assert opts["type"] == "PAPER"
+        assert opts["version"] == "LATEST"
+        assert opts["memory"] == "4G"
+        assert opts["dataDir"] == "/mnt/games/MinecraftServer"
+        assert opts["port"] == 25565
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'name:"bad name; rm -rf /"})))'
+        )
+        assert "rm -rf" not in " ".join(cmd)
+
+    def test_forge_version_and_custom_values_are_kept(self, js):
+        cmd = js(
+            "console.log(JSON.stringify(Docker.createMinecraftServerCommand({"
+            'type:"forge", version:"1.20.1-47.2.0", memory:"6G",'
+            ' name:"modded-world", dataDir:"/tmp/mc", port:25566'
+            "})))"
+        )
+        for expected in (
+            "TYPE=FORGE", "VERSION=1.20.1-47.2.0", "MEMORY=6G",
+            "25566:25566", "/tmp/mc:/data", "modded-world",
+        ):
+            assert expected in cmd
+
+    def test_logs_and_inspect_commands(self, js):
+        assert js(
+            'console.log(JSON.stringify(Docker.logsCommand("vember-minecraft", 100)))'
+        ) == ["docker", "logs", "--tail", "100", "vember-minecraft"]
+        # A bad line count falls back to 200 rather than passing garbage.
+        assert js(
+            'console.log(JSON.stringify(Docker.logsCommand("mc", "oops")))'
+        ) == ["docker", "logs", "--tail", "200", "mc"]
+        inspect = js(
+            'console.log(JSON.stringify(Docker.inspectDataDirCommand("mc")))'
+        )
+        assert inspect[:3] == ["docker", "inspect", "--format"]
+        assert ".Destination" in inspect[3] and ".Source" in inspect[3]
+        assert inspect[-1] == "mc"
+
+
 class TestRunningCount:
     def test_counts_running_only(self, js):
         out = js(

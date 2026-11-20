@@ -484,6 +484,16 @@ Work that fell out of the split, done in the same arc:
   the bar is hidden until at least one count is known. Guard:
   TestGameLibraryIsStackedBar (all five segments, proportional widths, source
   order); removing the Heroic segment was caught.
+- **Minecraft servers can be created from Gaming → Servers.** A form creates
+  an itzg/minecraft-server container with Paper as the default and Vanilla,
+  Forge and Fabric selectable. Every field is normalised in Docker.mjs before
+  the command is built, so form input cannot inject docker arguments. RCON is
+  not published; the world is bound to /mnt/games/MinecraftServer. Server rows
+  gained Logs (a 200-line snapshot) and Open data folder (resolved with docker
+  inspect) alongside Start/Stop/Restart. A cancel escape hatch leaves the
+  cached layers in place. Guards: TestMinecraftServerCommands and
+  TestMinecraftServerIsWired; four mutations were caught. A real Paper 26.3
+  server was created and verified healthy on LAN 25565.
 - **A plugin that restarts the shell on its own file changes is a foot-gun.**
   The self-watcher above turned a routine save into a full desktop restart and,
   through leaked runtime dirs, a full tmpfs. The rule now: a plugin may respond
@@ -508,8 +518,8 @@ plugin warnings in the journal.
 
 ## Result
 
-- 529 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
-- Plugin source went 7,718 → 9,172 lines. The growth is comments, per-file
+- 539 tests pass; `qmllint` reports no errors; `omarchy plugin validate` passes.
+- Plugin source went 7,718 → 9,645 lines. The growth is comments, per-file
   headers and the one-line wrappers that keep call sites stable; the code that
   moved into `model/*.mjs` (1,389) and `ui/` (4,192) was already there.
 - The three monoliths went 7,694 → 3,271 lines: `HubPanel.qml` 4,376 → 424,
@@ -517,7 +527,7 @@ plugin warnings in the journal.
   two install/update watchdogs, the failure-message improvements and the poll
   guards, then lost the duplicated config-parsing branch once the reader was
   wired to the tested parser and shed the dead state found in the audit; the
-  largest file is now `Panel.qml` at 2,847, then `ui/tabs/GamesTab.qml` at 949.
-- The test suite is 4,802 lines across 12 files and drives the real modules
+  largest file is now `Panel.qml` at 2,847, then `ui/tabs/GamesTab.qml` at 1,169.
+- The test suite is 4,934 lines across 12 files and drives the real modules
   through node, so it exercises the same code the shell runs.
-- Version 0.1.0 → 0.6.39, build 72 → 115.
+- Version 0.1.0 → 0.6.40, build 72 → 116.

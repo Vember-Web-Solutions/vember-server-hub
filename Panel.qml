@@ -26,8 +26,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.39"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 115
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.40"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 116
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -72,6 +72,21 @@ Item {
   property string dockerDetailSizeText: ""
   property bool dockerDetailSizeBusy: false
   property string dockerDetailSizeError: ""
+
+  // Minecraft server creation (Gaming → Servers). Drafts are bound to the form;
+  // the model normalises them before any docker command is built.
+  property string mcServerNameDraft: "vember-minecraft"
+  property string mcServerTypeDraft: "PAPER"
+  property string mcServerVersionDraft: "LATEST"
+  property string mcServerMemoryDraft: "4G"
+  property string mcServerDataDirDraft: "/mnt/games/MinecraftServer"
+  property bool mcServerCreateBusy: false
+  property string mcServerCreateStatus: ""
+  property string mcServerCreateResult: ""
+  property string mcServerLogsName: ""
+  property bool mcServerLogsBusy: false
+  property string mcServerLogsText: ""
+  property string mcDataDirName: ""
 
   property bool steamInstalled: false
   property bool steamRunning: false
@@ -207,13 +222,32 @@ Item {
     requestClose();
   }
 
+  // IPC: open the panel directly on a named tab (used for verification).
+  function selectTab(tabId) {
+    root.opened = true;
+    hubPanelView.currentTab = String(tabId || "overview");
+  }
+
   function status() {
     return JSON.stringify({
       opened: root.opened,
       serverName: root.serverName,
       tailscaleActive: root.tailscaleActive,
       dockerContainers: root.dockerContainers.length,
-      gameMountPresent: root.gameMountPresent
+      gameMountPresent: root.gameMountPresent,
+      steamInstalled: root.steamInstalled,
+      bnetInstalled: root.bnetInstalled,
+      steamGameCount: root.steamGameCount,
+      bnetGameCount: root.bnetGameCount,
+      prismInstanceCount: root.prismInstanceCount,
+      minecraftVersionCount: root.minecraftVersionCount,
+      heroicGameCount: root.heroicGameCount,
+      mcServerCreateBusy: root.mcServerCreateBusy,
+      mcServerCreateStatus: root.mcServerCreateStatus,
+      mcServerCreateResult: root.mcServerCreateResult,
+      mcServerLogsName: root.mcServerLogsName,
+      mcServerLogsBusy: root.mcServerLogsBusy,
+      mcServerLogsLines: root.mcServerLogsText.length
     });
   }
 
@@ -1247,6 +1281,77 @@ Item {
     refreshDocker();
   }
 
+  // --- Minecraft server creation ---
+  // Every field is normalised by the model, so a blank or hand-edited input
+  // can never turn into extra docker arguments. `docker run -d` returns the
+  // container id at once; the image downloads its server jar in the background,
+  // so the result says "created", not "ready".
+  function createMinecraftServer() {
+    if (mcServerCreateBusy)
+      return;
+    var opts = {
+      name: mcServerNameDraft, type: mcServerTypeDraft,
+      version: mcServerVersionDraft, memory: mcServerMemoryDraft,
+      dataDir: mcServerDataDirDraft, port: 25565
+    };
+    // Reflect the normalised values back into the form so the operator sees
+    // exactly what was created when an input fell back to its default.
+    var normalized = Docker.normalizeMinecraftServerOptions(opts);
+    mcServerNameDraft = normalized.name;
+    mcServerTypeDraft = normalized.type;
+    mcServerVersionDraft = normalized.version;
+    mcServerMemoryDraft = normalized.memory;
+    mcServerDataDirDraft = normalized.dataDir;
+
+    mcServerCreateBusy = true;
+    mcServerCreateStatus = "Creating " + normalized.type + " server " + normalized.name + "…";
+    mcServerCreateResult = "";
+    mcServerCreateProc.cancelled = false;
+    mcServerCreateProc.command = Docker.createMinecraftServerCommand(opts);
+    mcServerCreateProc.running = true;
+  }
+
+  // Escape hatch: a slow image pull is the operator's call to stop, not a
+  // stall timer. Stopping before the container is created leaves no container
+  // behind; layers already pulled stay in Docker's cache.
+  function cancelMinecraftServerCreate() {
+    if (!mcServerCreateBusy)
+      return;
+    mcServerCreateProc.cancelled = true;
+    mcServerCreateProc.running = false;
+    mcServerCreateBusy = false;
+    mcServerCreateStatus = "Server creation stopped by request.";
+    mcServerCreateResult = "No container was created. You can try again.";
+    lastActionMessage = "Minecraft server creation stopped.";
+    notifyIfClosed(lastActionMessage);
+  }
+
+  function showMinecraftServerLogs(name) {
+    if (mcServerLogsBusy || Shell.trim(name).length === 0)
+      return;
+    mcServerLogsName = Shell.trim(name);
+    mcServerLogsBusy = true;
+    mcServerLogsText = "Loading the last 200 log lines for " + mcServerLogsName + "…";
+    mcServerLogsProc.errText = "";
+    mcServerLogsProc.command = Docker.logsCommand(mcServerLogsName, 200);
+    mcServerLogsProc.running = true;
+  }
+
+  function clearMinecraftServerLogs() {
+    mcServerLogsName = "";
+    mcServerLogsText = "";
+    mcServerLogsBusy = false;
+  }
+
+  function openMinecraftDataFolder(name) {
+    if (Shell.trim(name).length === 0)
+      return;
+    mcDataDirName = Shell.trim(name);
+    mcDataDirProc.command = Docker.inspectDataDirCommand(mcDataDirName);
+    mcDataDirProc.running = false;
+    mcDataDirProc.running = true;
+  }
+
   // --- Processes: Tailscale ---
   Process {
     id: tsActiveProc
@@ -1681,6 +1786,73 @@ Item {
         root.notifyIfClosed(root.lastActionMessage);
       }
       root.refreshDocker();
+    }
+  }
+
+  Process {
+    id: mcServerCreateProc
+    property bool cancelled: false
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      root.mcServerCreateBusy = false;
+      if (cancelled)
+        return;
+      if (code === 0) {
+        var id = Shell.trim(stdout.text).split(/\s+/)[0] || "";
+        root.mcServerCreateResult = "Container " + root.mcServerNameDraft +
+          (id ? " (" + id.slice(0, 12) + ")" : "") +
+          " created. Connect on port 25565 once it is running; the server jar may still be downloading.";
+        root.mcServerCreateStatus = "Created — starting.";
+      } else {
+        root.mcServerCreateStatus = "Creation failed.";
+        root.mcServerCreateResult = Shell.failureMessage(
+          "Could not create Minecraft server " + root.mcServerNameDraft, code, stderr.text);
+      }
+      root.lastActionMessage = root.mcServerCreateResult;
+      root.notifyIfClosed(root.lastActionMessage);
+      root.refreshDocker();
+      root.refreshGames();
+    }
+  }
+
+  Process {
+    id: mcServerLogsProc
+    property string errText: ""
+    stdout: StdioCollector { onStreamFinished: root.mcServerLogsText = text }
+    stderr: StdioCollector { onStreamFinished: mcServerLogsProc.errText = text }
+    onExited: function(code) {
+      root.mcServerLogsBusy = false;
+      var combined = root.mcServerLogsText +
+        (mcServerLogsProc.errText ? "\n" + mcServerLogsProc.errText : "");
+      if (code !== 0 && Shell.trim(combined).length === 0)
+        combined = Shell.failureMessage("Could not read logs for " + root.mcServerLogsName, code, "");
+      root.mcServerLogsText = combined.length > 0 ? combined : "(no log output)";
+      mcServerLogsProc.errText = "";
+    }
+  }
+
+  Process {
+    id: mcDataDirProc
+    property string pathText: ""
+    stdout: StdioCollector { onStreamFinished: mcDataDirProc.pathText = Shell.trim(text) }
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      var path = mcDataDirProc.pathText;
+      mcDataDirProc.pathText = "";
+      if (code !== 0 || path.length === 0) {
+        root.lastActionMessage = Shell.failureMessage(
+          "Could not find the /data folder for " + root.mcDataDirName, code, stderr.text);
+        root.notifyIfClosed(root.lastActionMessage);
+        return;
+      }
+      if (!Qt.openUrlExternally("file://" + path)) {
+        root.lastActionMessage = "Could not open " + path + ".";
+        root.notifyIfClosed(root.lastActionMessage);
+        return;
+      }
+      root.lastActionMessage = "Opened " + path + ".";
+      root.handOffToExternalSurface();
     }
   }
 
@@ -2842,6 +3014,7 @@ Item {
   }
 
   HubPanel {
+    id: hubPanelView
     hub: root
   }
 }
