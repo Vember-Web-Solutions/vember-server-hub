@@ -1127,6 +1127,7 @@ class TestTransientStateIsClearedOnClose:
         "confirmPrune",
         "confirmRemoveSshKey",
         "confirmRemoveCodeServer",
+        "confirmRemoveGameServer",
         "codeServerSetupPassword",
         "settingsMenuOpen",
         "arrangeTabsOpen",
@@ -3009,3 +3010,83 @@ class TestOverviewRedesign:
             "SystemInfo.hostMetricsCommand()",
         ):
             assert name in panel, name + " is missing"
+
+
+class TestGameServerRemoval:
+    """A destructive per-server action must be named, confirmed and narrow."""
+
+    @staticmethod
+    def _body(text, name):
+        match = re.search(r"function\s+" + name + r"\s*\([^)]*\)\s*\{", text)
+        assert match, name + " not found"
+        start = text.index("{", match.end() - 1)
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        raise AssertionError("unbalanced braces in " + name)
+
+    def test_backend_keeps_the_target_and_result(self):
+        panel = read(REPO / "Panel.qml")
+        assert "property string gameServerRemoveTarget: \"\"" in panel
+        assert "property string gameServerRemoveResult: \"\"" in panel
+
+    def test_open_dialog_keeps_the_name_not_an_index(self):
+        backend = self._body(read(REPO / "Panel.qml"), "openGameServerRemoveDialog")
+        assert "gameServerRemoveTarget = target" in backend
+        tab = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert "hub.openGameServerRemoveDialog(modelData.name)" in tab
+        assert "panel.confirmRemoveGameServer = true" in tab
+
+    def test_confirm_uses_the_narrow_command_and_global_busy_guard(self):
+        body = self._body(read(REPO / "Panel.qml"), "removeGameServer")
+        assert "Docker.removeGameServerCommand(target)" in body
+        assert "dockerBusy = true" in body
+        assert "gameServerRemoveProc.running = true" in body
+        dialog = read(REPO / "ui" / "GameServerRemoveDialog.qml")
+        assert "panel.confirmRemoveGameServer = false" in dialog
+
+    def test_finish_refreshes_every_view_of_the_removed_server(self):
+        panel = read(REPO / "Panel.qml")
+        start = panel.index("id: gameServerRemoveProc")
+        end = panel.index("// Keeps the Vember server visible in Prism", start)
+        block = panel[start:end]
+        for needle in (
+            "root.dockerBusy = false",
+            "root.gameServerRemoveTarget = \"\"",
+            "root.gameServerRemoveResult =",
+            "root.notify(root.lastActionMessage)",
+            "root.refreshDocker()",
+            "root.refreshGames()",
+            "root.refreshGameServerSizes()",
+        ):
+            assert needle in block, needle + " missing from removal completion"
+
+    def test_hub_panel_owns_and_resets_the_dialog(self):
+        text = read(REPO / "HubPanel.qml")
+        assert "property bool confirmRemoveGameServer: false" in text
+        assert "panel.confirmRemoveGameServer = false" in text
+        assert "hub.closeGameServerRemoveDialog()" in text
+        assert "GameServerRemoveDialog { panel: panel; cardRadius: card.radius }" in text
+
+    def test_remove_button_is_on_docker_rows_only(self):
+        text = read(REPO / "ui" / "tabs" / "GamesTab.qml")
+        assert "text: \"Remove\"" in text
+        assert "hub.openGameServerRemoveDialog(modelData.name)" in text
+        assert "enabled: !hub.dockerBusy" in text
+        assert "hub.gameServerRemoveResult" in text
+
+    def test_dialog_states_the_exact_scope(self):
+        text = read(REPO / "ui" / "GameServerRemoveDialog.qml")
+        for needle in (
+            "panel.hub.closeGameServerRemoveDialog()",
+            "panel.hub.removeGameServer()",
+            "Data folder to delete:",
+            "Prism instances and modpack files are kept.",
+            "enabled: !panel.hub.dockerBusy",
+        ):
+            assert needle in text, needle + " missing from removal dialog"

@@ -23,6 +23,7 @@ PanelWindow {
   property string applyUpdateTarget: ""
   property bool confirmRemoveSshKey: false
   property bool confirmRemoveCodeServer: false
+  property bool confirmRemoveGameServer: false
   property bool codeServerSetupOpen: false
   property string codeServerSetupPassword: ""
   property string codeServerSetupPort: "8443"
@@ -116,7 +117,9 @@ PanelWindow {
     panel.applyUpdateTarget = "";
     panel.confirmRemoveSshKey = false;
     panel.confirmRemoveCodeServer = false;
+    panel.confirmRemoveGameServer = false;
     panel.codeServerSetupPassword = "";
+    if (typeof hub.closeGameServerRemoveDialog === "function") hub.closeGameServerRemoveDialog();
     panel.settingsMenuOpen = false;
     panel.arrangeTabsOpen = false;
   }
@@ -415,6 +418,9 @@ PanelWindow {
 
     // Confirm remove VS Code Server container popup
     CodeServerRemoveDialog { panel: panel; cardRadius: card.radius }
+
+    // Confirm remove one game server container + its data dir
+    GameServerRemoveDialog { panel: panel; cardRadius: card.radius }
 
     // Settings menu
     SettingsMenu { panel: panel }

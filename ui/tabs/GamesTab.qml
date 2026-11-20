@@ -936,6 +936,21 @@ Column {
 
         Rectangle { width: parent.width; height: 1; color: panel.softText(0.08) }
 
+        Text {
+          visible: (hub.dockerBusy && Shell.trim(hub.dockerBusyName).length > 0) ||
+            Shell.trim(hub.gameServerRemoveResult).length > 0
+          textFormat: Text.PlainText
+          text: hub.dockerBusy && Shell.trim(hub.dockerBusyName).length > 0
+            ? "Working on " + hub.dockerBusyName + "…"
+            : hub.gameServerRemoveResult
+          color: !hub.dockerBusy && hub.gameServerRemoveResult.indexOf("Could not") === 0
+            ? "#ef4444" : panel.softText(0.78)
+          font.family: Style.font.family
+          font.pixelSize: Style.font.caption
+          wrapMode: Text.Wrap
+          width: parent.width
+        }
+
         // Shared with the Storage size card so both views see the same servers.
         // The keyword list lives in Gaming.mjs and is covered by model tests.
         property var detectedGameServers: Gaming.gameServerContainers(
@@ -1024,6 +1039,16 @@ Column {
                   text: "Data folder"
                   tooltipText: "Open the host path mounted at /data in the file manager"
                   onClicked: hub.openMinecraftDataFolder(modelData.name)
+                }
+                Button {
+                  iconText: "󰆴"
+                  text: "Remove"
+                  enabled: !hub.dockerBusy
+                  tooltipText: "Confirm removal of this container and its <name>-data folder. Prism instances are kept."
+                  onClicked: {
+                    hub.openGameServerRemoveDialog(modelData.name);
+                    panel.confirmRemoveGameServer = true;
+                  }
                 }
               }
               Text {

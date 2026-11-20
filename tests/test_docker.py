@@ -27,6 +27,40 @@ class TestCommands:
         assert out == ["docker", "container", "prune", "-f"]
 
 
+class TestRemoveGameServer:
+    """Removal is destructive, so the command must be narrow and syntactically sound."""
+
+    def test_target_is_positional_not_spliced_into_the_script(self, js):
+        out = js(
+            "console.log(JSON.stringify(Docker.removeGameServerCommand("
+            + json.dumps("RPG; touch /tmp/boom") + ")))"
+        )
+        assert out[0] == "sh"
+        assert out[1] == "-c"
+        assert out[3] == "sh"
+        assert out[4] == "RPG; touch /tmp/boom"
+        assert "RPG;" not in out[2]
+
+    def test_script_removes_container_and_only_the_expected_data_dir(self, js):
+        script = js('console.log(JSON.stringify(Docker.removeGameServerCommand("RPG")))')[2]
+        subprocess.run(["sh", "-n"], input=script, text=True, check=True)
+        for needle in (
+            "docker inspect",
+            '"$name"',
+            "docker rm -f",
+            "rm -rf --",
+            '"$name-data"',
+            "Refusing to delete reserved data path",
+            "Refusing to delete data path with traversal",
+            "Refusing to delete symlinked data dir",
+        ):
+            assert needle in script, needle + " missing from removal script"
+
+    def test_empty_name_is_not_a_valid_target(self, js):
+        out = js('console.log(JSON.stringify(Docker.removeGameServerCommand("  ")))')
+        assert out[4] == ""
+
+
 class TestParsePs:
     def test_running_container(self, js):
         out = js(

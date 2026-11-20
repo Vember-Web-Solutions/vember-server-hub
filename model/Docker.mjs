@@ -370,6 +370,57 @@ export class Docker {
     shell.trim(String(name || ""))];
   }
 
+  // Remove one game server container and the host data dir the hub created for
+  // it. The dialog is the operator's confirmation; this is still deliberately
+  // narrow: only a /data mount whose basename is `<name>-data` is deleted. A
+  // missing or unexpected mount refuses before the container is touched.
+  removeGameServerCommand(name) {
+  var target = shell.trim(String(name || ""));
+  var script = [
+    "set -eu",
+    "name=$1",
+    'case "$name" in',
+    '  [A-Za-z0-9]*) ;;',
+    '  *) echo "Refusing to remove unsafe container name: $name" >&2; exit 2 ;;',
+    'esac',
+    'case "$name" in',
+    '  *[!A-Za-z0-9_.-]*) echo "Refusing to remove unsafe container name: $name" >&2; exit 2 ;;',
+    'esac',
+    "data=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination \"/data\"}}{{.Source}}{{end}}{{end}}' \"$name\" 2>/dev/null || true)",
+    "data=${data%/}",
+    'case "$data" in',
+    '  "") docker rm -f "$name" >/dev/null; echo "Removed container $name (no /data mount)."; exit 0 ;;',
+    '  /*) ;;',
+    '  *) echo "Refusing to delete non-absolute data path: $data" >&2; exit 2 ;;',
+    'esac',
+    'case "$data" in',
+    '  /|/home|/root|/mnt|/mnt/games|/mnt/games/GameServers)',
+    '    echo "Refusing to delete reserved data path: $data" >&2; exit 2 ;;',
+    'esac',
+    'case "$data" in',
+    '  *"/.."|*"/../*"|*"/."|*"/./*"|*//*)',
+    '    echo "Refusing to delete data path with traversal: $data" >&2; exit 2 ;;',
+    'esac',
+    'if [ "$(basename -- "$data")" != "$name-data" ]; then',
+    '  echo "Refusing to delete unexpected data dir $data; expected $name-data" >&2; exit 2;',
+    'fi',
+    'if [ -L "$data" ]; then',
+    '  echo "Refusing to delete symlinked data dir: $data" >&2; exit 2;',
+    'fi',
+    'docker rm -f "$name" >/dev/null',
+    'if [ -d "$data" ]; then',
+    '  if rm -rf -- "$data"; then',
+    '    echo "Removed container $name and data dir $data";',
+    '  else',
+    '    echo "Container removed but data deletion failed: $data" >&2; exit 1;',
+    '  fi',
+    'else',
+    '  echo "Removed container $name; data dir $data was already absent";',
+    'fi'
+  ].join("\n");
+  return ["sh", "-c", script, "sh", target];
+  }
+
   // Compose records its project, service and config files as container labels.
   // `|~|` is the separator: paths cannot contain it, unlike a tab which Go's
   // template escaping tends to mangle. All four fields come back in one
@@ -487,6 +538,7 @@ export function dockerReadyCommand(...args) { return impl.dockerReadyCommand(...
 export function minecraftServerImageCheckCommand(...args) { return impl.minecraftServerImageCheckCommand(...args); }
 export function logsCommand(...args) { return impl.logsCommand(...args); }
 export function inspectDataDirCommand(...args) { return impl.inspectDataDirCommand(...args); }
+export function removeGameServerCommand(...args) { return impl.removeGameServerCommand(...args); }
 export function inspectComposeCommand(...args) { return impl.inspectComposeCommand(...args); }
 export function parseComposeInfo(...args) { return impl.parseComposeInfo(...args); }
 export function applyComposeUpdateCommand(...args) { return impl.applyComposeUpdateCommand(...args); }

@@ -27,8 +27,8 @@ Item {
   readonly property string gameMount: "/mnt/games"
   readonly property string configPath: homeDir + "/.config/omarchy/plugins/elena.vember-server-hub/config.json"
 
-  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.55"
-  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 131
+  property string pluginVersion: manifest && manifest.version ? String(manifest.version) : "0.6.56"
+  property int pluginBuild: manifest && manifest.build ? Number(manifest.build) : 132
   property string serverName: ""
   property string serverNameDraft: ""
   property string serverRole: ""
@@ -82,6 +82,10 @@ Item {
   property string dockerDetailSizeText: ""
   property bool dockerDetailSizeBusy: false
   property string dockerDetailSizeError: ""
+  // Confirmed game-server removal: container plus its `<name>-data` mount.
+  // Prism instances are deliberately not touched.
+  property string gameServerRemoveTarget: ""
+  property string gameServerRemoveResult: ""
 
   // Minecraft server creation (Gaming → Servers). Drafts are bound to the form;
   // the model normalises them before any docker command is built.
@@ -1476,6 +1480,32 @@ Item {
     dockerActionProc.running = true;
   }
 
+  // The server-row Remove button opens the dialog; the dialog calls
+  // removeGameServer() only after the operator confirms. The target is kept by
+  // the backend so a poll cannot change what gets deleted mid-confirmation.
+  function openGameServerRemoveDialog(name) {
+    var target = Shell.trim(String(name || ""));
+    if (target.length === 0 || dockerBusy)
+      return;
+    gameServerRemoveTarget = target;
+    gameServerRemoveResult = "";
+  }
+
+  function closeGameServerRemoveDialog() {
+    gameServerRemoveTarget = "";
+  }
+
+  function removeGameServer() {
+    var target = Shell.trim(String(gameServerRemoveTarget || ""));
+    if (target.length === 0 || dockerBusy)
+      return;
+    dockerBusy = true;
+    dockerBusyName = target;
+    gameServerRemoveResult = "Removing " + target + " and its /data folder…";
+    gameServerRemoveProc.command = Docker.removeGameServerCommand(target);
+    gameServerRemoveProc.running = true;
+  }
+
   function runDockerPull(image, name) {
     if (dockerBusy)
       return;
@@ -2312,6 +2342,35 @@ Item {
         root.notifyIfClosed(root.lastActionMessage);
       }
       root.refreshDocker();
+    }
+  }
+
+  // Destructive counterpart to the per-row container actions. The command
+  // refuses anything but the expected `<name>-data` bind before Docker is
+  // touched, so a stale row or a hand-created container cannot take out a
+  // neighbouring directory.
+  Process {
+    id: gameServerRemoveProc
+    stdout: StdioCollector {}
+    stderr: StdioCollector {}
+    onExited: function(code) {
+      var target = gameServerRemoveTarget;
+      var detail = Shell.trim(stdout.text);
+      root.dockerBusy = false;
+      root.dockerBusyName = "";
+      root.gameServerRemoveTarget = "";
+      if (code === 0) {
+        root.gameServerRemoveResult = detail.length > 0
+          ? detail : ("Removed game server " + target + ".");
+      } else {
+        root.gameServerRemoveResult = Shell.failureMessage(
+          "Could not remove game server " + target, code, stderr.text);
+      }
+      root.lastActionMessage = root.gameServerRemoveResult;
+      root.notify(root.lastActionMessage);
+      root.refreshDocker();
+      root.refreshGames();
+      root.refreshGameServerSizes();
     }
   }
 
